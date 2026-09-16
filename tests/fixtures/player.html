@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Player test fixture</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@chunkify/player": "/packages/player/dist/index.js",
+          "hls.js": "/node_modules/hls.js/dist/hls.mjs",
+          "@player.style/demuxed-2022": "/node_modules/@player.style/demuxed-2022/dist/media-theme.js",
+          "media-chrome": "/node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "/node_modules/media-chrome/"
+        }
+      }
+    </script>
+    <script type="module">
+      if (!new URL(location.href).searchParams.has("defer")) {
+        await import("@chunkify/player");
+      }
+    </script>
+  </head>
+  <body></body>
+</html>

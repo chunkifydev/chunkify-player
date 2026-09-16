@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chunkify Player</title>
+    <style>
+      body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
+      label { display: inline-block; margin: 0 1rem 1rem 0; }
+      select { font: inherit; }
+      chunkify-player { margin: 1rem 0; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@chunkify/player": "../../packages/player/dist/index.js",
+          "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
+          "@player.style/demuxed-2022": "../../node_modules/@player.style/demuxed-2022/dist/media-theme.js",
+          "media-chrome": "../../node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "../../node_modules/media-chrome/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Chunkify Player</h1>
+    <p>A local six-second HLS test clip, using the Demuxed 2022 controls.</p>
+    <label>Playback engine
+      <select id="engine">
+        <option value="auto">Auto</option>
+        <option value="native">Native</option>
+        <option value="hlsjs">hls.js</option>
+      </select>
+    </label>
+    <label>Asset status
+      <select id="status">
+        <option value="ready">Ready</option>
+        <option value="preparing">Preparing</option>
+        <option value="failed">Failed</option>
+        <option value="expired">Expired</option>
+      </select>
+    </label>
+    <chunkify-player id="player" status="ready"
+      src="../../tests/fixtures/media/master.m3u8"
+      poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
+    </chunkify-player>
+    <p id="module-status" role="status">Loading player package...</p>
+    <p id="playback-error" role="alert" hidden></p>
+    <script type="module">
+      import "@chunkify/player";
+
+      const player = document.querySelector("#player");
+      const error = document.querySelector("#playback-error");
+      document.querySelector("#module-status").textContent = "Player package loaded.";
+      document.querySelector("#engine").addEventListener("change", (event) => {
+        error.hidden = true;
+        player.player = event.target.value;
+      });
+      document.querySelector("#status").addEventListener("change", (event) => {
+        error.hidden = true;
+        player.status = event.target.value;
+      });
+      player.addEventListener("playback-error", (event) => {
+        error.textContent = event.detail.message;
+        error.hidden = false;
+      });
+    </script>
+  </body>
+</html>

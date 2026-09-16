@@ -1,0 +1,24 @@
+import type { PlaybackErrorDetail } from "../../packages/player/src/index.js";
+
+const player = document.createElement("chunkify-player");
+player.poster = "/poster.jpg";
+player.poster = null;
+player.poster = undefined;
+const poster: string = player.poster;
+console.log(poster);
+
+player.addEventListener("playback-error", (event) => {
+  const detail: PlaybackErrorDetail = event.detail;
+  console.log(detail.code, detail.engine);
+  // @ts-expect-error The public error contract must not expose source URLs.
+  event.detail.url;
+});
+
+const onPlaybackError = (event: CustomEvent<PlaybackErrorDetail>) => {
+  console.log(event.detail.message);
+};
+player.addEventListener("playback-error", onPlaybackError);
+player.removeEventListener("playback-error", onPlaybackError);
+
+// Native event overloads must remain available.
+player.addEventListener("click", (event) => console.log(event.clientX));

@@ -1,0 +1,25 @@
+{
+  "name": "chunkify-player-workspace",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "workspaces": ["packages/*"],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspaces",
+    "serve": "http-server . -a 127.0.0.1 -p 4173 -c-1 --silent",
+    "test": "npm run build && playwright test",
+    "check:package": "npm pack --workspace @chunkify/player --dry-run",
+    "check": "npm run typecheck && npm test && npm run check:package"
+  },
+  "devDependencies": {
+    "@playwright/test": "~1.63.0",
+    "@types/node": "~24.13.5",
+    "http-server": "~14.1.1",
+    "typescript": "~7.0.2"
+  }
+}
