@@ -17,6 +17,7 @@ import "@chunkify/player";
   player="auto"
   src="https://media.example.com/manifest.m3u8"
   poster="https://media.example.com/poster.jpg"
+  thumbnails="https://media.example.com/thumbnails/images.vtt"
   controls
   muted
   playsinline
@@ -38,6 +39,7 @@ resolver or import map. No published CDN import is available for this version.
 | --- | --- | --- |
 | `src` | `src` | HTTP/HTTPS HLS URL, or a `.mp4` URL with native/auto playback. Relative URLs resolve against the page. Setting `null` or `undefined` removes it. |
 | `poster` | `poster` | Optional image URL. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears the media poster. |
+| `thumbnails` | `thumbnails` | Optional HTTP/HTTPS WebVTT URL for seek previews. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears previews. |
 | `player` | `player` | `auto`, `native`, or `hlsjs`; defaults to `auto`. |
 | `status` | `status` | `preparing`, `ready`, `failed`, `expired`, or omitted. Setting `null` or `undefined` removes it. |
 | `autoplay` | `autoplay` | Boolean attribute. Subject to browser autoplay policies. |
@@ -74,6 +76,40 @@ restarting playback. Playback remains available through `.media`.
 The controls adapt to the player's width. The theme integration is isolated in
 `src/theme.ts` so the design can be replaced independently of playback. There is
 no public runtime theme selector in this version.
+
+## Timeline previews
+
+Provide `thumbnails` to show sprite previews when hovering or dragging the seek
+bar. The browser parses the WebVTT file. Each cue must contain an image URL with
+integer pixel coordinates in `#xywh=x,y,width,height` form. Width and height must
+be positive. Multiple cues can share a sprite, and a file can reference multiple
+sprites:
+
+```vtt
+WEBVTT
+
+00:00:00.000 --> 00:00:03.000
+sprite01.jpg#xywh=0,0,160,90
+
+00:00:03.000 --> 00:00:06.000
+sprite02.jpg#xywh=160,0,160,90
+```
+
+Image URLs resolve relative to the VTT response URL, including after redirects.
+Absolute HTTP/HTTPS image URLs also work. Cross-origin VTT files and sprite
+images must allow CORS. Loading thumbnails does not change the video's CORS mode.
+Customer cookie authorization remains a later step.
+
+The VTT loads only during active playback initialization. Non-ready states and
+disconnected players request neither VTT nor sprites. Sprites load when requested
+by the seek preview. Replacing `thumbnails` leaves video playback intact; changing
+the source, leaving ready, or disconnecting cancels the VTT load and clears the old
+track and preview image. A missing VTT, invalid cue, or failed sprite image hides
+the affected preview without stopping playback.
+
+The loader uses `fetch` and a temporary blob-backed metadata track for browser
+WebVTT parsing. Sites using Content Security Policy must permit the VTT host in
+`connect-src`, `blob:` in `media-src`, and sprite hosts in `img-src`.
 
 ```js
 const player = document.querySelector("chunkify-player");
@@ -152,8 +188,8 @@ recoverable errors before a fatal error reaches this interface.
 
 ## Current scope
 
-This wrapper includes playback, posters, themed controls, and lifecycle handling.
-VTT previews, private-cookie credential configuration, the React wrapper, and
+This wrapper includes playback, posters, sprite VTT previews, themed controls,
+and lifecycle handling. Private-cookie credential configuration, the React wrapper, and
 telemetry are not implemented yet. No telemetry listeners or destinations are
 installed. No DRM or universal private-CDN compatibility is claimed.
 

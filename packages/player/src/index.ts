@@ -1,5 +1,6 @@
 import type Hls from "hls.js";
-import { createPlayerTheme } from "./theme.js";
+import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview } from "./theme.js";
+import { loadThumbnails } from "./thumbnails.js";
 
 export type PlayerStatus = "preparing" | "ready" | "failed" | "expired";
 export type PlayerEngine = "auto" | "native" | "hlsjs";
@@ -39,7 +40,7 @@ const mediaEvents = [
 ];
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = ["status", "src", "poster", "player", ...mediaAttributes];
+  static observedAttributes = ["status", "src", "poster", "thumbnails", "player", ...mediaAttributes];
 
   // Add payload inference without changing the browser's listener implementation.
   declare addEventListener: ((
@@ -62,6 +63,7 @@ export class ChunkifyPlayer extends HTMLElement {
   #generation = 0;
   #hls: Hls | null = null;
   #engine: Exclude<PlayerEngine, "auto"> | null = null;
+  #thumbnailCleanup: (() => void) | null = null;
 
   constructor() {
     super();
@@ -112,6 +114,13 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("poster", value);
   }
 
+  get thumbnails(): string {
+    return this.getAttribute("thumbnails") ?? "";
+  }
+  set thumbnails(value: string | null | undefined) {
+    this.#setStringAttribute("thumbnails", value);
+  }
+
   get status(): PlayerStatus | null {
     const value = this.getAttribute("status");
     return value === "preparing" || value === "ready" || value === "failed" || value === "expired"
@@ -147,7 +156,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     // Preserve properties assigned before the custom element was registered.
-    for (const name of ["src", "poster", "status", "player", "autoplay", "muted", "loop", "playsInline", "controls"]) {
+    for (const name of ["src", "poster", "thumbnails", "status", "player", "autoplay", "muted", "loop", "playsInline", "controls"]) {
       if (Object.prototype.hasOwnProperty.call(this, name)) {
         const value: unknown = Reflect.get(this, name);
         Reflect.deleteProperty(this, name);
@@ -155,6 +164,7 @@ export class ChunkifyPlayer extends HTMLElement {
       }
     }
     for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
+    connectPlayerTheme(this.#theme);
     this.#scheduleUpdate();
   }
 
@@ -166,6 +176,8 @@ export class ChunkifyPlayer extends HTMLElement {
     if (oldValue === value) return;
     if (name === "poster") {
       this.#syncPoster();
+    } else if (name === "thumbnails") {
+      this.#syncThumbnails();
     } else if (mediaAttributes.includes(name)) {
       this.#syncMediaAttribute(name);
     } else if (this.isConnected) {
@@ -192,6 +204,16 @@ export class ChunkifyPlayer extends HTMLElement {
     else this.#media.removeAttribute("poster");
   }
 
+  #syncThumbnails() {
+    this.#thumbnailCleanup?.();
+    this.#thumbnailCleanup = null;
+    refreshThumbnailPreview(this.#theme);
+    const source = this.thumbnails.trim();
+    if (this.#active && this.isConnected && source) {
+      this.#thumbnailCleanup = loadThumbnails(this.#media, source, () => refreshThumbnailPreview(this.#theme));
+    }
+  }
+
   #scheduleUpdate() {
     if (this.#updatePending) return;
     this.#updatePending = true;
@@ -206,6 +228,7 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#active = false;
     this.#theme.hidden = true;
     this.#syncPoster();
+    this.#syncThumbnails();
     this.#hls?.destroy();
     this.#hls = null;
     this.#engine = null;
@@ -269,6 +292,7 @@ export class ChunkifyPlayer extends HTMLElement {
         return;
       }
       this.#media.src = url.href;
+      this.#syncThumbnails();
       return;
     }
     this.#engine = "hlsjs";
@@ -293,6 +317,7 @@ export class ChunkifyPlayer extends HTMLElement {
       });
       hls.attachMedia(this.#media);
       hls.loadSource(url.href);
+      this.#syncThumbnails();
     } catch {
       if (generation !== this.#generation || !this.isConnected) return;
       this.#fail("engine-load-failed");

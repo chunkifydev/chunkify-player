@@ -24,7 +24,7 @@
   </head>
   <body>
     <h1>Chunkify Player</h1>
-    <p>A local six-second HLS test clip, using the Demuxed 2022 controls.</p>
+    <p>A local six-second HLS test clip, using the Demuxed 2022 controls. Hover or drag the seek bar to preview frames.</p>
     <label>Playback engine
       <select id="engine">
         <option value="auto">Auto</option>
@@ -42,7 +42,8 @@
     </label>
     <chunkify-player id="player" status="ready"
       src="../../tests/fixtures/media/master.m3u8"
-      poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
+      poster="../../tests/fixtures/media/poster.jpg"
+      thumbnails="../../tests/fixtures/media/thumbnails/images.vtt" controls muted playsinline>
     </chunkify-player>
     <p id="module-status" role="status">Loading player package...</p>
     <p id="playback-error" role="alert" hidden></p>

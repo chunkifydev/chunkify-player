@@ -6,6 +6,11 @@ player.poster = null;
 player.poster = undefined;
 const poster: string = player.poster;
 console.log(poster);
+player.thumbnails = "/thumbnails/images.vtt";
+player.thumbnails = null;
+player.thumbnails = undefined;
+const thumbnails: string = player.thumbnails;
+console.log(thumbnails);
 
 player.addEventListener("playback-error", (event) => {
   const detail: PlaybackErrorDetail = event.detail;

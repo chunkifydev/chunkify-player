@@ -242,6 +242,7 @@ test("properties set before registration survive upgrade and start playback once
     Object.assign(player, {
       status: "preparing", src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
       muted: true, controls: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
+      thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
     });
     document.body.append(player);
     const entry = "/packages/player/dist/index.js";
@@ -257,10 +258,12 @@ test("properties set before registration survive upgrade and start playback once
   expect(manifests).toHaveLength(1);
   expect(await player.evaluate((element: ChunkifyPlayer) => ({
     src: element.src, player: element.player, controls: element.controls, poster: element.poster,
+    thumbnails: element.thumbnails,
     muted: element.media.muted, playsInline: element.media.hasAttribute("playsinline"),
   }))).toEqual({
     src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
     controls: true, muted: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
+    thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
   });
 });
 
@@ -271,7 +274,7 @@ test("an omitted status waits for a source and named slots replace fallback text
   });
   await openFixture(page);
   await page.evaluate(() => {
-    document.body.innerHTML = `<chunkify-player muted>
+    document.body.innerHTML = `<chunkify-player muted thumbnails="/tests/fixtures/media/thumbnails/images.vtt">
       <span slot="preparing">Custom processing message</span>
     </chunkify-player>`;
   });

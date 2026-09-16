@@ -5,8 +5,8 @@ One repository for the Chunkify player packages described in
 
 The initial `<chunkify-player>` implementation wraps a native video element and
 loads hls.js only when selected. It supports readiness fallbacks, posters,
-Demuxed 2022 controls, media events, source replacement, and cleanup. Timeline
-previews, private-cookie configuration, React, and telemetry remain later steps.
+Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
+and cleanup. Private-cookie configuration, React, and telemetry remain later steps.
 
 ## Packages
 
@@ -44,6 +44,7 @@ npm run serve
 
 Visit [the local example](http://127.0.0.1:4173/examples/basic/) and press Play.
 Use the engine and status selectors to try playback and readiness fallbacks.
+Hover or drag the seek bar to preview frames from the two local sprite images.
 The clip is a local synthetic fixture; playback makes no Chunkify API calls.
 Rebuild after editing the source, then reload the page. The local static server
 binds to `127.0.0.1` and disables caching.
@@ -78,6 +79,8 @@ the browser API boundary to verify supported and unsupported behavior without OS
 windows. Actual OS fullscreen/PiP remains part of release browser/device QA. Native HLS
 uses the browser's reported support; unsupported native playback fails explicitly.
 Capability tests also simulate a browser without native HLS to verify fallback.
+Thumbnail tests cover multiple sprites and crops, cross-origin files, readiness,
+source/thumbnail replacement, cancellation, reconnection, and non-fatal failures.
 
 Fixtures are checked in under `tests/fixtures/media`. FFmpeg is only needed to
 regenerate them. These browser-engine checks do not certify every Safari/iOS,

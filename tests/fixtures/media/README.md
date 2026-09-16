@@ -7,6 +7,8 @@ covered by this repository's MIT license.
 
 `video.mp4` is a fast-start MP4. `master.m3u8` points to the muxed audio/video
 rendition `stream.m3u8`, which uses three fMP4 segments and `init.mp4`.
+`thumbnails/images.vtt` maps six one-second cues onto two 320 x 180 JPEG sprites,
+each containing a 2 x 2 grid of 160 x 90 frames. The final sprite has two frames.
 
 To regenerate the binary fixtures from the repository root with FFmpeg installed:
 
@@ -26,6 +28,10 @@ ffmpeg -y -hide_banner -loglevel error -i tests/fixtures/media/video.mp4 \
 
 ffmpeg -y -hide_banner -loglevel error -i tests/fixtures/media/video.mp4 \
   -frames:v 1 -update 1 tests/fixtures/media/poster.jpg
+
+ffmpeg -y -hide_banner -loglevel error -i tests/fixtures/media/video.mp4 \
+  -vf 'fps=1,scale=160:90,tile=2x2' -frames:v 2 \
+  tests/fixtures/media/thumbnails/sprite%02d.jpg
 ```
 
 CI uses the checked-in fixtures and does not need FFmpeg.
