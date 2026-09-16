@@ -29,6 +29,12 @@ export function createPlayerTheme() {
   theme.template = template;
   theme.setAttribute("part", "theme");
   theme.hidden = true;
+  // The theme supplies its own preview. Remove the seek bar's hidden fallback
+  // before the controller subscribes it, or it will load images anonymously.
+  for (const range of theme.renderRoot.querySelectorAll("media-time-range")) {
+    customElements.upgrade(range);
+    range.shadowRoot?.querySelector("media-preview-thumbnail")?.remove();
+  }
   theme.renderRoot.addEventListener("mediapreviewrequest", (event) => {
     if (!(event instanceof CustomEvent)) return;
     const media = theme.querySelector("video");
@@ -51,6 +57,13 @@ export function createPlayerTheme() {
     image?.addEventListener("load", () => { preview.hidden = false; });
   }
   return theme;
+}
+
+export function setThumbnailCredentials(theme: ReturnType<typeof createPlayerTheme>, include: boolean) {
+  for (const preview of theme.renderRoot.querySelectorAll("media-preview-thumbnail")) {
+    const image = preview.shadowRoot?.querySelector("img");
+    if (image) image.crossOrigin = include ? "use-credentials" : "anonymous";
+  }
 }
 
 export function refreshThumbnailPreview(theme: ReturnType<typeof createPlayerTheme>) {

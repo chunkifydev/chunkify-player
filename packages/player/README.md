@@ -41,6 +41,7 @@ resolver or import map. No published CDN import is available for this version.
 | `poster` | `poster` | Optional image URL. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears the media poster. |
 | `thumbnails` | `thumbnails` | Optional HTTP/HTTPS WebVTT URL for seek previews. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears previews. |
 | `player` | `player` | `auto`, `native`, or `hlsjs`; defaults to `auto`. |
+| `credentials` | `credentials` | Optional `include` for customer-set cookies. Setting `null` or `undefined` removes it and restores the engine/browser defaults. Changing it restarts playback. Other attribute values produce `invalid-credentials`. |
 | `status` | `status` | `preparing`, `ready`, `failed`, `expired`, or omitted. Setting `null` or `undefined` removes it. |
 | `autoplay` | `autoplay` | Boolean attribute. Subject to browser autoplay policies. |
 | `muted` | `muted` | Boolean attribute; updates the video's muted state when changed. |
@@ -98,7 +99,8 @@ sprite02.jpg#xywh=160,0,160,90
 Image URLs resolve relative to the VTT response URL, including after redirects.
 Absolute HTTP/HTTPS image URLs also work. Cross-origin VTT files and sprite
 images must allow CORS. Loading thumbnails does not change the video's CORS mode.
-Customer cookie authorization remains a later step.
+Set `credentials="include"` to include customer cookies for both VTT and sprite
+requests, subject to the private-playback requirements below.
 
 The VTT loads only during active playback initialization. Non-ready states and
 disconnected players request neither VTT nor sprites. Sprites load when requested
@@ -161,6 +163,66 @@ Built-in fallbacks use `role="status"`. Customize them with named slots:
 The wrapper does not fetch asset metadata, poll readiness, construct URLs from
 asset IDs, or contact a Chunkify API. The caller supplies status and source URLs.
 
+## Private playback
+
+Authorization belongs to the customer application and CDN. The player accepts
+an already authorized URL, or forwards cookies that the customer backend has
+already set. It never signs, refreshes, stores, or revokes tokens.
+
+For a path-token CDN, pass the authorized manifest URL as `src`. The player
+preserves the supplied path and query parameters. Child playlists and media
+resolve according to the manifest URLs; it does not copy a manifest's query
+token onto child URLs. The CDN's authorized path must cover those resources,
+or the manifest must supply individually authorized URLs. Supply authorized
+poster and thumbnail URLs separately when those resources are protected.
+
+For customer-managed cookies, such as CloudFront signed cookies:
+
+```html
+<!-- The customer backend sets the CDN cookies before rendering this player. -->
+<chunkify-player
+  src="https://media.example.com/asset/manifest.m3u8"
+  poster="https://media.example.com/asset/poster.jpg"
+  thumbnails="https://media.example.com/asset/thumbnails/images.vtt"
+  credentials="include"
+  controls
+></chunkify-player>
+```
+
+The same option is available as `player.credentials = "include"`. It configures
+the native video's `crossorigin="use-credentials"`, hls.js requests through its
+XHR loader, VTT fetches, and sprite images before those resources load. This
+covers master/child playlists, initialization segments, media segments and byte
+ranges, plus posters and previews. Setting the property to `null` or `undefined`
+removes the option. Changing it stops the old attempt and initializes a new one;
+non-ready or disconnected players still make no media requests.
+
+Without this option, the existing engine/browser defaults apply. In particular,
+it is not a guarantee that the browser sends no cookies. Cross-origin hls.js and
+VTT requests do not opt into cookies, and sprite images use anonymous CORS.
+
+For cross-origin cookie requests, the CDN must return the exact allowed page
+origin in `Access-Control-Allow-Origin`, not `*`, and
+`Access-Control-Allow-Credentials: true`. Configure those responses consistently
+for playlists, media, images and errors. Cookies must also match the media host
+and path and satisfy the browser's SameSite, Secure and third-party-cookie rules.
+See [credentialed CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#requests_with_credentials)
+and [native media CORS settings](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/crossOrigin).
+
+Automated tests exercise a cookie-gated, cross-origin but same-site local server,
+including hls.js HLS byte ranges, native MP4 seeking, and native HLS when the
+browser reports support. Path-token tests verify URL handling using a synthetic
+authorized path; they do not certify a CDN's signing implementation. Real Safari,
+iOS, cross-site cookies and customer CDN configurations require deployment tests.
+No universal native/cross-site cookie compatibility or DRM is claimed.
+
+Denied media requests emit the normalized `playback-error` event without URLs,
+cookies or raw errors. Native browsers may report a denied resource as an
+unsupported source rather than expose its HTTP status. Optional poster/preview
+failures do not stop video playback. When authorization expires, the customer
+application must obtain fresh authorization and restart playback, for example by
+replacing `src`; the player does not contact an authorization service.
+
 ## Events and errors
 
 Standard media events are forwarded to the host during active playback,
@@ -179,7 +241,7 @@ player.addEventListener("playback-error", (event) => {
 });
 ```
 
-Codes are `missing-source`, `invalid-source`, `invalid-status`, `invalid-player`,
+Codes are `missing-source`, `invalid-source`, `invalid-status`, `invalid-player`, `invalid-credentials`,
 `unsupported-engine`, `unsupported-source`, `engine-load-failed`, `network-error`,
 `decode-error`, and `playback-failed`. Startup failures, fatal hls.js errors, and
 native media errors stop the current attempt. Change the source/status or
@@ -189,8 +251,8 @@ recoverable errors before a fatal error reaches this interface.
 ## Current scope
 
 This wrapper includes playback, posters, sprite VTT previews, themed controls,
-and lifecycle handling. Private-cookie credential configuration, the React wrapper, and
-telemetry are not implemented yet. No telemetry listeners or destinations are
+cookie credentials, and lifecycle handling. The React wrapper and telemetry
+are not implemented yet. No telemetry listeners or destinations are
 installed. No DRM or universal private-CDN compatibility is claimed.
 
 The package emits ES modules, TypeScript declarations, and source maps. Sources

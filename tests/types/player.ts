@@ -11,6 +11,13 @@ player.thumbnails = null;
 player.thumbnails = undefined;
 const thumbnails: string = player.thumbnails;
 console.log(thumbnails);
+player.credentials = "include";
+player.credentials = null;
+player.credentials = undefined;
+const credentials: "include" | null = player.credentials;
+console.log(credentials);
+// @ts-expect-error The component accepts only include or an omitted credential setting.
+player.credentials = "omit";
 
 player.addEventListener("playback-error", (event) => {
   const detail: PlaybackErrorDetail = event.detail;

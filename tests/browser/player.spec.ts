@@ -243,6 +243,7 @@ test("properties set before registration survive upgrade and start playback once
       status: "preparing", src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
       muted: true, controls: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
       thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
+      credentials: "include",
     });
     document.body.append(player);
     const entry = "/packages/player/dist/index.js";
@@ -258,12 +259,13 @@ test("properties set before registration survive upgrade and start playback once
   expect(manifests).toHaveLength(1);
   expect(await player.evaluate((element: ChunkifyPlayer) => ({
     src: element.src, player: element.player, controls: element.controls, poster: element.poster,
-    thumbnails: element.thumbnails,
+    thumbnails: element.thumbnails, credentials: element.credentials,
     muted: element.media.muted, playsInline: element.media.hasAttribute("playsinline"),
   }))).toEqual({
     src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
     controls: true, muted: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
     thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
+    credentials: "include",
   });
 });
 

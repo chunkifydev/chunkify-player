@@ -1,4 +1,4 @@
-export function loadThumbnails(media: HTMLVideoElement, source: string, onReady: () => void): () => void {
+export function loadThumbnails(media: HTMLVideoElement, source: string, credentials: RequestCredentials, onReady: () => void): () => void {
   const controller = new AbortController();
   const track = document.createElement("track");
   track.kind = "metadata";
@@ -10,7 +10,7 @@ export function loadThumbnails(media: HTMLVideoElement, source: string, onReady:
     try {
       const url = new URL(source, media.baseURI);
       if (!/^https?:$/.test(url.protocol)) return;
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { signal: controller.signal, credentials });
       if (!response.ok) return;
       const text = await response.text();
       if (controller.signal.aborted) return;

@@ -35,3 +35,13 @@ ffmpeg -y -hide_banner -loglevel error -i tests/fixtures/media/video.mp4 \
 ```
 
 CI uses the checked-in fixtures and does not need FFmpeg.
+
+`../private-media.ts` serves these same files on an ephemeral loopback port for
+private-playback tests. The page and media server share a site but have different
+origins. `/cookies/` requires the synthetic HttpOnly `media_access=fixture` cookie;
+`/token/fixture-signature/` represents an already authorized path; `/public/` needs
+neither. The server returns credentialed CORS headers and real HTTP 206 ranges.
+It builds a nested master/rendition layout and a byte-range HLS playlist in memory
+from the existing init/segment files. No extra binary fixtures or real CDN
+credentials are needed. This fixture tests forwarding and URL resolution, not
+cryptographic signing or cross-site browser cookie policy.

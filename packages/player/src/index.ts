@@ -1,5 +1,5 @@
 import type Hls from "hls.js";
-import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview } from "./theme.js";
+import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview, setThumbnailCredentials } from "./theme.js";
 import { loadThumbnails } from "./thumbnails.js";
 
 export type PlayerStatus = "preparing" | "ready" | "failed" | "expired";
@@ -10,6 +10,7 @@ const errorMessages = {
   "invalid-source": "Provide a valid HTTP or HTTPS video URL.",
   "invalid-status": "Use preparing, ready, failed, or expired for status.",
   "invalid-player": "Use auto, native, or hlsjs for player.",
+  "invalid-credentials": "Use include for credentials, or omit the attribute.",
   "unsupported-engine": "The selected playback engine is not supported by this browser.",
   "unsupported-source": "The selected engine cannot play this media format.",
   "engine-load-failed": "The playback engine could not load. Check your module configuration and connection.",
@@ -40,7 +41,7 @@ const mediaEvents = [
 ];
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = ["status", "src", "poster", "thumbnails", "player", ...mediaAttributes];
+  static observedAttributes = ["status", "src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
 
   // Add payload inference without changing the browser's listener implementation.
   declare addEventListener: ((
@@ -121,6 +122,13 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("thumbnails", value);
   }
 
+  get credentials(): "include" | null {
+    return this.getAttribute("credentials") === "include" ? "include" : null;
+  }
+  set credentials(value: "include" | null | undefined) {
+    this.#setStringAttribute("credentials", value);
+  }
+
   get status(): PlayerStatus | null {
     const value = this.getAttribute("status");
     return value === "preparing" || value === "ready" || value === "failed" || value === "expired"
@@ -156,7 +164,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     // Preserve properties assigned before the custom element was registered.
-    for (const name of ["src", "poster", "thumbnails", "status", "player", "autoplay", "muted", "loop", "playsInline", "controls"]) {
+    for (const name of ["src", "poster", "thumbnails", "status", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
       if (Object.prototype.hasOwnProperty.call(this, name)) {
         const value: unknown = Reflect.get(this, name);
         Reflect.deleteProperty(this, name);
@@ -210,7 +218,8 @@ export class ChunkifyPlayer extends HTMLElement {
     refreshThumbnailPreview(this.#theme);
     const source = this.thumbnails.trim();
     if (this.#active && this.isConnected && source) {
-      this.#thumbnailCleanup = loadThumbnails(this.#media, source, () => refreshThumbnailPreview(this.#theme));
+      this.#thumbnailCleanup = loadThumbnails(this.#media, source, this.credentials ?? "same-origin",
+        () => refreshThumbnailPreview(this.#theme));
     }
   }
 
@@ -278,6 +287,13 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#fail("invalid-player");
       return;
     }
+    if (this.hasAttribute("credentials") && this.credentials === null) {
+      this.#fail("invalid-credentials");
+      return;
+    }
+    if (this.credentials === "include") this.#media.crossOrigin = "use-credentials";
+    else this.#media.removeAttribute("crossorigin");
+    setThumbnailCredentials(this.#theme, this.credentials === "include");
     this.#fallback.hidden = true;
     this.#media.hidden = false;
     this.#theme.hidden = false;
@@ -307,7 +323,10 @@ export class ChunkifyPlayer extends HTMLElement {
         this.#fail("unsupported-engine");
         return;
       }
-      const hls = new Hls();
+      const includeCredentials = this.credentials === "include";
+      const hls = new Hls({
+        xhrSetup: (xhr) => { xhr.withCredentials = includeCredentials; },
+      });
       this.#hls = hls;
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal || generation !== this.#generation) return;

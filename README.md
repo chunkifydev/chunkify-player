@@ -6,7 +6,7 @@ One repository for the Chunkify player packages described in
 The initial `<chunkify-player>` implementation wraps a native video element and
 loads hls.js only when selected. It supports readiness fallbacks, posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
-and cleanup. Private-cookie configuration, React, and telemetry remain later steps.
+cookie credentials, and cleanup. React and telemetry remain later steps.
 
 ## Packages
 
@@ -81,6 +81,10 @@ uses the browser's reported support; unsupported native playback fails explicitl
 Capability tests also simulate a browser without native HLS to verify fallback.
 Thumbnail tests cover multiple sprites and crops, cross-origin files, readiness,
 source/thumbnail replacement, cancellation, reconnection, and non-fatal failures.
+Private-playback tests use a second local origin with real cookie checks and
+CORS responses. They cover credentialed playlists, segments, posters, previews,
+HTTP byte ranges, authorized path URLs, denial, and credential changes. Native
+HLS cases run where supported; all three browsers test hls.js and native MP4.
 
 Fixtures are checked in under `tests/fixtures/media`. FFmpeg is only needed to
 regenerate them. These browser-engine checks do not certify every Safari/iOS,
