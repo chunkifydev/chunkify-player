@@ -21,6 +21,7 @@ const session = attachTelemetry(video, {
   assetId: "asset_123",
   provider: "callback",
   environment: "development",
+  sampleRate: 1,
   send(event) {
     console.log(event); // Replace with your application's destination.
   },
@@ -52,6 +53,7 @@ function. Invalid configuration throws a fixed `TypeError` before installing
 listeners. `environment` and `viewerId` are optional strings. A viewer ID must be
 customer-supplied and pseudonymous. Do not put names, emails, credentials or URLs
 in these metadata fields. The SDK does not generate or persist a viewer ID.
+`sampleRate` is optional and must be a finite number from `0` to `1`.
 
 ## View lifecycle and measurements
 
@@ -121,6 +123,18 @@ so frames decoded before telemetry attached are excluded. The standard
 `getVideoPlaybackQuality()` API is preferred, with WebKit frame counters as a
 fallback. Missing, invalid, or reset counters produce `null` instead of an estimate.
 
+## Sampling
+
+Sampling limits the number of complete views sent to the destination. It defaults
+to `1`, which includes every view. `0.1` includes approximately ten percent, while
+`0` excludes every view.
+
+The package makes one independent random decision when each view begins. An included
+view sends its complete start, snapshot, error, and end sequence. An excluded view
+sends nothing and schedules no snapshots. Replay after an ended view makes a fresh
+decision. Sampling choices are kept only in memory and are not tied to a viewer ID,
+cookie, or persistent storage.
+
 ## Record contract and delivery
 
 The initial schema version is `1`. Each record includes:
@@ -156,8 +170,8 @@ an attachment there are no telemetry listeners or records.
 
 ## Remaining telemetry work
 
-This is not the complete MVP telemetry package. Later steps will add sampling,
-engine enrichment, Datadog/Grafana/OTLP destinations, and the player/React property integration.
+This is not the complete MVP telemetry package. Later steps will add engine
+enrichment, Datadog/Grafana/OTLP destinations, and the player/React property integration.
 None of those options are exposed yet.
 Measurements not exposed by a future connector will remain nullable.
 

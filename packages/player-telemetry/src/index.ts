@@ -45,6 +45,7 @@ export interface CallbackTelemetryConfig {
   send: (event: ChunkifyPlayerTelemetryEvent) => void | Promise<void>;
   environment?: string | undefined;
   viewerId?: string | undefined;
+  sampleRate?: number | undefined;
 }
 export interface TelemetryOptions extends CallbackTelemetryConfig {
   assetId: string;
@@ -79,6 +80,7 @@ interface View {
   frameBaseline: FrameCounts | null;
   framePrevious: FrameCounts | null;
   frameMetricsValid: boolean;
+  sampled: boolean;
 }
 
 interface FrameCounts {
@@ -141,7 +143,11 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       (options.viewerId !== undefined && typeof options.viewerId !== "string")) {
     throw new TypeError("Telemetry environment and viewerId must be strings when provided.");
   }
-  const { assetId, send, environment = null, viewerId = null } = options;
+  if (options.sampleRate !== undefined &&
+      (!Number.isFinite(options.sampleRate) || options.sampleRate < 0 || options.sampleRate > 1)) {
+    throw new TypeError("Telemetry sampleRate must be a finite number from 0 to 1.");
+  }
+  const { assetId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
   let view: View | null = null;
   let destroyed = false;
   let wantsPlay = false;
@@ -150,6 +156,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
 
   function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null,
     error: NormalizedError | null = null) {
+    if (!current.sampled) return;
     const now = performance.now();
     const playingTime = current.playing + (current.playingSince === null ? 0 : now - current.playingSince);
     const rebufferDuration = current.rebufferDuration + (current.rebufferSince === null ? 0 : now - current.rebufferSince);
@@ -206,6 +213,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     wantsPlay = true;
     if (view) return;
     const initialFrames = frameCounts(media);
+    const sampled = sampleRate === 1 || (sampleRate > 0 && Math.random() < sampleRate);
     view = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(), startup: null,
       playing: 0, playingSince: null,
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
@@ -216,7 +224,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
       errorEmitted: false, frameBaseline: initialFrames, framePrevious: initialFrames,
-      frameMetricsValid: initialFrames !== null };
+      frameMetricsValid: initialFrames !== null, sampled };
     emit(view, "chunkify.video.view_started");
     if (media.error) reportMediaError();
   }
@@ -254,7 +262,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     });
   }
   function scheduleSnapshot() {
-    if (!view || snapshotTimer !== null) return;
+    if (!view || !view.sampled || snapshotTimer !== null) return;
     const playingSince = view.playingSince;
     if (playingSince === null) return;
     const current = view;

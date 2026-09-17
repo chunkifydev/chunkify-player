@@ -8,7 +8,8 @@ loads hls.js only when selected. It supports posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
 cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
 reuses that implementation. A standalone telemetry package provides callback
-start/end/snapshot/error records and cumulative playback metrics; player integration remains pending.
+start/end/snapshot/error records, cumulative playback metrics, and per-view sampling;
+player integration remains pending.
 
 ## Packages
 
@@ -124,6 +125,7 @@ these tests; the published React wrapper keeps React external as a peer.
 Standalone telemetry tests cover attempt boundaries, snapshots, startup/playing/
 buffering/seek timing, completion, source changes, replay, page exit, listener cleanup,
 normalized media errors, browser frame counts, callback failures and payload privacy.
+They also verify complete-view sampling and fresh decisions on replay.
 They combine controlled-clock checks with actual native video playback.
 
 GitHub Actions runs the same checks on pushes and pull requests, and retains

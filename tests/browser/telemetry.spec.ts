@@ -167,6 +167,88 @@ test("snapshots report cumulative metrics every 30 seconds of active playing tim
   expect(await page.evaluate(() => window.telemetryFixture.events.length)).toBe(4);
 });
 
+test("sampling keeps a complete selected view and makes a fresh decision for replay", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const state = window as typeof window & { restoreRandom: () => void };
+    const decisions = [0.25, 0.75];
+    const originalRandom = Math.random;
+    state.restoreRandom = () => { Math.random = originalRandom; };
+    Math.random = () => decisions.shift() ?? 1;
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-sampled", provider: "callback", sampleRate: 0.5,
+      send: (event) => { f.events.push(event); },
+    });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(30000);
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.video.dispatchEvent(new Event("error"));
+    f.video.dispatchEvent(new Event("ended"));
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(60000);
+  const events = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.video.dispatchEvent(new Event("error"));
+    f.video.dispatchEvent(new Event("ended"));
+    f.session!.destroy();
+    (window as typeof window & { restoreRandom: () => void }).restoreRandom();
+    return f.events;
+  });
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started",
+    "chunkify.video.view_snapshot",
+    "chunkify.video.playback_error",
+    "chunkify.video.view_ended",
+  ]);
+  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
+  expect(new Set(events.map((event) => event.view_id)).size).toBe(1);
+});
+
+test("sample rates zero and one do not require a random decision", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const state = window as typeof window & { restoreRandom: () => void };
+    const originalRandom = Math.random;
+    state.restoreRandom = () => { Math.random = originalRandom; };
+    Math.random = () => { throw new Error("sampling should not need randomness"); };
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-none", provider: "callback", sampleRate: 0,
+      send: (event) => { f.events.push(event); },
+    });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(60000);
+  const result = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.video.dispatchEvent(new Event("error"));
+    f.video.dispatchEvent(new Event("ended"));
+    f.session!.destroy();
+    const excludedCount = f.events.length;
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-all", provider: "callback", sampleRate: 1,
+      send: (event) => { f.events.push(event); },
+    });
+    f.session.startAttempt();
+    f.session.destroy();
+    (window as typeof window & { restoreRandom: () => void }).restoreRandom();
+    return { excludedCount, events: f.events };
+  });
+  expect(result.excludedCount).toBe(0);
+  expect(result.events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.view_ended",
+  ]);
+});
+
 test("a media error stops an unfinished seek measurement", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -475,7 +557,8 @@ test("invalid configuration fails before installing listeners or calling a desti
     const f = window.telemetryFixture;
     const failures: boolean[] = [];
     for (const invalid of [{ assetId: "" }, { assetId: "  " }, { provider: "unknown" }, { send: null },
-      { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } }]) {
+      { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } },
+      { sampleRate: -0.1 }, { sampleRate: 1.1 }, { sampleRate: NaN }, { sampleRate: "1" }, { sampleRate: Infinity }]) {
       try {
         Reflect.apply(f.attachTelemetry, null, [f.video, {
           assetId: "asset-valid", provider: "callback", send: (event: ChunkifyPlayerTelemetryEvent) => { f.events.push(event); }, ...invalid,
@@ -486,7 +569,7 @@ test("invalid configuration fails before installing listeners or calling a desti
     f.video.dispatchEvent(new Event("play"));
     return { failures, events: f.events };
   });
-  expect(result).toEqual({ failures: [true, true, true, true, true, true], events: [] });
+  expect(result).toEqual({ failures: Array(11).fill(true), events: [] });
 });
 
 test("real video playback records source replacement, replay and cleanup without loading an engine or transport", async ({ page }) => {

@@ -3,6 +3,7 @@ import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelem
 const video = document.createElement("video");
 const destination: CallbackTelemetryConfig = {
   provider: "callback",
+  sampleRate: 1,
   async send(event) {
     const record: ChunkifyPlayerTelemetryEvent = event;
     const startup: number | null = record.metrics.startup_time_ms;
@@ -25,3 +26,5 @@ attachTelemetry(video, destination);
 attachTelemetry(video, { assetId: "asset-types", provider: "datadog", client: {} });
 // @ts-expect-error Transport secrets are not accepted.
 attachTelemetry(video, { ...destination, assetId: "asset-types", authorization: "secret" });
+// @ts-expect-error Sample rates are numeric.
+attachTelemetry(video, { ...destination, assetId: "asset-types", sampleRate: "0.5" });
