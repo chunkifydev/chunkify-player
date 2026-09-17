@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { ChunkifyPlayer, type ChunkifyPlayerRef } from "@chunkify/player-react";
+import { ChunkifyPlayer, type ChunkifyPlayerRef, type TelemetryConfig } from "@chunkify/player-react";
 
 const ref = createRef<ChunkifyPlayerRef>();
 <ChunkifyPlayer ref={ref} src="/master.m3u8" assetId="asset-123"
@@ -19,6 +19,17 @@ ref.current?.status;
 <ChunkifyPlayer player="videojs" />;
 // @ts-expect-error Only include or an omitted credentials option is supported.
 <ChunkifyPlayer credentials="omit" />;
+
+const telemetry: TelemetryConfig = {
+  provider: "callback",
+  sampleRate: 0.5,
+  send(event) { console.log(event.event_name); },
+};
+<ChunkifyPlayer assetId="asset-telemetry" telemetry={telemetry} />;
+<ChunkifyPlayer telemetry={null} />;
+<ChunkifyPlayer telemetry={undefined} />;
+// @ts-expect-error Telemetry configuration is an object, not an HTML attribute string.
+<ChunkifyPlayer telemetry="callback" />;
 
 <ChunkifyPlayer
   onPlay={(event) => { const video: HTMLVideoElement = event.currentTarget.media; void video; }}

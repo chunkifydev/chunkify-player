@@ -2,7 +2,8 @@
 
 import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState,
   type DOMAttributes, type HTMLAttributes, type ReactElement, type Ref } from "react";
-import type { ChunkifyPlayer as PlayerElement, PlaybackErrorDetail, PlayerEngine } from "@chunkify/player";
+import type { ChunkifyPlayer as PlayerElement, PlaybackErrorDetail, PlayerEngine,
+  TelemetryConfig as PlayerTelemetryConfig } from "@chunkify/player";
 
 const mediaEvents = {
   onAbort: "abort", onCanPlay: "canplay", onCanPlayThrough: "canplaythrough",
@@ -17,6 +18,7 @@ const mediaEvents = {
 const callbackNames = Object.keys(mediaEvents) as Array<keyof typeof mediaEvents>;
 
 export type ChunkifyPlayerRef = PlayerElement;
+export type TelemetryConfig = PlayerTelemetryConfig;
 export type PlayerMediaEvent = Event & { readonly currentTarget: PlayerElement };
 export type PlayerPlaybackErrorEvent = CustomEvent<PlaybackErrorDetail> & { readonly currentTarget: PlayerElement };
 type MediaCallbacks = {
@@ -32,6 +34,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   thumbnails?: string | null | undefined;
   player?: PlayerEngine | undefined;
   credentials?: "include" | null | undefined;
+  telemetry?: TelemetryConfig | null | undefined;
   autoPlay?: boolean | undefined;
   loop?: boolean | undefined;
   muted?: boolean | undefined;

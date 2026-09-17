@@ -4,14 +4,16 @@
 
 Added the initial standalone `@chunkify/player-telemetry` package with a callback
 destination, start/end records, cumulative 30-second snapshots, ephemeral view IDs,
-startup/playing/buffering/seek timing, completion, and cleanup. React integration,
-engine metrics, and provider destinations remain pending.
+startup/playing/buffering/seek timing, completion, and cleanup. Engine metrics and
+provider destinations remain pending.
 HTML media errors now emit an immediate normalized, privacy-safe record, and browser
 frame counters report per-view dropped and total frames when available.
 Optional per-view sampling now keeps or excludes each complete event sequence and
 supports rates from `0` to `1` without storing a persistent sampling decision.
 The Web Component now exposes optional callback telemetry through its JavaScript-only
 `telemetry` property and owns attachment cleanup across asset changes and disconnects.
+The React wrapper now exposes the same callback configuration through its typed
+`telemetry` prop, including Strict Mode, source replacement, disabling, and unmount cleanup.
 
 Asset readiness now belongs to the application. The player initializes playback
 when given a valid source URL and stays idle without one.

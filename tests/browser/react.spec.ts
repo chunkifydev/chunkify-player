@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
+import type { ChunkifyPlayerTelemetryEvent } from "../../packages/player-telemetry/src/index.js";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/tests/fixtures/react.html");
@@ -91,6 +92,106 @@ test("React callback refs replay safely in Strict Mode and clean up on removal",
   await expect(page.locator("body")).toHaveAttribute("data-ref-has-media", "true");
   await page.evaluate(() => window.reactFixture.render(null));
   await expect(page.locator("body")).toHaveAttribute("data-ref-cleanups", "2");
+});
+
+test("React keeps one telemetry attachment across source replacement and cleans it on unmount", async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      reactTelemetryConfig: { provider: "callback"; send(event: ChunkifyPlayerTelemetryEvent): void };
+      reactTelemetryEvents: ChunkifyPlayerTelemetryEvent[];
+    };
+    state.reactTelemetryEvents = [];
+    state.reactTelemetryConfig = {
+      provider: "callback",
+      send(event) { state.reactTelemetryEvents.push(event); },
+    };
+    window.reactFixture.render({
+      assetId: "asset-react-telemetry", telemetry: state.reactTelemetryConfig,
+      player: "native", src: "/tests/fixtures/media/video.mp4", muted: true,
+    });
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { reactTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).reactTelemetryEvents.length)).toBe(1);
+
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      reactTelemetryConfig: { provider: "callback"; send(event: ChunkifyPlayerTelemetryEvent): void };
+    };
+    window.reactFixture.render({
+      assetId: "asset-react-telemetry", telemetry: state.reactTelemetryConfig,
+      player: "native", src: "/tests/fixtures/media/video.mp4?replacement", muted: true,
+    });
+  });
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { reactTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).reactTelemetryEvents.length)).toBe(2);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { reactTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).reactTelemetryEvents.length)).toBe(3);
+  await page.evaluate(() => window.reactFixture.render(null));
+  const events = await page.evaluate(() => (
+    window as typeof window & { reactTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).reactTelemetryEvents);
+
+  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "source_changed"],
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "destroyed"],
+  ]);
+  expect(new Set(events.map((event) => event.view_id)).size).toBe(2);
+});
+
+test("React replaces and disables telemetry configurations without serializing them", async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      firstReactTelemetryEvents: ChunkifyPlayerTelemetryEvent[];
+      secondReactTelemetryEvents: ChunkifyPlayerTelemetryEvent[];
+    };
+    state.firstReactTelemetryEvents = [];
+    state.secondReactTelemetryEvents = [];
+    window.reactFixture.render({
+      assetId: "asset-react-config",
+      telemetry: { provider: "callback", send: (event) => { state.firstReactTelemetryEvents.push(event); } },
+    });
+  });
+  await expect(page.locator("chunkify-player")).toHaveCount(1);
+  const result = await page.evaluate(() => {
+    const state = window as typeof window & {
+      firstReactTelemetryEvents: ChunkifyPlayerTelemetryEvent[];
+      secondReactTelemetryEvents: ChunkifyPlayerTelemetryEvent[];
+    };
+    const player = window.reactFixture.ref.current!;
+    player.media.dispatchEvent(new Event("play"));
+    window.reactFixture.render({
+      assetId: "asset-react-config",
+      telemetry: { provider: "callback", send: (event) => { state.secondReactTelemetryEvents.push(event); } },
+    });
+    player.media.dispatchEvent(new Event("play"));
+    window.reactFixture.render({ assetId: "asset-react-config" });
+    player.media.dispatchEvent(new Event("play"));
+    return {
+      first: state.firstReactTelemetryEvents,
+      second: state.secondReactTelemetryEvents,
+      attribute: player.getAttribute("telemetry"),
+      configured: player.telemetry,
+    };
+  });
+
+  expect(result.first.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.view_ended",
+  ]);
+  expect(result.second.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.view_ended",
+  ]);
+  expect(result.attribute).toBeNull();
+  expect(result.configured).toBeNull();
 });
 
 test("React props start HLS playback and expose the component and video through a ref", async ({ page }) => {

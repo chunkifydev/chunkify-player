@@ -10,14 +10,14 @@ cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrappe
 reuses that implementation. A standalone telemetry package provides callback
 start/end/snapshot/error records, cumulative playback metrics, and per-view sampling;
 the Web Component exposes that callback core through its optional `telemetry` property.
-React integration remains pending.
+The React wrapper exposes the same configuration through a typed prop.
 
 ## Packages
 
 | Directory | npm package | Status |
 | --- | --- | --- |
 | `packages/player` | `@chunkify/player` | Playback wrapper with optional callback telemetry |
-| `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper |
+| `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper with optional callback telemetry |
 | `packages/player-telemetry` | `@chunkify/player-telemetry` | Initial standalone callback core |
 
 All three package directories exist. The root package is private so it
@@ -119,7 +119,7 @@ will be established with the remaining ticket requirements.
 React tests cover typed props, ref access, updates, idle sources,
 Strict Mode callback-ref cleanup, source replacement, unmount/remount and
 unmounting before component registration completes. They also verify callback
-replacement/removal and normalized errors.
+replacement/removal, normalized errors, and telemetry forwarding and cleanup.
 Both native MP4 and hls.js
 use real local media. React and React DOM are development dependencies for
 these tests; the published React wrapper keeps React external as a peer.

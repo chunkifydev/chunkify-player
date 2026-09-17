@@ -26,7 +26,7 @@ function Video({ src }: { src: string }) {
 
 ## Props and refs
 
-Props include `src`, `poster`, `thumbnails`, `assetId`, `player`,
+Props include `src`, `poster`, `thumbnails`, `assetId`, `player`, `telemetry`,
 `credentials`, `autoPlay`, `muted`, `loop`, `playsInline`, and `controls`.
 They follow the [Web Component's behavior](../player/README.md). Use React's
 `autoPlay` spelling. `className`, `style`, `id`, ARIA attributes and other standard
@@ -54,14 +54,48 @@ added separately to server code.
 Development Strict Mode, source replacement, source clearing and real
 unmount/remount are covered by browser tests. Unmounting while registration is
 pending cannot start playback for the removed component. The Web Component
-releases playback resources when removed from the DOM; the wrapper does not
-manually invoke custom-element lifecycle callbacks.
+releases playback and telemetry resources when removed from the DOM; the wrapper
+does not manually invoke custom-element lifecycle callbacks.
 
 React 19 is required. Automated tests currently use React and React DOM 19.3
 in Chromium, Firefox and WebKit. React 18 and earlier are not supported.
 
-Telemetry and real preview/CDN/device validation remain pending. Asset IDs are
-passive metadata and do not trigger asset lookup or enable telemetry.
+Real preview/CDN/device validation remains pending. Asset IDs are passive metadata
+and do not trigger asset lookup or enable telemetry by themselves.
+
+## Optional telemetry
+
+Pass the same typed configuration accepted by the Web Component. `assetId` supplies
+the normalized telemetry asset identity and is required for telemetry to become
+active:
+
+```tsx
+import { ChunkifyPlayer, type TelemetryConfig } from "@chunkify/player-react";
+
+const telemetry: TelemetryConfig = {
+  provider: "callback",
+  environment: "production",
+  sampleRate: 0.1,
+  send(event) {
+    // Send to a destination owned by your application.
+    console.log(event);
+  },
+};
+
+<ChunkifyPlayer
+  assetId="asset_123"
+  src="https://media.example.com/manifest.m3u8"
+  telemetry={telemetry}
+  controls
+/>
+```
+
+The current integration supports the callback provider. Omitting `telemetry`, or
+passing `null` or `undefined`, disables it. React 19 forwards the object through
+the custom element's JavaScript property; it is never serialized as an HTML
+attribute. Replacing the configuration ends its active telemetry session, source
+replacement remains part of the same attachment, and unmount cleanup ends any open
+view. Sampling, privacy and callback delivery follow `@chunkify/player-telemetry`.
 
 ## Events
 
