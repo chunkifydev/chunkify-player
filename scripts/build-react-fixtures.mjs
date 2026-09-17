@@ -1,8 +1,12 @@
 import { build } from "esbuild";
 
-// Bundle React's development runtime for local browser tests, not for publication.
+// Bundle React's development runtime for local tests and the example, not for publication.
 await build({
-  entryPoints: ["tests/fixtures/react.ts", "tests/fixtures/react-runtime.ts"],
+  entryPoints: {
+    react: "tests/fixtures/react.ts",
+    "react-runtime": "tests/fixtures/react-runtime.ts",
+    example: "examples/react/main.tsx",
+  },
   splitting: true,
   bundle: true,
   format: "esm",

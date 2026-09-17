@@ -19,3 +19,15 @@ void media;
 <ChunkifyPlayer player="videojs" />;
 // @ts-expect-error Only include or an omitted credentials option is supported.
 <ChunkifyPlayer credentials="omit" />;
+
+<ChunkifyPlayer status="preparing" preparingFallback={<button>Check progress</button>}
+  failedFallback="Unavailable" expiredFallback={null}
+  onPlay={(event) => { const video: HTMLVideoElement = event.currentTarget.media; void video; }}
+  onPlaybackError={(event) => {
+    const code: import("@chunkify/player").PlaybackErrorCode = event.detail.code;
+    void code;
+    // @ts-expect-error Normalized errors do not expose media URLs.
+    event.detail.url;
+  }} />;
+// @ts-expect-error Media callbacks receive native events, not React SyntheticEvents.
+<ChunkifyPlayer onPlay={(event) => event.nativeEvent} />;

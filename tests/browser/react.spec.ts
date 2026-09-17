@@ -167,3 +167,92 @@ test("removing optional engine and boolean props restores their defaults", async
   }))).toEqual({ engine: "auto", engineAttribute: "auto", autoplay: false, muted: false,
     loop: false, playsInline: false, controls: false });
 });
+
+for (const [engine, source] of [
+  ["native", "/tests/fixtures/media/video.mp4"],
+  ["hlsjs", "/tests/fixtures/media/master.m3u8"],
+] as const) {
+  test(`React ${engine} event callbacks deliver native media events and update without duplicates`, async ({ page }) => {
+    await page.evaluate(({ engine, source }) => {
+      window.reactFixture.render({
+        src: source, player: engine, muted: true,
+        onLoadedMetadata(event) {
+          document.body.dataset.metadata = String(event.currentTarget.media.duration > 0);
+        },
+        onPlay(event) {
+          document.body.dataset.firstPlays = String(Number(document.body.dataset.firstPlays ?? 0) + 1);
+          document.body.dataset.nativeEvent = String(event instanceof Event);
+        },
+      });
+    }, { engine, source });
+    const player = page.locator("chunkify-player");
+    await expect(page.locator("body")).toHaveAttribute("data-metadata", "true");
+    await page.evaluate(() => window.reactFixture.ref.current!.media.play());
+    await expect(page.locator("body")).toHaveAttribute("data-first-plays", "1");
+    await expect(page.locator("body")).toHaveAttribute("data-native-event", "true");
+    await page.evaluate(({ engine, source }) => {
+      window.reactFixture.ref.current!.media.pause();
+      window.reactFixture.render({
+        src: source, player: engine, muted: true,
+        onPlay() { document.body.dataset.nextPlays = String(Number(document.body.dataset.nextPlays ?? 0) + 1); },
+      });
+    }, { engine, source });
+    await page.evaluate(() => window.reactFixture.ref.current!.media.play());
+    await expect(page.locator("body")).toHaveAttribute("data-next-plays", "1");
+    await expect(page.locator("body")).toHaveAttribute("data-first-plays", "1");
+    const oldPlayer = await player.elementHandle();
+    await page.evaluate(() => window.reactFixture.render(null));
+    await oldPlayer!.evaluate((element) => element.dispatchEvent(new Event("play")));
+    await expect(page.locator("body")).toHaveAttribute("data-next-plays", "1");
+  });
+}
+
+test("React receives safe startup errors and removes callbacks when omitted", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({
+    src: "javascript:secret-token",
+    onPlaybackError(event) {
+      document.body.dataset.error = JSON.stringify(event.detail);
+      document.body.dataset.errors = String(Number(document.body.dataset.errors ?? 0) + 1);
+      document.body.dataset.errorHost = String(event.currentTarget === window.reactFixture.ref.current);
+    },
+  }));
+  await expect(page.locator("body")).toHaveAttribute("data-errors", "1");
+  await expect(page.locator("body")).toHaveAttribute("data-error-host", "true");
+  const error = await page.locator("body").getAttribute("data-error");
+  expect(JSON.parse(error!)).toEqual({ code: "invalid-source", message: "Provide a valid HTTP or HTTPS video URL.", engine: null });
+  expect(error).not.toContain("secret-token");
+  await page.evaluate(() => window.reactFixture.render({ src: "javascript:different-secret" }));
+  await expect(page.getByRole("status")).toHaveText("Provide a valid HTTP or HTTPS video URL.");
+  await expect(page.locator("body")).toHaveAttribute("data-errors", "1");
+});
+
+test("React readiness fallbacks render interactive content and restore defaults when removed", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", (request) => { if (/\/media\/|hls\.mjs/.test(request.url())) requests.push(request.url()); });
+  await page.evaluate(() => {
+    const { createElement, render } = window.reactFixture;
+    render({
+      status: "preparing", src: "/tests/fixtures/media/master.m3u8",
+      poster: "/tests/fixtures/media/poster.jpg", thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
+      preparingFallback: createElement("button", {
+        onClick: () => render({ status: "preparing", preparingFallback: createElement("strong", null, "Still processing") }),
+      }, "Check progress"),
+    });
+  });
+  await page.getByRole("button", { name: "Check progress" }).click();
+  await expect(page.getByRole("status")).toBeVisible();
+  await expect(page.getByText("Still processing", { exact: true })).toBeVisible();
+  await page.evaluate(() => window.reactFixture.render({ status: "failed", failedFallback: "Try uploading again" }));
+  await expect(page.getByText("Try uploading again", { exact: true })).toBeVisible();
+  await page.evaluate(() => window.reactFixture.render({ status: "expired", expiredFallback: "Preview no longer available" }));
+  await expect(page.getByText("Preview no longer available", { exact: true })).toBeVisible();
+  await page.evaluate(() => window.reactFixture.render({ status: "preparing", preparingFallback: null }));
+  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+  expect(requests).toEqual([]);
+  await page.evaluate(() => window.reactFixture.render({
+    status: "ready", src: "/tests/fixtures/media/video.mp4", player: "native",
+    preparingFallback: "Wait for video",
+  }));
+  await expect.poll(() => page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await expect(page.getByText("Wait for video")).toBeHidden();
+});

@@ -7,6 +7,7 @@ const root = createRoot(document.getElementById("root")!);
 const ref = createRef<ChunkifyPlayerRef>();
 const fixture = {
   ref,
+  createElement,
   render(props: ChunkifyPlayerProps | null) {
     flushSync(() => root.render(createElement(StrictMode, null,
       props ? createElement(ChunkifyPlayer, { ...props, ref: props.ref ?? ref }) : null)));

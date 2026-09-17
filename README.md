@@ -55,6 +55,10 @@ See the [player package README](packages/player/README.md) for its interface.
 See the [React package README](packages/player-react/README.md) for props, refs,
 server rendering and React support.
 
+For the React example, also run `npm run build:react-fixtures`, then visit
+[the React example](http://127.0.0.1:4173/examples/react/). It includes custom
+readiness content, media callbacks, ref access and mount/unmount controls.
+
 Other useful commands:
 
 ```sh
@@ -105,7 +109,9 @@ will be established with the remaining ticket requirements.
 
 React tests cover typed props, ref access, updates, readiness gating,
 Strict Mode callback-ref cleanup, source replacement, unmount/remount and
-unmounting before component registration completes. Both native MP4 and hls.js
+unmounting before component registration completes. They also verify callback
+replacement/removal, normalized errors and interactive fallback content.
+Both native MP4 and hls.js
 use real local media. React and React DOM are development dependencies for
 these tests; the published React wrapper keeps React external as a peer.
 

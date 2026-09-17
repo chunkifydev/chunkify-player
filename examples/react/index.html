@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chunkify Player with React</title>
+    <style>
+      body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
+      label { display: inline-block; margin: 0 1rem 1rem 0; }
+      select, button { font: inherit; }
+      button { margin-right: .5rem; }
+      chunkify-player { margin: 1rem 0; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "/tests/fixtures/dist/react-runtime.js",
+          "@chunkify/player-react": "/packages/player-react/dist/index.js",
+          "@chunkify/player": "/packages/player/dist/index.js",
+          "hls.js": "/node_modules/hls.js/dist/hls.mjs",
+          "@player.style/demuxed-2022": "/node_modules/@player.style/demuxed-2022/dist/media-theme.js",
+          "media-chrome": "/node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "/node_modules/media-chrome/"
+        }
+      }
+    </script>
+    <script type="module" src="/tests/fixtures/dist/example.js"></script>
+  </head>
+  <body><div id="root"></div></body>
+</html>

@@ -61,9 +61,54 @@ manually invoke custom-element lifecycle callbacks.
 React 19 is required. Automated tests currently use React and React DOM 19.3
 in Chromium, Firefox and WebKit. React 18 and earlier are not supported.
 
-React event callbacks and custom readiness fallback props are the next slice.
 Telemetry and real preview/CDN/device validation remain pending. Asset IDs are
 passive metadata and do not trigger asset lookup or enable telemetry.
+
+## Events and custom fallbacks
+
+Media callbacks receive native browser events. During the callback,
+`event.currentTarget` is typed as the player Web Component. `onPlaybackError`
+receives a `CustomEvent` with the Web Component's normalized `detail`, containing
+`code`, `message` and `engine`. It does not expose source URLs or raw errors.
+
+```tsx
+<ChunkifyPlayer
+  status="ready"
+  src="https://media.example.com/manifest.m3u8"
+  controls
+  onPlaying={(event) => console.log(event.currentTarget.media.currentTime)}
+  onPlaybackError={(event) => console.log(event.detail.code, event.detail.message)}
+/>
+
+<ChunkifyPlayer
+  status="preparing"
+  preparingFallback={<p>Your video is processing.</p>}
+  failedFallback={<p>Please try another upload.</p>}
+  expiredFallback={<p>This preview has expired.</p>}
+/>
+```
+
+The callback props are `onAbort`, `onCanPlay`, `onCanPlayThrough`,
+`onDurationChange`, `onEmptied`, `onEnded`, `onError`, `onLoadedData`,
+`onLoadedMetadata`, `onLoadStart`, `onPause`, `onPlay`, `onPlaying`, `onProgress`,
+`onRateChange`, `onResize`, `onSeeked`, `onSeeking`, `onStalled`, `onSuspend`,
+`onTimeUpdate`, `onVolumeChange`, `onWaiting`, and `onPlaybackError`.
+Use `onPlaybackError` for actionable playback failures; `onError` forwards the
+native media error event. Callbacks are not React SyntheticEvents. Listener
+updates and unmount cleanup do not restart playback. Other host event callbacks
+are not part of this wrapper's API; use the component ref for additional native
+listeners and clean them up in your application.
+
+Fallback props accept React nodes, including interactive components. The wrapper
+places them in the corresponding Web Component slots and preserves its accessible
+status container. Omit a fallback, or pass `null` or `undefined`, to use the built-in
+message. Fallbacks are shown only for their matching status and never authorize
+media requests. They appear after client registration, as described above.
+
+The local [React example](../../examples/react/main.tsx) demonstrates status changes,
+event callbacks, ref access and unmount/remount. Build it with
+`npm run build && npm run build:react-fixtures`, run `npm run serve`, then open
+[the React example](http://127.0.0.1:4173/examples/react/).
 
 ## Package contents
 
