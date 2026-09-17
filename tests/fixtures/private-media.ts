@@ -21,6 +21,10 @@ async function startMediaServer() {
     ["segment00.m4s", "video/mp4"], ["segment01.m4s", "video/mp4"], ["segment02.m4s", "video/mp4"],
     ["poster.jpg", "image/jpeg"], ["thumbnails/images.vtt", "text/vtt"],
     ["thumbnails/sprite01.jpg", "image/jpeg"], ["thumbnails/sprite02.jpg", "image/jpeg"],
+    ["adaptive/master.m3u8", "application/vnd.apple.mpegurl"],
+    ["adaptive/low/stream.m3u8", "application/vnd.apple.mpegurl"],
+    ["adaptive/high/stream.m3u8", "application/vnd.apple.mpegurl"],
+    ["adaptive/low/video.mp4", "video/mp4"], ["adaptive/high/video.mp4", "video/mp4"],
   ]) {
     files.set(name!, { body: await readFile(new URL(`./media/${name}`, import.meta.url)), type: type! });
   }
@@ -39,6 +43,7 @@ async function startMediaServer() {
     `#EXT-X-MAP:URI="video-ranges.mp4",BYTERANGE="${parts[0]!.length}@0"\n${segments}#EXT-X-ENDLIST\n`,
   ) });
   const requests: MediaRequest[] = [];
+  let bandwidthBytesPerSecond = 128_000;
   const server = createServer((request, response) => {
     const path = new URL(request.url!, "http://fixture").pathname;
     const cookie = request.headers.cookie ?? "";
@@ -52,7 +57,23 @@ async function startMediaServer() {
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     const finish = (status: number, body?: Buffer | string) => {
       record.status = status;
-      response.writeHead(status).end(body);
+      response.writeHead(status);
+      if (status < 400 && path.includes("/adaptive/") && path.endsWith(".mp4") && Buffer.isBuffer(body)) {
+        // Pace response chunks, not just headers, so the engine measures actual
+        // transfer throughput. Changes also apply to requests already in flight.
+        let offset = 0;
+        let timer: ReturnType<typeof setTimeout>;
+        response.once("close", () => clearTimeout(timer));
+        const send = () => {
+          if (response.destroyed) return;
+          const chunk = body.subarray(offset, offset + 4096);
+          response.write(chunk);
+          offset += chunk.length;
+          if (offset === body.length) response.end();
+          else timer = setTimeout(send, Math.ceil(chunk.length / bandwidthBytesPerSecond * 1000));
+        };
+        send();
+      } else response.end(body);
     };
     if (path.startsWith("/cookies/") && !cookie.split("; ").includes("media_access=fixture")) {
       finish(403, "Fixture authorization required");
@@ -85,6 +106,8 @@ async function startMediaServer() {
   if (!address || typeof address === "string") throw new Error("Missing fixture server address");
   return {
     origin: `http://127.0.0.1:${address.port}`, requests,
+    get bandwidthBytesPerSecond() { return bandwidthBytesPerSecond; },
+    set bandwidthBytesPerSecond(value: number) { bandwidthBytesPerSecond = value; },
     close: () => new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
       server.closeAllConnections();

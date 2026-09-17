@@ -45,3 +45,33 @@ It builds a nested master/rendition layout and a byte-range HLS playlist in memo
 from the existing init/segment files. No extra binary fixtures or real CDN
 credentials are needed. This fixture tests forwarding and URL resolution, not
 cryptographic signing or cross-site browser cookie policy.
+
+## Multiple quality renditions
+
+`adaptive/master.m3u8` describes two synchronized 20-second versions of an
+FFmpeg test pattern and sine wave. The lower rendition is 128 x 72 at a target
+64 kbit/s video bitrate; the higher rendition is 256 x 144 at 256 kbit/s. Both
+use H.264 baseline at 12 frames per second and 16 kbit/s AAC. Each rendition
+contains one-second independently decodable fragments in a single fMP4 file,
+referenced with HLS byte ranges. Master bandwidth values include actual media
+container/audio bytes and are calculated from the generated fragments. The AVC
+codec identifiers are read from each file's initialization metadata.
+
+Regenerate these fixtures with Node and an FFmpeg build containing libx264:
+
+```sh
+node tests/fixtures/generate-adaptive.mjs
+# Optionally pass the path to a specific FFmpeg binary as the first argument.
+```
+
+The files add approximately 950 KB of checked-in media and are excluded from
+the npm package. CI serves them directly and does not run FFmpeg.
+
+The local media server paces these fMP4 responses in chunks. The adaptive test
+starts with fast delivery, observes the decoded higher resolution, slows
+delivery, and requires a decoded switch to the lower resolution. It uses
+cookie-protected URLs and requires successful completion without a fatal error.
+Restoring delivery need not cause an immediate upgrade if the remaining VOD is
+already buffered. Public native/auto tests also verify playback, seeking and
+completion; they leave native rendition selection to the browser. No engine
+internals or rendition-selection overrides are used by these tests.

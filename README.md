@@ -85,6 +85,11 @@ Private-playback tests use a second local origin with real cookie checks and
 CORS responses. They cover credentialed playlists, segments, posters, previews,
 HTTP byte ranges, authorized path URLs, denial, and credential changes. Native
 HLS cases run where supported; all three browsers test hls.js and native MP4.
+An additional two-quality fixture verifies an actual decoded resolution change
+when hls.js delivery slows, including cookie forwarding across the switch.
+Native/auto checks play and seek the same public master without prescribing
+the browser's rendition choice. These checks use controlled local throughput;
+deployed preview/CDN URLs and real device compatibility remain separate checks.
 
 Fixtures are checked in under `tests/fixtures/media`. FFmpeg is only needed to
 regenerate them. These browser-engine checks do not certify every Safari/iOS,

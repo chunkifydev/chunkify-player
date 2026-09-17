@@ -165,6 +165,12 @@ asset IDs, or contact a Chunkify API. The caller supplies status and source URLs
 
 ## Private playback
 
+Public HLS hosts must allow CORS for both native and hls.js playback. Public
+native HLS uses `crossorigin="anonymous"`; this also permits Chromium's native
+cross-origin HLS byte-range reads. Cookie-authorized playback uses
+`crossorigin="use-credentials"` as described below. Plain native MP4 retains
+the browser's default CORS mode unless credentials are explicitly enabled.
+
 Authorization belongs to the customer application and CDN. The player accepts
 an already authorized URL, or forwards cookies that the customer backend has
 already set. It never signs, refreshes, stores, or revokes tokens.
@@ -197,7 +203,8 @@ ranges, plus posters and previews. Setting the property to `null` or `undefined`
 removes the option. Changing it stops the old attempt and initializes a new one;
 non-ready or disconnected players still make no media requests.
 
-Without this option, the existing engine/browser defaults apply. In particular,
+Without this option, public native HLS uses anonymous CORS and plain native MP4
+retains the browser's default CORS mode. In particular,
 it is not a guarantee that the browser sends no cookies. Cross-origin hls.js and
 VTT requests do not opt into cookies, and sprite images use anonymous CORS.
 

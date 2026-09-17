@@ -291,7 +291,12 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#fail("invalid-credentials");
       return;
     }
+    const isMp4 = url.pathname.toLowerCase().endsWith(".mp4");
+    const nativeHls = Boolean(this.#media.canPlayType("application/vnd.apple.mpegurl"));
+    const useNative = player === "native" || (player === "auto" && (isMp4 || nativeHls));
     if (this.credentials === "include") this.#media.crossOrigin = "use-credentials";
+    // Chromium's native HLS byte-range reads require CORS for cross-origin media.
+    else if (useNative && !isMp4) this.#media.crossOrigin = "anonymous";
     else this.#media.removeAttribute("crossorigin");
     setThumbnailCredentials(this.#theme, this.credentials === "include");
     this.#fallback.hidden = true;
@@ -299,9 +304,7 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#theme.hidden = false;
     this.#active = true;
     this.#syncPoster();
-    const isMp4 = url.pathname.toLowerCase().endsWith(".mp4");
-    const nativeHls = Boolean(this.#media.canPlayType("application/vnd.apple.mpegurl"));
-    if (player === "native" || (player === "auto" && (isMp4 || nativeHls))) {
+    if (useNative) {
       this.#engine = "native";
       if (!isMp4 && !nativeHls) {
         this.#fail("unsupported-engine");
