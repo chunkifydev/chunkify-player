@@ -2,13 +2,10 @@ import type Hls from "hls.js";
 import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview, setThumbnailCredentials } from "./theme.js";
 import { loadThumbnails } from "./thumbnails.js";
 
-export type PlayerStatus = "preparing" | "ready" | "failed" | "expired";
 export type PlayerEngine = "auto" | "native" | "hlsjs";
 
 const errorMessages = {
-  "missing-source": "A ready video requires a source URL.",
   "invalid-source": "Provide a valid HTTP or HTTPS video URL.",
-  "invalid-status": "Use preparing, ready, failed, or expired for status.",
   "invalid-player": "Use auto, native, or hlsjs for player.",
   "invalid-credentials": "Use include for credentials, or omit the attribute.",
   "unsupported-engine": "The selected playback engine is not supported by this browser.",
@@ -26,12 +23,6 @@ export interface PlaybackErrorDetail {
   engine: Exclude<PlayerEngine, "auto"> | null;
 }
 
-const fallbacks = {
-  preparing: "Your video is being prepared.",
-  failed: "This video could not be prepared.",
-  expired: "This video has expired.",
-};
-
 const mediaAttributes = ["autoplay", "muted", "loop", "playsinline", "controls"];
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -41,7 +32,7 @@ const mediaEvents = [
 ];
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = ["status", "src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
+  static observedAttributes = ["src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
 
   // Add payload inference without changing the browser's listener implementation.
   declare addEventListener: ((
@@ -137,15 +128,6 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("credentials", value);
   }
 
-  get status(): PlayerStatus | null {
-    const value = this.getAttribute("status");
-    return value === "preparing" || value === "ready" || value === "failed" || value === "expired"
-      ? value : null;
-  }
-  set status(value: PlayerStatus | null | undefined) {
-    this.#setStringAttribute("status", value);
-  }
-
   get player(): PlayerEngine {
     const value = this.getAttribute("player");
     return value === "native" || value === "hlsjs" ? value : "auto";
@@ -172,7 +154,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     // Preserve properties assigned before the custom element was registered.
-    for (const name of ["assetId", "src", "poster", "thumbnails", "status", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
+    for (const name of ["assetId", "src", "poster", "thumbnails", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
       if (Object.prototype.hasOwnProperty.call(this, name)) {
         const value: unknown = Reflect.get(this, name);
         Reflect.deleteProperty(this, name);
@@ -261,24 +243,8 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#media.hidden = true;
     this.#theme.hidden = true;
     this.#fallback.hidden = false;
-    const status = this.getAttribute("status");
-    if (status === "preparing" || status === "failed" || status === "expired") {
-      const slot = document.createElement("slot");
-      slot.name = status;
-      slot.textContent = fallbacks[status];
-      this.#fallback.replaceChildren(slot);
-      return;
-    }
-    if (status !== null && status !== "ready") {
-      this.#fail("invalid-status");
-      return;
-    }
     const src = this.getAttribute("src")?.trim();
     if (!src) {
-      if (status === "ready") {
-        this.#fail("missing-source");
-        return;
-      }
       this.#fallback.textContent = "No video source provided.";
       return;
     }

@@ -67,24 +67,21 @@ test("invalid credentials fail before any protected media request", async ({ pag
   expect(mediaServer.requests).toEqual([]);
 });
 
-test("credential changes respect readiness, recover from denial and restore public requests", async ({ page, context, mediaServer }) => {
+test("credential changes wait for a source, recover from denial and restore public requests", async ({ page, context, mediaServer }) => {
   await context.addCookies([{ name: "media_access", value: "fixture", url: mediaServer.origin, httpOnly: true, sameSite: "Lax" }]);
   await page.goto("/tests/fixtures/player.html");
   await page.evaluate(() => customElements.whenDefined("chunkify-player"));
   await page.evaluate((origin) => {
     const player = document.createElement("chunkify-player");
-    Object.assign(player, { status: "preparing", player: "hlsjs", credentials: "include", muted: true,
-      src: `${origin}/cookies/master.m3u8`, poster: `${origin}/cookies/poster.jpg`, thumbnails: `${origin}/cookies/thumbnails/images.vtt` });
+    Object.assign(player, { player: "hlsjs", credentials: "include", muted: true,
+      poster: `${origin}/cookies/poster.jpg`, thumbnails: `${origin}/cookies/thumbnails/images.vtt` });
     player.addEventListener("playback-error", (event) => { player.dataset.error = JSON.stringify(event.detail); });
     document.body.append(player);
   }, mediaServer.origin);
   const player = page.locator("chunkify-player");
-  for (const status of ["preparing", "failed", "expired"] as const) {
-    await player.evaluate((element: ChunkifyPlayer, status) => { element.status = status; }, status);
-    await expect(page.getByRole("status")).toBeVisible();
-    expect(mediaServer.requests).toEqual([]);
-  }
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
+  expect(mediaServer.requests).toEqual([]);
+  await player.evaluate((element: ChunkifyPlayer, origin) => { element.src = `${origin}/cookies/master.m3u8`; }, mediaServer.origin);
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
   await player.evaluate((element: ChunkifyPlayer) => { element.credentials = null; });
   await expect(player).not.toHaveAttribute("credentials");

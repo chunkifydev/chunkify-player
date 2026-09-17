@@ -40,31 +40,30 @@ for (const [engine, source] of [
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(2.2);
   });
 
-  test(`${engine}: muted autoplay waits for ready and stops when leaving ready`, async ({ page }) => {
+  test(`${engine}: muted autoplay waits for a source and stops when it clears`, async ({ page }) => {
     const requests: string[] = [];
     page.on("request", (request) => {
       if (/\/media\/|hls\.mjs/.test(request.url())) requests.push(request.url());
     });
     await page.evaluate(({ engine, source }) => {
-      document.body.innerHTML = `<chunkify-player player="${engine}" src="${source}"
-        status="preparing" autoplay muted playsinline></chunkify-player>`;
+      document.body.innerHTML = `<chunkify-player player="${engine}" autoplay muted playsinline></chunkify-player>`;
       const player = document.querySelector("chunkify-player")!;
       player.addEventListener("playing", () => { player.dataset.playing = "true"; });
     }, { engine, source });
     const player = page.locator("chunkify-player");
-    await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+    await expect(page.getByRole("status")).toHaveText("No video source provided.");
     expect(requests).toEqual([]);
     expect(await player.evaluate((element: ChunkifyPlayer) => element.media.paused)).toBe(true);
-    await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+    await player.evaluate((element: ChunkifyPlayer, source) => { element.src = source; }, source);
     // No play() call or user gesture: the browser must honor muted autoplay itself.
     await expect(player).toHaveAttribute("data-playing", "true");
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-    await player.evaluate((element: ChunkifyPlayer) => { element.status = "failed"; });
-    await expect(page.getByRole("status")).toHaveText("This video could not be prepared.");
+    await player.evaluate((element: ChunkifyPlayer) => { element.src = null; });
+    await expect(page.getByRole("status")).toHaveText("No video source provided.");
     expect(await player.evaluate((element: ChunkifyPlayer) => ({
       paused: element.media.paused, src: element.media.getAttribute("src"),
     }))).toEqual({ paused: true, src: null });
-    await player.evaluate((element: ChunkifyPlayer) => { element.autoplay = false; element.status = "ready"; });
+    await player.evaluate((element: ChunkifyPlayer, source) => { element.autoplay = false; element.src = source; }, source);
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(3);
     expect(await player.evaluate((element: ChunkifyPlayer) => ({
       paused: element.media.paused, currentTime: element.media.currentTime,

@@ -10,17 +10,17 @@ async function openPlayer(page: Page, attributes = "") {
   return page.locator("chunkify-player");
 }
 
-test("poster loads only when ready and can change without restarting playback", async ({ page }) => {
+test("poster loads only with a source and can change without restarting playback", async ({ page }) => {
   const posters: string[] = [];
   page.on("request", (request) => {
     if (request.url().includes("poster.jpg")) posters.push(request.url());
   });
-  const player = await openPlayer(page, `status="preparing" src="/tests/fixtures/media/video.mp4"
+  const player = await openPlayer(page, `
     poster="/tests/fixtures/media/poster.jpg"`);
-  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
   expect(posters).toEqual([]);
   const loaded = page.waitForResponse((response) => response.url().endsWith("/poster.jpg") && response.ok());
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
   await loaded;
   await expect(page.locator("video")).toHaveAttribute("poster", "/tests/fixtures/media/poster.jpg");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
@@ -33,15 +33,15 @@ test("poster loads only when ready and can change without restarting playback", 
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeCloseTo(3, 0);
   await expect(player).not.toHaveAttribute("data-restarted");
   await player.evaluate((element: ChunkifyPlayer) => {
-    element.status = "expired";
-    element.setAttribute("poster", "/tests/fixtures/media/poster.jpg?expired");
+    element.src = null;
+    element.setAttribute("poster", "/tests/fixtures/media/poster.jpg?idle");
   });
-  await expect(page.getByRole("status")).toHaveText("This video has expired.");
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
   await expect(page.locator("video")).not.toHaveAttribute("poster");
-  expect(posters.some((url) => url.endsWith("?expired"))).toBe(false);
+  expect(posters.some((url) => url.endsWith("?idle"))).toBe(false);
 });
 
-test("controls can be toggled without restarting media and remain inactive in fallbacks", async ({ page }) => {
+test("controls can be toggled without restarting media and remain inactive without a source", async ({ page }) => {
   const player = await openPlayer(page, `controls src="/tests/fixtures/media/video.mp4"`);
   await expect(page.getByRole("button", { name: "play", exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "play", exact: true }).first().focus();
@@ -61,8 +61,8 @@ test("controls can be toggled without restarting media and remain inactive in fa
   await player.evaluate((element: ChunkifyPlayer) => { element.controls = true; });
   await expect(page.getByRole("button", { name: "play", exact: true }).first()).toBeVisible();
   await expect(player).not.toHaveAttribute("data-restarted");
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "preparing"; });
-  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = undefined; });
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
   await expect(page.getByRole("button")).toHaveCount(0);
 });
 

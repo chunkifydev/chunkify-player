@@ -1,8 +1,8 @@
 "use client";
 
 import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState,
-  type DOMAttributes, type HTMLAttributes, type ReactElement, type ReactNode, type Ref } from "react";
-import type { ChunkifyPlayer as PlayerElement, PlaybackErrorDetail, PlayerEngine, PlayerStatus } from "@chunkify/player";
+  type DOMAttributes, type HTMLAttributes, type ReactElement, type Ref } from "react";
+import type { ChunkifyPlayer as PlayerElement, PlaybackErrorDetail, PlayerEngine } from "@chunkify/player";
 
 const mediaEvents = {
   onAbort: "abort", onCanPlay: "canplay", onCanPlayThrough: "canplaythrough",
@@ -24,12 +24,9 @@ type MediaCallbacks = {
     ? PlayerPlaybackErrorEvent : PlayerMediaEvent) => void) | undefined;
 };
 type HostProps = Omit<HTMLAttributes<PlayerElement>, keyof DOMAttributes<PlayerElement>>;
-type SourceProps =
-  | { status: "ready"; src: string }
-  | { status?: Exclude<PlayerStatus, "ready"> | null | undefined; src?: string | null | undefined };
-
-export type ChunkifyPlayerProps = HostProps & SourceProps & MediaCallbacks & {
+export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   ref?: Ref<ChunkifyPlayerRef> | undefined;
+  src?: string | null | undefined;
   assetId?: string | null | undefined;
   poster?: string | null | undefined;
   thumbnails?: string | null | undefined;
@@ -40,13 +37,10 @@ export type ChunkifyPlayerProps = HostProps & SourceProps & MediaCallbacks & {
   muted?: boolean | undefined;
   controls?: boolean | undefined;
   playsInline?: boolean | undefined;
-  preparingFallback?: ReactNode;
-  failedFallback?: ReactNode;
-  expiredFallback?: ReactNode;
 };
 
 export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null {
-  const { ref, preparingFallback, failedFallback, expiredFallback, ...hostProps } = props;
+  const { ref, ...hostProps } = props;
   const elementRef = useRef<PlayerElement | null>(null);
   const attachRef = useCallback((element: PlayerElement | null) => {
     elementRef.current = element;
@@ -98,9 +92,5 @@ export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null 
     controls: props.controls ?? false,
   };
   for (const name of callbackNames) delete elementProps[name];
-  return registered ? createElement("chunkify-player", elementProps,
-    preparingFallback != null ? createElement("div", { slot: "preparing" }, preparingFallback) : null,
-    failedFallback != null ? createElement("div", { slot: "failed" }, failedFallback) : null,
-    expiredFallback != null ? createElement("div", { slot: "expired" }, expiredFallback) : null,
-  ) : null;
+  return registered ? createElement("chunkify-player", elementProps) : null;
 }

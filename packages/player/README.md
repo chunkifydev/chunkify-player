@@ -13,7 +13,6 @@ import "@chunkify/player";
 
 ```html
 <chunkify-player
-  status="ready"
   player="auto"
   src="https://media.example.com/manifest.m3u8"
   poster="https://media.example.com/poster.jpg"
@@ -44,7 +43,6 @@ resolver or import map. No published CDN import is available for this version.
 | `thumbnails` | `thumbnails` | Optional HTTP/HTTPS WebVTT URL for seek previews. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears previews. |
 | `player` | `player` | `auto`, `native`, or `hlsjs`; defaults to `auto`. |
 | `credentials` | `credentials` | Optional `include` for customer-set cookies. Setting `null` or `undefined` removes it and restores the engine/browser defaults. Changing it restarts playback. Other attribute values produce `invalid-credentials`. |
-| `status` | `status` | `preparing`, `ready`, `failed`, `expired`, or omitted. Setting `null` or `undefined` removes it. |
 | `autoplay` | `autoplay` | Boolean attribute. Subject to browser autoplay policies. |
 | `muted` | `muted` | Boolean attribute; updates the video's muted state when changed. |
 | `loop` | `loop` | Boolean attribute. |
@@ -58,7 +56,7 @@ is a read-only reference to the underlying `HTMLVideoElement`. Its native
 `controls` property stays false to avoid displaying two sets of controls.
 
 For autoplay, use `autoplay muted playsinline`. Playback starts only when the
-source is eligible under the readiness rules below, and browser autoplay policies
+source is non-empty and valid, and browser autoplay policies
 still apply. With `loop`, reaching the end starts the video again; setting
 `player.loop = false` lets the current playback finish normally.
 
@@ -69,7 +67,7 @@ telemetry. Telemetry integration is a later step.
 
 The poster appears before playback using the browser's video poster behavior.
 Changing or clearing it does not restart playback. The component does not request
-the poster while preparing, failed, expired, disconnected, or waiting for a source.
+the poster while disconnected or waiting for a source.
 A failed poster request does not prevent video playback.
 
 With `controls`, the component uses Media Chrome and the Demuxed 2022 theme.
@@ -112,10 +110,10 @@ images must allow CORS. Loading thumbnails does not change the video's CORS mode
 Set `credentials="include"` to include customer cookies for both VTT and sprite
 requests, subject to the private-playback requirements below.
 
-The VTT loads only during active playback initialization. Non-ready states and
+The VTT loads only during active playback initialization. Players without a source and
 disconnected players request neither VTT nor sprites. Sprites load when requested
 by the seek preview. Replacing `thumbnails` leaves video playback intact; changing
-the source, leaving ready, or disconnecting cancels the VTT load and clears the old
+or clearing the source, or disconnecting cancels the VTT load and clears the old
 track and preview image. A missing VTT, invalid cue, or failed sprite image hides
 the affected preview without stopping playback.
 
@@ -129,18 +127,17 @@ const canPlay = new Promise((resolve) => {
   player.addEventListener("canplay", resolve, { once: true });
 });
 player.src = "/videos/another/manifest.m3u8";
-player.status = "ready";
 await canPlay;
 await player.media.play();
 player.media.pause();
 ```
 
-Readiness and source changes are applied together in a microtask. Wait for
+Playback configuration changes are applied together in a microtask. Wait for
 `loadedmetadata` or `canplay` before operations that need a loaded source, such
 as seeking. Handle `playback-error` when waiting for readiness, and handle the
 promise returned by `play()`: browser autoplay restrictions still apply.
 
-## Engines and readiness
+## Engines and source lifecycle
 
 `auto` uses native playback for `.mp4` URLs and for HLS when the browser reports
 native HLS support. Otherwise it imports hls.js. `hlsjs` forces hls.js for HLS;
@@ -148,30 +145,21 @@ it does not silently switch to native. `native` never imports hls.js and reports
 an error when the browser lacks native HLS support. Other non-`.mp4` URLs are
 treated as HLS. The selected engine is replaced when `src` or `player` changes.
 
-| Status | Behavior |
-| --- | --- |
-| `preparing`, `failed`, `expired` | Show a fallback and make no media requests. |
-| `ready` | Require a valid source, then initialize the selected engine. |
-| Omitted | Wait for a non-empty source, then initialize playback. |
+An omitted, null, empty or whitespace-only `src` leaves the player idle with the
+message "No video source provided." It makes no manifest, media, poster, thumbnail
+or playback-engine requests. Supplying a non-empty valid URL initializes playback.
 
-Native playback does not download hls.js. Non-ready states do not start an
-engine. A pending engine import may finish after a status change, but it cannot
-initialize playback for the old source. Removing the element or leaving ready
-destroys the active engine and clears the media source. Reconnecting starts
-playback initialization again using the current attributes.
+Native playback does not download hls.js. A pending engine import may finish after
+a source change, but cannot initialize playback for the old source. Clearing `src`
+or removing the element destroys the active engine and clears the media source.
+Reconnecting initializes playback using the current attributes.
 
-Built-in fallbacks use `role="status"`. Customize them with named slots:
-
-```html
-<chunkify-player status="preparing">
-  <p slot="preparing">Your video is processing.</p>
-  <p slot="failed">This video is unavailable.</p>
-  <p slot="expired">This preview has expired.</p>
-</chunkify-player>
-```
-
-The wrapper does not fetch asset metadata, poll readiness, construct URLs from
-asset IDs, or contact a Chunkify API. The caller supplies status and source URLs.
+Asset readiness belongs to the application. Check asset progression and display
+processing, failure or expiration UI in your own application. Mount the player or
+supply `src` when you want playback to initialize; clear `src` or unmount it to stop.
+The player has no asset `status` API or named readiness slots. It does not fetch
+asset metadata, poll readiness, construct URLs from asset IDs or contact a Chunkify
+API. Playback and invalid-source errors still use `playback-error`.
 
 ## Private playback
 
@@ -211,7 +199,7 @@ XHR loader, VTT fetches, and sprite images before those resources load. This
 covers master/child playlists, initialization segments, media segments and byte
 ranges, plus posters and previews. Setting the property to `null` or `undefined`
 removes the option. Changing it stops the old attempt and initializes a new one;
-non-ready or disconnected players still make no media requests.
+players without a source or disconnected players still make no media requests.
 
 Without this option, public native HLS uses anonymous CORS and plain native MP4
 retains the browser's default CORS mode. In particular,
@@ -258,10 +246,10 @@ player.addEventListener("playback-error", (event) => {
 });
 ```
 
-Codes are `missing-source`, `invalid-source`, `invalid-status`, `invalid-player`, `invalid-credentials`,
+Codes are `invalid-source`, `invalid-player`, `invalid-credentials`,
 `unsupported-engine`, `unsupported-source`, `engine-load-failed`, `network-error`,
 `decode-error`, and `playback-failed`. Startup failures, fatal hls.js errors, and
-native media errors stop the current attempt. Change the source/status or
+native media errors stop the current attempt. Change the source or
 disconnect and reconnect to start a new attempt. hls.js handles its own
 recoverable errors before a fatal error reaches this interface.
 

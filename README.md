@@ -4,7 +4,7 @@ One repository for the Chunkify player packages described in
 [issue #279](https://github.com/chunkifydev/chunkify/issues/279).
 
 The initial `<chunkify-player>` implementation wraps a native video element and
-loads hls.js only when selected. It supports readiness fallbacks, posters,
+loads hls.js only when selected. It supports posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
 cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
 reuses that implementation. Telemetry remains a later step.
@@ -45,7 +45,7 @@ npm run serve
 ```
 
 Visit [the local example](http://127.0.0.1:4173/examples/basic/) and press Play.
-Use the engine and status selectors to try playback and readiness fallbacks.
+Use the engine and source selectors to try playback and source clearing.
 Hover or drag the seek bar to preview frames from the two local sprite images.
 The clip is a local synthetic fixture; playback makes no Chunkify API calls.
 Rebuild after editing the source, then reload the page. The local static server
@@ -56,7 +56,7 @@ See the [React package README](packages/player-react/README.md) for props, refs,
 server rendering and React support.
 
 For the React example, also run `npm run build:react-fixtures`, then visit
-[the React example](http://127.0.0.1:4173/examples/react/). It includes custom
+[the React example](http://127.0.0.1:4173/examples/react/). It includes application-owned
 readiness content, media callbacks, ref access and mount/unmount controls.
 
 Other useful commands:
@@ -82,7 +82,7 @@ hls.js engine is selected. The controls do not add another playback engine.
 
 Playwright tests run in Chromium, Firefox, and WebKit. They cover local HLS/fMP4
 playback through hls.js, automatic engine selection, native MP4 playback, media
-events, readiness gating, property upgrades, errors, and teardown. They also verify
+events, idle sources, property upgrades, errors, and teardown. They also verify
 muted autoplay, looping, and asset ID changes that preserve playback. Controls tests
 cover poster requests, keyboard operation, accessible control names, controls
 visibility, and layouts at 320, 768, and 1280 pixels. Fullscreen/PiP tests substitute
@@ -90,7 +90,7 @@ the browser API boundary to verify supported and unsupported behavior without OS
 windows. Actual OS fullscreen/PiP remains part of release browser/device QA. Native HLS
 uses the browser's reported support; unsupported native playback fails explicitly.
 Capability tests also simulate a browser without native HLS to verify fallback.
-Thumbnail tests cover multiple sprites and crops, cross-origin files, readiness,
+Thumbnail tests cover multiple sprites and crops, cross-origin files, idle sources,
 source/thumbnail replacement, cancellation, reconnection, and non-fatal failures.
 Private-playback tests use a second local origin with real cookie checks and
 CORS responses. They cover credentialed playlists, segments, posters, previews,
@@ -107,10 +107,10 @@ regenerate them. These browser-engine checks do not certify every Safari/iOS,
 Android, codec, or private-CDN configuration. The full release support matrix
 will be established with the remaining ticket requirements.
 
-React tests cover typed props, ref access, updates, readiness gating,
+React tests cover typed props, ref access, updates, idle sources,
 Strict Mode callback-ref cleanup, source replacement, unmount/remount and
 unmounting before component registration completes. They also verify callback
-replacement/removal, normalized errors and interactive fallback content.
+replacement/removal and normalized errors.
 Both native MP4 and hls.js
 use real local media. React and React DOM are development dependencies for
 these tests; the published React wrapper keeps React external as a peer.

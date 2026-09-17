@@ -32,15 +32,13 @@
         <option value="hlsjs">hls.js</option>
       </select>
     </label>
-    <label>Asset status
-      <select id="status">
-        <option value="ready">Ready</option>
-        <option value="preparing">Preparing</option>
-        <option value="failed">Failed</option>
-        <option value="expired">Expired</option>
+    <label>Video source
+      <select id="source">
+        <option value="loaded">Local clip</option>
+        <option value="empty">None</option>
       </select>
     </label>
-    <chunkify-player id="player" status="ready"
+    <chunkify-player id="player"
       src="../../tests/fixtures/media/master.m3u8"
       poster="../../tests/fixtures/media/poster.jpg"
       thumbnails="../../tests/fixtures/media/thumbnails/images.vtt" controls muted playsinline>
@@ -57,9 +55,9 @@
         error.hidden = true;
         player.player = event.target.value;
       });
-      document.querySelector("#status").addEventListener("change", (event) => {
+      document.querySelector("#source").addEventListener("change", (event) => {
         error.hidden = true;
-        player.status = event.target.value;
+        player.src = event.target.value === "loaded" ? "../../tests/fixtures/media/master.m3u8" : null;
       });
       player.addEventListener("playback-error", (event) => {
         error.textContent = event.detail.message;

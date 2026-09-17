@@ -6,25 +6,38 @@ async function openFixture(page: Page) {
   await expect.poll(() => page.evaluate(() => Boolean(customElements.get("chunkify-player")))).toBe(true);
 }
 
-test("non-ready states show accessible fallbacks without loading media or engines", async ({ page }) => {
+test("playback depends on the supplied URL, not an asset status attribute", async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player status="preparing" player="hlsjs"
+      src="/tests/fixtures/media/master.m3u8" muted></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  expect(await player.evaluate((element) => "status" in element)).toBe(false);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
+});
+
+test("absent and empty sources stay idle without media, optional images or engine requests", async ({ page }) => {
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
   await openFixture(page);
-
-  for (const [status, message] of [
-    ["preparing", "Your video is being prepared."],
-    ["failed", "This video could not be prepared."],
-    ["expired", "This video has expired."],
-  ] as const) {
-    await page.evaluate(({ status }) => {
-      document.body.innerHTML = `<chunkify-player status="${status}"
-        src="/tests/fixtures/media/master.m3u8"
-        poster="/must-not-load.jpg" thumbnails="/must-not-load.vtt"></chunkify-player>`;
-    }, { status });
-    await expect(page.getByRole("status")).toHaveText(message);
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player player="hlsjs" poster="/must-not-load.jpg"
+      thumbnails="/must-not-load.vtt" autoplay muted></chunkify-player>`;
+    document.querySelector("chunkify-player")!.addEventListener("playback-error", () => {
+      document.body.dataset.error = "unexpected";
+    });
+  });
+  const player = page.locator("chunkify-player");
+  for (const src of [undefined, null, "", "   "]) {
+    await player.evaluate((element: ChunkifyPlayer, src) => { element.src = src; }, src);
+    await expect(page.getByRole("status")).toHaveText("No video source provided.");
     await expect(page.locator("video")).toBeHidden();
+    expect(await player.evaluate((element: ChunkifyPlayer) => element.media.getAttribute("src"))).toBeNull();
   }
-
+  await expect(page.locator("body")).not.toHaveAttribute("data-error");
   expect(requests.filter((url) => /\/media\/|must-not-load|hls\.mjs/.test(url))).toEqual([]);
 });
 
@@ -35,9 +48,7 @@ test("invalid startup reports a safe playback error without requesting media", a
   });
   await openFixture(page);
   for (const [attributes, code] of [
-    [{ status: "ready" }, "missing-source"],
-    [{ status: "ready", src: "javascript:secret-token" }, "invalid-source"],
-    [{ status: "unknown", src: "/tests/fixtures/media/master.m3u8" }, "invalid-status"],
+    [{ src: "javascript:secret-token" }, "invalid-source"],
     [{ player: "unknown", src: "/tests/fixtures/media/master.m3u8" }, "invalid-player"],
   ] as const) {
     await page.evaluate((attributes) => {
@@ -64,7 +75,7 @@ test("hlsjs loads on demand and plays a muxed fMP4 HLS master", async ({ page })
   expect(requests.some((url) => url.includes("hls.mjs"))).toBe(false);
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player player="hlsjs" controls muted playsinline
-      status="ready" src="/tests/fixtures/media/master.m3u8"></chunkify-player>`;
+      src="/tests/fixtures/media/master.m3u8"></chunkify-player>`;
   });
   const player = page.locator("chunkify-player");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
@@ -83,7 +94,7 @@ test("native video plays and forwards events without loading hls.js", async ({ p
   await openFixture(page);
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player player="native" controls muted playsinline
-      status="ready" src="/tests/fixtures/media/video.mp4"></chunkify-player>`;
+      src="/tests/fixtures/media/video.mp4"></chunkify-player>`;
     const player = document.querySelector("chunkify-player")!;
     for (const event of ["playing", "pause", "seeked", "ended"]) {
       player.addEventListener(event, () => player.dataset[event] = "received");
@@ -169,7 +180,7 @@ test("forced native reports unsupported HLS without loading another engine", asy
 });
 
 for (const engine of ["native", "hlsjs"] as const) {
-  test(`${engine} replaces sources, stops when non-ready, and reconnects cleanly`, async ({ page }) => {
+  test(`${engine} replaces sources, stops when the source clears, and reconnects cleanly`, async ({ page }) => {
     const source = engine === "native" ? "video.mp4" : "master.m3u8";
     const requests: string[] = [];
     page.on("request", (request) => {
@@ -178,7 +189,7 @@ for (const engine of ["native", "hlsjs"] as const) {
     await openFixture(page);
     await page.evaluate(({ engine, source }) => {
       const player = document.createElement("chunkify-player");
-      Object.assign(player, { player: engine, src: `/tests/fixtures/media/${source}`, status: "ready", muted: true });
+      Object.assign(player, { player: engine, src: `/tests/fixtures/media/${source}`, muted: true });
       document.body.append(player);
     }, { engine, source });
     const player = page.locator("chunkify-player");
@@ -187,11 +198,11 @@ for (const engine of ["native", "hlsjs"] as const) {
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
     await player.evaluate((element: ChunkifyPlayer) => element.media.play());
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-    await player.evaluate((element: ChunkifyPlayer) => { element.status = "failed"; });
-    await expect(page.getByRole("status")).toHaveText("This video could not be prepared.");
+    await player.evaluate((element: ChunkifyPlayer) => { element.src = null; });
+    await expect(page.getByRole("status")).toHaveText("No video source provided.");
     expect(await player.evaluate((element: ChunkifyPlayer) => ({ paused: element.media.paused, src: element.media.getAttribute("src") })))
       .toEqual({ paused: true, src: null });
-    await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+    await player.evaluate((element: ChunkifyPlayer, source) => { element.src = `/tests/fixtures/media/${source}`; }, source);
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
     expect(await player.evaluate((element: ChunkifyPlayer) => {
       element.remove();
@@ -204,7 +215,7 @@ for (const engine of ["native", "hlsjs"] as const) {
   });
 }
 
-test("leaving ready during a delayed engine import never starts media requests", async ({ page }) => {
+test("clearing the source during a delayed engine import never starts media requests", async ({ page }) => {
   let release!: () => void;
   let requested!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -220,18 +231,18 @@ test("leaving ready during a delayed engine import never starts media requests",
   });
   await openFixture(page);
   await page.evaluate(() => {
-    document.body.innerHTML = `<chunkify-player player="hlsjs" status="ready"
+    document.body.innerHTML = `<chunkify-player player="hlsjs"
       src="/tests/fixtures/media/master.m3u8"></chunkify-player>`;
   });
   await engineRequest;
-  await page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => { element.status = "preparing"; });
+  await page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => { element.src = null; });
   release();
   await page.evaluate(async () => { const engine = "hls.js"; await import(engine); });
-  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
   expect(mediaRequests).toEqual([]);
 });
 
-test("properties set before registration survive upgrade and start playback once ready", async ({ page }) => {
+test("properties set before registration survive upgrade and initialize the supplied source once", async ({ page }) => {
   const manifests: string[] = [];
   page.on("request", (request) => {
     if (request.url().endsWith("/master.m3u8")) manifests.push(request.url());
@@ -240,7 +251,7 @@ test("properties set before registration survive upgrade and start playback once
   await page.evaluate(async () => {
     const player = document.createElement("chunkify-player");
     Object.assign(player, {
-      status: "preparing", src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
+      src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
       muted: true, controls: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
       thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
       assetId: "asset-before-registration",
@@ -251,13 +262,9 @@ test("properties set before registration survive upgrade and start playback once
     await import(entry);
   });
   const player = page.locator("chunkify-player");
-  await expect(player).toHaveAttribute("status", "preparing");
   await expect(player).toHaveAttribute("asset-id", "asset-before-registration");
-  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
-  expect(manifests).toHaveLength(0);
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/master.m3u8"; });
   expect(manifests).toHaveLength(1);
   expect(await player.evaluate((element: ChunkifyPlayer) => ({
     src: element.src, player: element.player, controls: element.controls, poster: element.poster,
@@ -271,25 +278,20 @@ test("properties set before registration survive upgrade and start playback once
   });
 });
 
-test("an omitted status waits for a source and named slots replace fallback text", async ({ page }) => {
+test("a supplied source starts playback and clearing it returns to idle", async ({ page }) => {
   const mediaRequests: string[] = [];
   page.on("request", (request) => {
     if (/\/media\/|hls\.mjs/.test(request.url())) mediaRequests.push(request.url());
   });
   await openFixture(page);
   await page.evaluate(() => {
-    document.body.innerHTML = `<chunkify-player muted thumbnails="/tests/fixtures/media/thumbnails/images.vtt">
-      <span slot="preparing">Custom processing message</span>
-    </chunkify-player>`;
+    document.body.innerHTML = `<chunkify-player muted thumbnails="/tests/fixtures/media/thumbnails/images.vtt"></chunkify-player>`;
   });
   await expect(page.getByRole("status")).toHaveText("No video source provided.");
   const player = page.locator("chunkify-player");
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "preparing"; });
-  await expect(page.getByText("Custom processing message")).toBeVisible();
   expect(mediaRequests).toEqual([]);
   await player.evaluate((element: ChunkifyPlayer) => {
     element.src = "/tests/fixtures/media/video.mp4";
-    element.status = null;
   });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
   await player.evaluate((element: ChunkifyPlayer) => { element.src = null; });

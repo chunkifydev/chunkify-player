@@ -1,7 +1,7 @@
 # @chunkify/player-react
 
 Typed React 19 wrapper over `@chunkify/player`. The Web Component owns playback,
-controls, readiness and cleanup. This package adds no playback engine.
+controls and cleanup. This package adds no playback engine.
 
 Version `0.0.0` is an unpublished development package. Both packages are linked
 locally through the repository's npm workspaces. React is a peer dependency;
@@ -16,7 +16,6 @@ function Video({ src }: { src: string }) {
   return (
     <ChunkifyPlayer
       ref={ref}
-      status="ready"
       src={src}
       controls
       playsInline
@@ -27,16 +26,16 @@ function Video({ src }: { src: string }) {
 
 ## Props and refs
 
-Props include `src`, `poster`, `thumbnails`, `assetId`, `status`, `player`,
+Props include `src`, `poster`, `thumbnails`, `assetId`, `player`,
 `credentials`, `autoPlay`, `muted`, `loop`, `playsInline`, and `controls`.
 They follow the [Web Component's behavior](../player/README.md). Use React's
 `autoPlay` spelling. `className`, `style`, `id`, ARIA attributes and other standard
 host attributes apply to the custom element. There is no extra container.
 
-`status="ready"` requires a string `src` in TypeScript. Preparing, failed and
-expired states accept an omitted or null source. With status omitted, the player
-waits for a source. Runtime validation remains in the Web Component, including
-empty or invalid URLs. Removing a prop clears the corresponding setting.
+`src` is optional. Omitting it or passing `null`, `undefined`, an empty string or
+whitespace leaves the player idle. Supplying a valid URL initializes playback;
+clearing it stops playback and releases the engine. Runtime URL validation remains
+in the Web Component. Removing a prop clears the corresponding setting.
 
 The ref points directly to the `ChunkifyPlayer` Web Component. `ref.current.media`
 is the underlying `HTMLVideoElement`; use its `play()`, `pause()` and `currentTime`
@@ -52,7 +51,7 @@ Reserve space with a parent layout if needed. Registration failures reach the
 nearest React error boundary. Browser-only Web Component imports must not be
 added separately to server code.
 
-Development Strict Mode, source replacement, status changes and real
+Development Strict Mode, source replacement, source clearing and real
 unmount/remount are covered by browser tests. Unmounting while registration is
 pending cannot start playback for the removed component. The Web Component
 releases playback resources when removed from the DOM; the wrapper does not
@@ -64,7 +63,7 @@ in Chromium, Firefox and WebKit. React 18 and earlier are not supported.
 Telemetry and real preview/CDN/device validation remain pending. Asset IDs are
 passive metadata and do not trigger asset lookup or enable telemetry.
 
-## Events and custom fallbacks
+## Events
 
 Media callbacks receive native browser events. During the callback,
 `event.currentTarget` is typed as the player Web Component. `onPlaybackError`
@@ -73,19 +72,12 @@ receives a `CustomEvent` with the Web Component's normalized `detail`, containin
 
 ```tsx
 <ChunkifyPlayer
-  status="ready"
   src="https://media.example.com/manifest.m3u8"
   controls
   onPlaying={(event) => console.log(event.currentTarget.media.currentTime)}
   onPlaybackError={(event) => console.log(event.detail.code, event.detail.message)}
 />
 
-<ChunkifyPlayer
-  status="preparing"
-  preparingFallback={<p>Your video is processing.</p>}
-  failedFallback={<p>Please try another upload.</p>}
-  expiredFallback={<p>This preview has expired.</p>}
-/>
 ```
 
 The callback props are `onAbort`, `onCanPlay`, `onCanPlayThrough`,
@@ -99,13 +91,24 @@ updates and unmount cleanup do not restart playback. Other host event callbacks
 are not part of this wrapper's API; use the component ref for additional native
 listeners and clean them up in your application.
 
-Fallback props accept React nodes, including interactive components. The wrapper
-places them in the corresponding Web Component slots and preserves its accessible
-status container. Omit a fallback, or pass `null` or `undefined`, to use the built-in
-message. Fallbacks are shown only for their matching status and never authorize
-media requests. They appear after client registration, as described above.
+## Application-owned asset readiness
 
-The local [React example](../../examples/react/main.tsx) demonstrates status changes,
+The application checks asset progression and decides what to display. The player
+has no `status`, `preparingFallback`, `failedFallback` or `expiredFallback` props.
+Render your own messages and mount the player when a usable URL is available:
+
+```tsx
+function AssetVideo({ src, processing }: { src?: string; processing: boolean }) {
+  if (processing) return <p role="status">Your video is processing.</p>;
+  if (!src) return <p>This video is unavailable.</p>;
+  return <ChunkifyPlayer src={src} controls playsInline />;
+}
+```
+
+You can also keep the player mounted and omit or clear `src` until playback is
+wanted. `assetId` never triggers an asset lookup.
+
+The local [React example](../../examples/react/main.tsx) demonstrates application-owned readiness,
 event callbacks, ref access and unmount/remount. Build it with
 `npm run build && npm run build:react-fixtures`, run `npm run serve`, then open
 [the React example](http://127.0.0.1:4173/examples/react/).

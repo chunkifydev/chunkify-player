@@ -149,7 +149,7 @@ test("thumbnail previews remain within a narrow player while seeking", async ({ 
   await expect(slider).toBeEnabled();
 });
 
-test("HLS previews respect readiness and reset on source replacement and disconnection", async ({ page }) => {
+test("HLS previews wait for a source and reset on source replacement and disconnection", async ({ page }) => {
   const requests: string[] = [];
   page.on("request", (request) => {
     if (/images\.vtt|sprite\d+\.jpg/.test(request.url())) requests.push(request.url());
@@ -158,17 +158,14 @@ test("HLS previews respect readiness and reset on source replacement and disconn
   await page.evaluate(() => customElements.whenDefined("chunkify-player"));
   await page.evaluate((thumbnails) => {
     const player = document.createElement("chunkify-player");
-    Object.assign(player, { status: "preparing", player: "hlsjs", controls: true, muted: true,
-      src: "/tests/fixtures/media/master.m3u8", thumbnails });
+    Object.assign(player, { player: "hlsjs", controls: true, muted: true,
+      thumbnails });
     document.body.append(player);
   }, thumbnails);
   const player = page.locator("chunkify-player");
-  for (const status of ["preparing", "failed", "expired"] as const) {
-    await player.evaluate((element: ChunkifyPlayer, status) => { element.status = status; }, status);
-    await expect(page.getByRole("status")).toBeVisible();
-    expect(requests).toEqual([]);
-  }
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
+  expect(requests).toEqual([]);
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/master.m3u8"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
   const preview = page.locator("media-preview-thumbnail").first();
   await hoverTime(page, 4.5);
@@ -191,7 +188,7 @@ test("HLS previews respect readiness and reset on source replacement and disconn
   expect(requests.some((url) => url.endsWith("?reconnected"))).toBe(true);
 });
 
-test("leaving ready aborts a pending VTT request and cannot restore its old previews", async ({ page }) => {
+test("clearing the source aborts a pending VTT request and cannot restore its old previews", async ({ page }) => {
   let requested!: () => void;
   let release!: () => void;
   const started = new Promise<void>((resolve) => { requested = resolve; });
@@ -207,13 +204,13 @@ test("leaving ready aborts a pending VTT request and cannot restore its old prev
   await started;
   await hoverTime(page, 0.5);
   const aborted = page.waitForEvent("requestfailed", (request) => request.url().endsWith("delayed.vtt"));
-  await player.evaluate((element: ChunkifyPlayer) => { element.status = "preparing"; });
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = null; });
   await aborted;
   release();
-  await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
+  await expect(page.getByRole("status")).toHaveText("No video source provided.");
   await player.evaluate((element: ChunkifyPlayer) => {
     element.thumbnails = null;
-    element.status = "ready";
+    element.src = "/tests/fixtures/media/video.mp4";
   });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
   await hoverTime(page, 4.5);
