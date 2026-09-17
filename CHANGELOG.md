@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+Added the initial standalone `@chunkify/player-telemetry` package with a callback
+destination, start/end records, ephemeral view IDs, startup and playing time, and
+cleanup. Player/React integration, snapshots, errors, additional metrics, sampling
+and provider destinations remain pending.
+
 Asset readiness now belongs to the application. The player initializes playback
 when given a valid source URL and stays idle without one.
 

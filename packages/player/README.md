@@ -257,8 +257,9 @@ recoverable errors before a fatal error reaches this interface.
 
 This wrapper includes playback, posters, sprite VTT previews, themed controls,
 cookie credentials, and lifecycle handling. A separate typed React wrapper
-reuses this implementation. Telemetry is not implemented yet. No telemetry listeners or destinations are
-installed. No DRM or universal private-CDN compatibility is claimed.
+reuses this implementation. Player telemetry integration is not implemented yet. The separate
+`@chunkify/player-telemetry` package has an initial standalone callback core. No
+telemetry listeners or destinations are installed by this player. No DRM or universal private-CDN compatibility is claimed.
 
 The package emits ES modules, TypeScript declarations, and source maps. Sources
 are included so source and declaration maps remain usable. Chunkify-authored

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Standalone telemetry fixture</title></head>
+  <body>
+    <video muted playsinline></video>
+    <script type="module">
+      import { attachTelemetry } from "/packages/player-telemetry/dist/index.js";
+      window.telemetryFixture = {
+        attachTelemetry,
+        video: document.querySelector("video"),
+        events: [],
+        session: null,
+      };
+    </script>
+  </body>
+</html>

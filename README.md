@@ -7,7 +7,8 @@ The initial `<chunkify-player>` implementation wraps a native video element and
 loads hls.js only when selected. It supports posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
 cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
-reuses that implementation. Telemetry remains a later step.
+reuses that implementation. A standalone telemetry package now provides callback
+start/end records and basic timing; integration into the player remains pending.
 
 ## Packages
 
@@ -15,9 +16,9 @@ reuses that implementation. Telemetry remains a later step.
 | --- | --- | --- |
 | `packages/player` | `@chunkify/player` | Initial playback wrapper |
 | `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper |
-| `packages/player-telemetry` | `@chunkify/player-telemetry` | Planned last |
+| `packages/player-telemetry` | `@chunkify/player-telemetry` | Initial standalone callback core |
 
-The player and React wrapper directories exist. The root package is private so it
+All three package directories exist. The root package is private so it
 cannot be published. Each package will have its own publishable contents.
 
 ## Development
@@ -58,6 +59,11 @@ server rendering and React support.
 For the React example, also run `npm run build:react-fixtures`, then visit
 [the React example](http://127.0.0.1:4173/examples/react/). It includes application-owned
 readiness content, media callbacks, ref access and mount/unmount controls.
+
+The [standalone telemetry example](http://127.0.0.1:4173/examples/telemetry/) uses
+a plain video element and prints callback records locally. See the
+[telemetry package README](packages/player-telemetry/README.md) for the current
+API, lifecycle and remaining work.
 
 Other useful commands:
 
@@ -114,6 +120,10 @@ replacement/removal and normalized errors.
 Both native MP4 and hls.js
 use real local media. React and React DOM are development dependencies for
 these tests; the published React wrapper keeps React external as a peer.
+
+Standalone telemetry tests cover attempt boundaries, startup/playing time, source
+changes, replay, page exit, listener cleanup, callback failures and payload privacy.
+They combine controlled-clock checks with actual native video playback.
 
 GitHub Actions runs the same checks on pushes and pull requests, and retains
 the Playwright report for seven days. Failed tests retain traces.

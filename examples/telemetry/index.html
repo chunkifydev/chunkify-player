@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Standalone Chunkify telemetry</title>
+    <style>
+      body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
+      video { display: block; width: 100%; margin: 1rem 0; }
+      button { font: inherit; }
+      pre { padding: 1rem; background: #f2f2f2; white-space: pre-wrap; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <h1>Standalone Chunkify telemetry</h1>
+    <p>This native video uses the telemetry package directly. Play the clip to start a view.
+      Records appear here through a callback; this example sends no telemetry over the network.</p>
+    <video src="../../tests/fixtures/media/video.mp4" controls muted playsinline></video>
+    <button id="stop">Stop telemetry</button>
+    <p id="status" role="status">Waiting for a playback attempt.</p>
+    <pre id="events" aria-label="Telemetry records">No records yet.</pre>
+    <script type="module">
+      import { attachTelemetry } from "../../packages/player-telemetry/dist/index.js";
+      const records = [];
+      const session = attachTelemetry(document.querySelector("video"), {
+        assetId: "local-telemetry-example",
+        provider: "callback",
+        environment: "development",
+        send(event) {
+          records.push(event);
+          document.querySelector("#events").textContent = JSON.stringify(records, null, 2);
+          document.querySelector("#status").textContent = `${records.length} records received.`;
+        },
+      });
+      document.querySelector("#stop").addEventListener("click", (event) => {
+        session.destroy();
+        event.currentTarget.disabled = true;
+        document.querySelector("#status").textContent = "Telemetry stopped. Video controls still work. Reload to attach again.";
+      });
+    </script>
+  </body>
+</html>
