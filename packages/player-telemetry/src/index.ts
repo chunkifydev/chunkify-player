@@ -1,6 +1,7 @@
 const sdkVersion = "0.0.0";
 
 export type TelemetryEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
+export type TelemetryErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
 export interface ViewMetrics {
   media_duration_seconds: number | null;
   startup_time_ms: number | null;
@@ -12,10 +13,12 @@ export interface ViewMetrics {
   seek_duration_ms: number;
   maximum_playhead_seconds: number;
   completion_ratio: number | null;
+  dropped_video_frames: number | null;
+  total_video_frames: number | null;
 }
 export interface ChunkifyPlayerTelemetryEvent {
   schema_version: 1;
-  event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.view_ended";
+  event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.playback_error" | "chunkify.video.view_ended";
   event_id: string;
   sequence: number;
   occurred_at: string;
@@ -32,6 +35,10 @@ export interface ChunkifyPlayerTelemetryEvent {
   viewer_id: string | null;
   metrics: ViewMetrics;
   reason: TelemetryEndReason | null;
+  error_category: TelemetryErrorCategory | null;
+  error_code: string | number | null;
+  error_fatal: boolean | null;
+  error_playhead_seconds: number | null;
 }
 export interface CallbackTelemetryConfig {
   provider: "callback";
@@ -68,6 +75,22 @@ interface View {
   hostname: string | null;
   source: string;
   resourceStarted: boolean;
+  errorEmitted: boolean;
+  frameBaseline: FrameCounts | null;
+  framePrevious: FrameCounts | null;
+  frameMetricsValid: boolean;
+}
+
+interface FrameCounts {
+  dropped: number;
+  total: number;
+}
+
+interface NormalizedError {
+  category: TelemetryErrorCategory;
+  code: string | number | null;
+  fatal: boolean;
+  playhead: number | null;
 }
 
 function deliveryHostname(media: HTMLMediaElement): string | null {
@@ -80,6 +103,31 @@ function deliveryHostname(media: HTMLMediaElement): string | null {
 }
 function duration(media: HTMLMediaElement): number | null {
   return Number.isFinite(media.duration) && media.duration >= 0 ? media.duration : null;
+}
+function mediaErrorCategory(code: number | null): TelemetryErrorCategory {
+  return code === 1 ? "aborted" : code === 2 ? "network" : code === 3 ? "decode"
+    : code === 4 ? "unsupported" : "unknown";
+}
+function frameCounts(media: HTMLMediaElement): FrameCounts | null {
+  const video = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement, "getVideoPlaybackQuality">>;
+  if (typeof video.getVideoPlaybackQuality === "function") {
+    try {
+      const quality = video.getVideoPlaybackQuality();
+      if (Number.isInteger(quality.droppedVideoFrames) && quality.droppedVideoFrames >= 0 &&
+          Number.isInteger(quality.totalVideoFrames) && quality.totalVideoFrames >= 0) {
+        return { dropped: quality.droppedVideoFrames, total: quality.totalVideoFrames };
+      }
+    } catch {
+      // Treat an inaccessible browser counter like an unavailable measurement.
+    }
+  }
+  const webkit = media as HTMLMediaElement & {
+    webkitDecodedFrameCount?: number;
+    webkitDroppedFrameCount?: number;
+  };
+  if (!Number.isInteger(webkit.webkitDecodedFrameCount) || (webkit.webkitDecodedFrameCount ?? -1) < 0 ||
+      !Number.isInteger(webkit.webkitDroppedFrameCount) || (webkit.webkitDroppedFrameCount ?? -1) < 0) return null;
+  return { dropped: webkit.webkitDroppedFrameCount!, total: webkit.webkitDecodedFrameCount! };
 }
 
 export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptions): TelemetrySession {
@@ -100,12 +148,26 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   let seeking = false;
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null) {
+  function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null,
+    error: NormalizedError | null = null) {
     const now = performance.now();
     const playingTime = current.playing + (current.playingSince === null ? 0 : now - current.playingSince);
     const rebufferDuration = current.rebufferDuration + (current.rebufferSince === null ? 0 : now - current.rebufferSince);
     const seekDuration = current.seekDuration + (current.seekSince === null ? 0 : now - current.seekSince);
     const rebufferDenominator = playingTime + rebufferDuration;
+    const frames = frameCounts(media);
+    let viewFrames: FrameCounts | null = null;
+    if (frames && current.frameBaseline && current.framePrevious && current.frameMetricsValid) {
+      if (frames.dropped < current.framePrevious.dropped || frames.total < current.framePrevious.total) {
+        current.frameMetricsValid = false;
+      } else {
+        viewFrames = {
+          dropped: frames.dropped - current.frameBaseline.dropped,
+          total: frames.total - current.frameBaseline.total,
+        };
+      }
+    }
+    if (frames) current.framePrevious = frames;
     const event: ChunkifyPlayerTelemetryEvent = {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, asset_id: assetId,
@@ -113,6 +175,10 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       connector_name: "html-media", connector_version: sdkVersion,
       player_name: null, player_version: null, delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
+      error_category: error?.category ?? null,
+      error_code: error?.code ?? null,
+      error_fatal: error?.fatal ?? null,
+      error_playhead_seconds: error?.playhead ?? null,
       metrics: {
         media_duration_seconds: current.duration,
         startup_time_ms: current.startup,
@@ -124,6 +190,8 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
         seek_duration_ms: seekDuration,
         maximum_playhead_seconds: current.maximumPlayhead,
         completion_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
+        dropped_video_frames: viewFrames?.dropped ?? null,
+        total_video_frames: viewFrames?.total ?? null,
       },
     };
     try {
@@ -137,6 +205,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     if (destroyed) return;
     wantsPlay = true;
     if (view) return;
+    const initialFrames = frameCounts(media);
     view = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(), startup: null,
       playing: 0, playingSince: null,
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
@@ -145,8 +214,11 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       nextSnapshotAt: 30000,
       duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
-      resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2 };
+      resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
+      errorEmitted: false, frameBaseline: initialFrames, framePrevious: initialFrames,
+      frameMetricsValid: initialFrames !== null };
     emit(view, "chunkify.video.view_started");
+    if (media.error) reportMediaError();
   }
   function stopPlaying() {
     if (snapshotTimer !== null) {
@@ -170,6 +242,16 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   function updatePlaybackPosition() {
     if (!view || !Number.isFinite(media.currentTime)) return;
     view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
+  }
+  function reportMediaError() {
+    if (!view || view.errorEmitted) return;
+    updatePlaybackPosition();
+    view.errorEmitted = true;
+    const code = media.error && Number.isFinite(media.error.code) ? media.error.code : null;
+    emit(view, "chunkify.video.playback_error", null, {
+      category: mediaErrorCategory(code), code, fatal: true,
+      playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
+    });
   }
   function scheduleSnapshot() {
     if (!view || snapshotTimer !== null) return;
@@ -224,7 +306,10 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
         view.rebufferSince = performance.now();
       }
     },
-    error() { stopPlaying(); stopRebuffering(); stopSeeking(); seeking = false; },
+    error() {
+      stopPlaying(); stopRebuffering(); stopSeeking(); seeking = false; wantsPlay = false;
+      reportMediaError();
+    },
     ended() { finish("ended"); },
     emptied() {
       if (!view) return;

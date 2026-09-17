@@ -7,8 +7,9 @@ you provide. The package does not contact Chunkify or store a viewer identity.
 Version `0.0.0` is unpublished. This package implements the first telemetry steps from
 [issue #279](https://github.com/chunkifydev/chunkify/issues/279), following the
 [shared contract](https://github.com/chunkifydev/chunkify/issues/272#issuecomment-5426511219).
-It provides start/end records, cumulative snapshots, startup/playing/buffering/seek
-timing, and completion. The Web Component and React wrapper do not enable or import it yet.
+It provides start/end/error records, cumulative snapshots, startup/playing/buffering/
+seek timing, completion, and browser frame counts. The Web Component and React
+wrapper do not enable or import it yet.
 
 ## Use
 
@@ -87,14 +88,38 @@ Each record has a `metrics` object:
 | `seek_duration_ms` | Cumulative elapsed seek time. |
 | `maximum_playhead_seconds` | Furthest finite playhead observed in the view. |
 | `completion_ratio` | Maximum playhead divided by known duration, bounded to 0–1; otherwise `null`. |
+| `dropped_video_frames` | Frames dropped during this view when the browser exposes reliable counters; otherwise `null`. |
+| `total_video_frames` | Total frames during this view when exposed; otherwise `null`. |
 
 Playing time counts elapsed time, not distance along the timeline. Seeking forward
 and higher playback rates do not increase it artificially. A seek or waiting state
 stops its clock; a subsequent `playing` event resumes it. A media error also stops
-the clock, without emitting a separate error record in this slice. Startup includes time
+the clock and emits the normalized record described below. Startup includes time
 between the first attempt and first playing state, including any intervening pause.
 The package observes `timeupdate` locally to maintain the maximum playhead, but it
 does not forward those high-frequency events.
+
+An HTML media `error` during an open view immediately emits one
+`chunkify.video.playback_error` record. It has the current cumulative metrics plus:
+
+| Field | Meaning |
+| --- | --- |
+| `error_category` | `aborted`, `network`, `decode`, `unsupported`, or `unknown`. |
+| `error_code` | The browser's numeric `MediaError.code`, or `null` when unavailable. |
+| `error_fatal` | `true` for an HTML media error. Engine connectors may classify their own errors later. |
+| `error_playhead_seconds` | Finite playhead at failure, or `null`. |
+
+Other record types set these four fields to `null`. Only the first media error in a
+view is emitted because the HTML media error state is fatal. Raw browser messages,
+error objects, URLs, and stack traces are never copied into the record. The view
+remains open for the final end record when the application cleans up or changes source.
+An error that occurs during preload sends nothing by itself. If the first playback
+attempt finds that existing error, it emits `view_started` and then `playback_error`.
+
+Frame totals are deltas from the counters observed at the first playback attempt,
+so frames decoded before telemetry attached are excluded. The standard
+`getVideoPlaybackQuality()` API is preferred, with WebKit frame counters as a
+fallback. Missing, invalid, or reset counters produce `null` instead of an estimate.
 
 ## Record contract and delivery
 
@@ -131,9 +156,8 @@ an attachment there are no telemetry listeners or records.
 
 ## Remaining telemetry work
 
-This is not the complete MVP telemetry package. Later steps will add normalized
-playback-error records, browser frame metrics, sampling, engine enrichment,
-Datadog/Grafana/OTLP destinations, and the player/React property integration.
+This is not the complete MVP telemetry package. Later steps will add sampling,
+engine enrichment, Datadog/Grafana/OTLP destinations, and the player/React property integration.
 None of those options are exposed yet.
 Measurements not exposed by a future connector will remain nullable.
 
@@ -145,8 +169,8 @@ local fixture with native controls and prints callback records on the page.
 
 Browser tests exercise the public attachment/callback API with controlled media
 events and a clock, plus actual video playback in Chromium, Firefox and WebKit.
-They cover lifecycle, snapshots, cumulative metrics, privacy, destination failures
-and cleanup. Node checks
+They cover lifecycle, snapshots, cumulative metrics, normalized errors, browser
+frame APIs, privacy, destination failures and cleanup. Node checks
 verify server-safe imports and agreement between package and payload SDK versions.
 
 The package includes ES modules, declarations, source maps, source and the MIT license.

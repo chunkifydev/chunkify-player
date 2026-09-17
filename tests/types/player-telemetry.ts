@@ -1,4 +1,4 @@
-import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelemetryEvent } from "@chunkify/player-telemetry";
+import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelemetryEvent, type TelemetryErrorCategory } from "@chunkify/player-telemetry";
 
 const video = document.createElement("video");
 const destination: CallbackTelemetryConfig = {
@@ -9,7 +9,9 @@ const destination: CallbackTelemetryConfig = {
     const buffering: number = record.metrics.rebuffer_duration_ms;
     const completion: number | null = record.metrics.completion_ratio;
     const snapshot: boolean = record.event_name === "chunkify.video.view_snapshot";
-    void startup; void buffering; void completion; void snapshot;
+    const frames: number | null = record.metrics.total_video_frames;
+    const category: TelemetryErrorCategory | null = record.error_category;
+    void startup; void buffering; void completion; void snapshot; void frames; void category;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;
   },

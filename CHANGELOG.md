@@ -5,8 +5,9 @@
 Added the initial standalone `@chunkify/player-telemetry` package with a callback
 destination, start/end records, cumulative 30-second snapshots, ephemeral view IDs,
 startup/playing/buffering/seek timing, completion, and cleanup. Player/React
-integration, errors, frame and engine metrics, sampling, and provider destinations
-remain pending.
+integration, engine metrics, sampling, and provider destinations remain pending.
+HTML media errors now emit an immediate normalized, privacy-safe record, and browser
+frame counters report per-view dropped and total frames when available.
 
 Asset readiness now belongs to the application. The player initializes playback
 when given a valid source URL and stays idle without one.

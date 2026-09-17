@@ -73,15 +73,19 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   await page.clock.runFor(5000);
   await dispatch("ended");
   const events = await page.evaluate(() => window.telemetryFixture.events);
-  expect(events).toHaveLength(2);
-  expect(events[1]).toMatchObject({ metrics: {
-    startup_time_ms: 2000,
-    playing_time_ms: 8000,
-    rebuffer_count: 1,
-    rebuffer_duration_ms: 4000,
-    seek_count: 1,
-    seek_duration_ms: 3000,
-  } });
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
+  ]);
+  for (const event of events.slice(1)) {
+    expect(event).toMatchObject({ metrics: {
+      startup_time_ms: 2000,
+      playing_time_ms: 8000,
+      rebuffer_count: 1,
+      rebuffer_duration_ms: 4000,
+      seek_count: 1,
+      seek_duration_ms: 3000,
+    } });
+  }
 });
 
 test("final records contain cumulative buffering, seeking and completion measurements", async ({ page }) => {
@@ -177,6 +181,154 @@ test("a media error stops an unfinished seek measurement", async ({ page }) => {
   await page.evaluate(() => window.telemetryFixture.session!.destroy());
   const events = await page.evaluate(() => window.telemetryFixture.events);
   expect(events[1]).toMatchObject({ metrics: { seek_count: 1, seek_duration_ms: 2000 } });
+});
+
+test("media failures emit one normalized error record without raw error text", async ({ page }) => {
+  const results = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const results: ChunkifyPlayerTelemetryEvent[][] = [];
+    for (const [code, category] of [[1, "aborted"], [2, "network"], [3, "decode"], [4, "unsupported"], [99, "unknown"]] as const) {
+      f.events = [];
+      Object.defineProperties(f.video, {
+        currentTime: { configurable: true, writable: true, value: 12.5 },
+        error: { configurable: true, value: { code, message: "https://private.example/video.m3u8?token=secret" } },
+      });
+      f.session = f.attachTelemetry(f.video, { assetId: "asset-error", provider: "callback", send: (event) => { f.events.push(event); } });
+      f.session.startAttempt();
+      f.video.dispatchEvent(new Event("error"));
+      f.video.dispatchEvent(new Event("error"));
+      f.session.destroy();
+      const events = structuredClone(f.events);
+      if (events[1]?.error_category !== category) throw new Error("unexpected normalized category");
+      results.push(events);
+    }
+    return results;
+  });
+  for (const [index, events] of results.entries()) {
+    expect(events.map((event) => event.event_name)).toEqual([
+      "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
+    ]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events[1]).toMatchObject({
+      error_code: [1, 2, 3, 4, 99][index],
+      error_fatal: true,
+      error_playhead_seconds: 12.5,
+      reason: null,
+    });
+    expect(JSON.stringify(events)).not.toMatch(/private\.example|token|secret|m3u8/);
+  }
+});
+
+test("browser playback quality reports frame totals for the current view", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const quality = { totalVideoFrames: 100, droppedVideoFrames: 5 };
+    Object.defineProperty(f.video, "getVideoPlaybackQuality", {
+      configurable: true,
+      value: () => quality,
+    });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session.startAttempt();
+    quality.totalVideoFrames = 220;
+    quality.droppedVideoFrames = 11;
+    f.session.destroy();
+    return f.events;
+  });
+  expect(events[0]).toMatchObject({ metrics: { total_video_frames: 0, dropped_video_frames: 0 } });
+  expect(events[1]).toMatchObject({ metrics: { total_video_frames: 120, dropped_video_frames: 6 } });
+});
+
+test("WebKit frame counters are supported and unavailable counters remain null", async ({ page }) => {
+  const results = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    Object.defineProperties(f.video, {
+      getVideoPlaybackQuality: { configurable: true, value: undefined },
+      webkitDecodedFrameCount: { configurable: true, writable: true, value: 40 },
+      webkitDroppedFrameCount: { configurable: true, writable: true, value: 2 },
+    });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-webkit-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session.startAttempt();
+    Reflect.set(f.video, "webkitDecodedFrameCount", 70);
+    Reflect.set(f.video, "webkitDroppedFrameCount", 5);
+    f.session.destroy();
+    const supported = structuredClone(f.events);
+    f.events = [];
+    Object.defineProperties(f.video, {
+      webkitDecodedFrameCount: { configurable: true, value: undefined },
+      webkitDroppedFrameCount: { configurable: true, value: undefined },
+    });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-no-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session.startAttempt();
+    f.session.destroy();
+    return { supported, unavailable: f.events };
+  });
+  expect(results.supported[1]).toMatchObject({ metrics: { total_video_frames: 30, dropped_video_frames: 3 } });
+  expect(results.unavailable[1]).toMatchObject({ metrics: { total_video_frames: null, dropped_video_frames: null } });
+});
+
+test("a failing browser frame API does not interrupt telemetry or expose its error", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    Object.defineProperties(f.video, {
+      getVideoPlaybackQuality: { configurable: true, value: () => { throw new Error("private frame failure"); } },
+      webkitDecodedFrameCount: { configurable: true, value: undefined },
+      webkitDroppedFrameCount: { configurable: true, value: undefined },
+    });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-frame-failure", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session.startAttempt();
+    f.session.destroy();
+    return f.events;
+  });
+  expect(events).toHaveLength(2);
+  expect(events[1]).toMatchObject({ metrics: { total_video_frames: null, dropped_video_frames: null } });
+  expect(JSON.stringify(events)).not.toContain("private frame failure");
+});
+
+test("frame metrics remain unavailable after counters reset above their baseline", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const quality = { totalVideoFrames: 100, droppedVideoFrames: 5 };
+    Object.defineProperty(f.video, "getVideoPlaybackQuality", { configurable: true, value: () => quality });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-frame-reset", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session.startAttempt();
+    quality.totalVideoFrames = 300;
+    quality.droppedVideoFrames = 10;
+    f.video.dispatchEvent(new Event("error"));
+    quality.totalVideoFrames = 150;
+    quality.droppedVideoFrames = 7;
+    f.session.destroy();
+    quality.totalVideoFrames = 400;
+    quality.droppedVideoFrames = 12;
+    return f.events;
+  });
+  expect(events[1]).toMatchObject({ metrics: { total_video_frames: 200, dropped_video_frames: 5 } });
+  expect(events[2]).toMatchObject({ metrics: { total_video_frames: null, dropped_video_frames: null } });
+});
+
+test("the first attempt reports a media error that happened during preload", async ({ page }) => {
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-preload-error", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.video.preload = "metadata";
+    f.video.src = "/tests/fixtures/media/does-not-exist.mp4?private=secret";
+  });
+  await expect.poll(() => page.evaluate(() => window.telemetryFixture.video.error?.code ?? 0)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.telemetryFixture.events)).toEqual([]);
+  const rejected = await page.evaluate(async () => {
+    const f = window.telemetryFixture;
+    f.session!.startAttempt();
+    try { await f.video.play(); return false; } catch { return true; }
+  });
+  expect(rejected).toBe(true);
+  let events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.playback_error",
+  ]);
+  expect(events[1]).toMatchObject({ error_fatal: true, error_playhead_seconds: 0 });
+  expect(JSON.stringify(events)).not.toMatch(/does-not-exist|private|secret|\.mp4/);
+  await page.evaluate(() => window.telemetryFixture.session!.destroy());
+  events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
 });
 
 test("a delayed snapshot timer emits once and schedules the next future interval", async ({ page }) => {
