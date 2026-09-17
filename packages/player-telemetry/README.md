@@ -8,8 +8,8 @@ Version `0.0.0` is unpublished. This package implements the first telemetry step
 [issue #279](https://github.com/chunkifydev/chunkify/issues/279), following the
 [shared contract](https://github.com/chunkifydev/chunkify/issues/272#issuecomment-5426511219).
 It provides start/end/error records, cumulative snapshots, startup/playing/buffering/
-seek timing, completion, and browser frame counts. The Web Component and React
-wrapper do not enable or import it yet.
+seek timing, completion, and browser frame counts. The Web Component now uses this
+package for its callback telemetry property; React integration remains pending.
 
 ## Use
 
@@ -171,7 +171,7 @@ an attachment there are no telemetry listeners or records.
 ## Remaining telemetry work
 
 This is not the complete MVP telemetry package. Later steps will add engine
-enrichment, Datadog/Grafana/OTLP destinations, and the player/React property integration.
+enrichment, Datadog/Grafana/OTLP destinations, and the React property integration.
 None of those options are exposed yet.
 Measurements not exposed by a future connector will remain nullable.
 

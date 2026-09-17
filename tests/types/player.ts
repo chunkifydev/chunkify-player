@@ -1,4 +1,4 @@
-import type { PlaybackErrorDetail } from "../../packages/player/src/index.js";
+import type { PlaybackErrorDetail, TelemetryConfig } from "../../packages/player/src/index.js";
 
 const player = document.createElement("chunkify-player");
 player.assetId = "asset-123";
@@ -25,6 +25,19 @@ const credentials: "include" | null = player.credentials;
 console.log(credentials);
 // @ts-expect-error The component accepts only include or an omitted credential setting.
 player.credentials = "omit";
+
+const telemetry: TelemetryConfig = {
+  provider: "callback",
+  sampleRate: 0.5,
+  send(event) { console.log(event.event_name); },
+};
+player.telemetry = telemetry;
+player.telemetry = null;
+player.telemetry = undefined;
+const configuredTelemetry: TelemetryConfig | null = player.telemetry;
+console.log(configuredTelemetry);
+// @ts-expect-error Telemetry is configured with an object, not an HTML string.
+player.telemetry = "callback";
 
 player.addEventListener("playback-error", (event) => {
   const detail: PlaybackErrorDetail = event.detail;

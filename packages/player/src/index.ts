@@ -1,8 +1,10 @@
 import type Hls from "hls.js";
+import { attachTelemetry, type CallbackTelemetryConfig, type TelemetrySession } from "@chunkify/player-telemetry";
 import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview, setThumbnailCredentials } from "./theme.js";
 import { loadThumbnails } from "./thumbnails.js";
 
 export type PlayerEngine = "auto" | "native" | "hlsjs";
+export type TelemetryConfig = CallbackTelemetryConfig;
 
 const errorMessages = {
   "invalid-source": "Provide a valid HTTP or HTTPS video URL.",
@@ -32,7 +34,7 @@ const mediaEvents = [
 ];
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = ["src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
+  static observedAttributes = ["asset-id", "src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
 
   // Add payload inference without changing the browser's listener implementation.
   declare addEventListener: ((
@@ -56,6 +58,9 @@ export class ChunkifyPlayer extends HTMLElement {
   #hls: Hls | null = null;
   #engine: Exclude<PlayerEngine, "auto"> | null = null;
   #thumbnailCleanup: (() => void) | null = null;
+  #telemetryConfig: TelemetryConfig | null = null;
+  #telemetrySession: TelemetrySession | null = null;
+  #telemetryRevision = 0;
 
   constructor() {
     super();
@@ -81,8 +86,14 @@ export class ChunkifyPlayer extends HTMLElement {
         this.dispatchEvent(new Event(event));
         if (event === "error" && this.#media.error) {
           const code = this.#media.error.code;
-          this.#fail(code === 2 ? "network-error" : code === 3 ? "decode-error"
-            : code === 4 ? "unsupported-source" : "playback-failed");
+          const generation = this.#generation;
+          // Let other media error listeners, including telemetry, read the browser's
+          // error and playhead before teardown resets the media element.
+          globalThis.setTimeout(() => {
+            if (!this.#active || generation !== this.#generation) return;
+            this.#fail(code === 2 ? "network-error" : code === 3 ? "decode-error"
+              : code === 4 ? "unsupported-source" : "playback-failed");
+          }, 0);
         }
       });
     }
@@ -90,6 +101,16 @@ export class ChunkifyPlayer extends HTMLElement {
 
   get media(): HTMLVideoElement {
     return this.#media;
+  }
+
+  get telemetry(): TelemetryConfig | null {
+    return this.#telemetryConfig;
+  }
+  set telemetry(value: TelemetryConfig | null | undefined) {
+    const next = value ?? null;
+    if (next === this.#telemetryConfig) return;
+    this.#telemetryConfig = next;
+    this.#syncTelemetry();
   }
 
   // Passive context: changing an asset ID must not restart playback.
@@ -154,7 +175,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     // Preserve properties assigned before the custom element was registered.
-    for (const name of ["assetId", "src", "poster", "thumbnails", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
+    for (const name of ["assetId", "src", "poster", "thumbnails", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls", "telemetry"]) {
       if (Object.prototype.hasOwnProperty.call(this, name)) {
         const value: unknown = Reflect.get(this, name);
         Reflect.deleteProperty(this, name);
@@ -163,16 +184,20 @@ export class ChunkifyPlayer extends HTMLElement {
     }
     for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
     connectPlayerTheme(this.#theme);
+    this.#syncTelemetry();
     this.#scheduleUpdate();
   }
 
   disconnectedCallback() {
+    this.#stopTelemetry();
     this.#stop();
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, value: string | null) {
     if (oldValue === value) return;
-    if (name === "poster") {
+    if (name === "asset-id") {
+      this.#syncTelemetry();
+    } else if (name === "poster") {
       this.#syncPoster();
     } else if (name === "thumbnails") {
       this.#syncThumbnails();
@@ -211,6 +236,26 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#thumbnailCleanup = loadThumbnails(this.#media, source, this.credentials ?? "same-origin",
         () => refreshThumbnailPreview(this.#theme));
     }
+  }
+
+  #stopTelemetry() {
+    const session = this.#telemetrySession;
+    this.#telemetrySession = null;
+    session?.destroy();
+  }
+
+  #syncTelemetry() {
+    const revision = ++this.#telemetryRevision;
+    this.#stopTelemetry();
+    if (revision !== this.#telemetryRevision) return;
+    const assetId = this.assetId.trim();
+    if (!this.isConnected || !this.#telemetryConfig || !assetId) return;
+    const session = attachTelemetry(this.#media, { ...this.#telemetryConfig, assetId });
+    if (revision !== this.#telemetryRevision) {
+      session.destroy();
+      return;
+    }
+    this.#telemetrySession = session;
   }
 
   #scheduleUpdate() {

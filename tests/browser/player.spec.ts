@@ -249,6 +249,8 @@ test("properties set before registration survive upgrade and initialize the supp
   });
   await page.goto("/tests/fixtures/player.html?defer");
   await page.evaluate(async () => {
+    const state = window as typeof window & { upgradeTelemetryEvents: unknown[] };
+    state.upgradeTelemetryEvents = [];
     const player = document.createElement("chunkify-player");
     Object.assign(player, {
       src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
@@ -256,6 +258,10 @@ test("properties set before registration survive upgrade and initialize the supp
       thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
       assetId: "asset-before-registration",
       credentials: "include",
+      telemetry: {
+        provider: "callback",
+        send: (event: unknown) => { state.upgradeTelemetryEvents.push(event); },
+      },
     });
     document.body.append(player);
     const entry = "/packages/player/dist/index.js";
@@ -264,6 +270,10 @@ test("properties set before registration survive upgrade and initialize the supp
   const player = page.locator("chunkify-player");
   await expect(player).toHaveAttribute("asset-id", "asset-before-registration");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => { element.media.dispatchEvent(new Event("play")); });
+  expect(await page.evaluate(() => (
+    window as typeof window & { upgradeTelemetryEvents: unknown[] }
+  ).upgradeTelemetryEvents)).toHaveLength(1);
   await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/master.m3u8"; });
   expect(manifests).toHaveLength(1);
   expect(await player.evaluate((element: ChunkifyPlayer) => ({

@@ -9,13 +9,14 @@ Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
 cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
 reuses that implementation. A standalone telemetry package provides callback
 start/end/snapshot/error records, cumulative playback metrics, and per-view sampling;
-player integration remains pending.
+the Web Component exposes that callback core through its optional `telemetry` property.
+React integration remains pending.
 
 ## Packages
 
 | Directory | npm package | Status |
 | --- | --- | --- |
-| `packages/player` | `@chunkify/player` | Initial playback wrapper |
+| `packages/player` | `@chunkify/player` | Playback wrapper with optional callback telemetry |
 | `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper |
 | `packages/player-telemetry` | `@chunkify/player-telemetry` | Initial standalone callback core |
 
@@ -83,9 +84,10 @@ packages so the published maps can resolve their sources. Published packages
 are not bundled. esbuild prepares React's development runtime for the local
 browser fixtures, including Strict Mode checks, without adding Vite.
 
-The local example uses an import map to resolve the package, hls.js, Media Chrome,
-and the Demuxed 2022 theme. The wrapper's `import("hls.js")` runs only when the
-hls.js engine is selected. The controls do not add another playback engine.
+The local example uses an import map to resolve the player and telemetry packages,
+hls.js, Media Chrome, and the Demuxed 2022 theme. The wrapper's `import("hls.js")`
+runs only when the hls.js engine is selected. The controls do not add another
+playback engine.
 
 Playwright tests run in Chromium, Firefox, and WebKit. They cover local HLS/fMP4
 playback through hls.js, automatic engine selection, native MP4 playback, media
@@ -127,6 +129,8 @@ buffering/seek timing, completion, source changes, replay, page exit, listener c
 normalized media errors, browser frame counts, callback failures and payload privacy.
 They also verify complete-view sampling and fresh decisions on replay.
 They combine controlled-clock checks with actual native video playback.
+Web Component integration tests cover callback configuration, asset context,
+pre-registration properties, source clearing, replay, disabling, and disconnect cleanup.
 
 GitHub Actions runs the same checks on pushes and pull requests, and retains
 the Playwright report for seven days. Failed tests retain traces.

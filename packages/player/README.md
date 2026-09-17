@@ -32,12 +32,15 @@ and its dependencies: `hls.js`, `@player.style/demuxed-2022`, `media-chrome`, an
 `media-chrome/` path prefix. The repository's `examples/basic/index.html`
 demonstrates this with local files. Bare npm imports cannot resolve without a module
 resolver or import map. No published CDN import is available for this version.
+The import map must also resolve `@chunkify/player-telemetry`, which supplies the
+component's optional telemetry core.
 
 ## Attributes and properties
 
 | Attribute | JavaScript property | Behavior |
 | --- | --- | --- |
 | `asset-id` | `assetId` | Optional asset metadata. Changing it does not restart playback or fetch asset information. The getter returns an empty string when absent; setting `null` or `undefined` removes it. |
+| — | `telemetry` | Optional callback telemetry configuration. This is a JavaScript property only; setting `null` or `undefined` disables telemetry. |
 | `src` | `src` | HTTP/HTTPS HLS URL, or a `.mp4` URL with native/auto playback. Relative URLs resolve against the page. Setting `null` or `undefined` removes it. |
 | `poster` | `poster` | Optional image URL. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears the media poster. |
 | `thumbnails` | `thumbnails` | Optional HTTP/HTTPS WebVTT URL for seek previews. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears previews. |
@@ -61,7 +64,48 @@ still apply. With `loop`, reaching the end starts the video again; setting
 `player.loop = false` lets the current playback finish normally.
 
 `asset-id` is passive context for the supplied source. It does not enable
-telemetry. Telemetry integration is a later step.
+telemetry by itself or trigger an asset lookup.
+
+## Optional telemetry
+
+Telemetry is disabled by default. Configure it through the JavaScript property;
+callbacks and provider clients must never be serialized into an HTML attribute:
+
+```html
+<chunkify-player
+  id="player"
+  asset-id="asset_123"
+  src="https://media.example.com/manifest.m3u8"
+  controls
+></chunkify-player>
+
+<script type="module">
+  import "@chunkify/player";
+
+  document.querySelector("#player").telemetry = {
+    provider: "callback",
+    environment: "production",
+    sampleRate: 0.1,
+    send(event) {
+      // Send to a destination owned by your application.
+      console.log(event);
+    },
+  };
+</script>
+```
+
+The current component integration supports the callback provider. It passes its
+non-empty `asset-id` to the shared `@chunkify/player-telemetry` core; the configuration
+does not repeat the asset ID. A configuration assigned before `asset-id` is retained
+but remains inactive until an asset ID is available. No telemetry listeners are
+installed when the property is absent or the asset ID is empty.
+
+Changing `asset-id` ends the old telemetry session and prepares a new one without
+restarting media. Replacing `telemetry` does the same. Setting the property to `null`
+or `undefined` disables it, and removing the component cleans up the active session.
+Reconnecting restores the retained configuration. Source replacement and replay are
+observed by the same attachment. See the telemetry package README for records,
+sampling, privacy, and callback delivery behavior.
 
 ## Posters and controls
 
