@@ -101,6 +101,14 @@ export class ChunkifyPlayer extends HTMLElement {
     return this.#media;
   }
 
+  // Passive context: changing an asset ID must not restart playback.
+  get assetId(): string {
+    return this.getAttribute("asset-id") ?? "";
+  }
+  set assetId(value: string | null | undefined) {
+    this.#setStringAttribute("asset-id", value);
+  }
+
   get src(): string {
     return this.getAttribute("src") ?? "";
   }
@@ -164,7 +172,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     // Preserve properties assigned before the custom element was registered.
-    for (const name of ["src", "poster", "thumbnails", "status", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
+    for (const name of ["assetId", "src", "poster", "thumbnails", "status", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
       if (Object.prototype.hasOwnProperty.call(this, name)) {
         const value: unknown = Reflect.get(this, name);
         Reflect.deleteProperty(this, name);

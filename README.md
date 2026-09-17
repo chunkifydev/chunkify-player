@@ -6,7 +6,7 @@ One repository for the Chunkify player packages described in
 The initial `<chunkify-player>` implementation wraps a native video element and
 loads hls.js only when selected. It supports readiness fallbacks, posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
-cookie credentials, and cleanup. React and telemetry remain later steps.
+cookie credentials, passive asset metadata, and cleanup. React and telemetry remain later steps.
 
 ## Packages
 
@@ -72,7 +72,8 @@ hls.js engine is selected. The controls do not add another playback engine.
 
 Playwright tests run in Chromium, Firefox, and WebKit. They cover local HLS/fMP4
 playback through hls.js, automatic engine selection, native MP4 playback, media
-events, readiness gating, property upgrades, errors, and teardown. Controls tests
+events, readiness gating, property upgrades, errors, and teardown. They also verify
+muted autoplay, looping, and asset ID changes that preserve playback. Controls tests
 cover poster requests, keyboard operation, accessible control names, controls
 visibility, and layouts at 320, 768, and 1280 pixels. Fullscreen/PiP tests substitute
 the browser API boundary to verify supported and unsupported behavior without OS

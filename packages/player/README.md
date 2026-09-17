@@ -37,6 +37,7 @@ resolver or import map. No published CDN import is available for this version.
 
 | Attribute | JavaScript property | Behavior |
 | --- | --- | --- |
+| `asset-id` | `assetId` | Optional asset metadata. Changing it does not restart playback or fetch asset information. The getter returns an empty string when absent; setting `null` or `undefined` removes it. |
 | `src` | `src` | HTTP/HTTPS HLS URL, or a `.mp4` URL with native/auto playback. Relative URLs resolve against the page. Setting `null` or `undefined` removes it. |
 | `poster` | `poster` | Optional image URL. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears the media poster. |
 | `thumbnails` | `thumbnails` | Optional HTTP/HTTPS WebVTT URL for seek previews. Relative URLs resolve against the page. Setting `null`, `undefined`, or an empty string clears previews. |
@@ -54,6 +55,14 @@ Boolean attributes follow HTML rules: omit `controls` to disable it;
 assigned before registration are preserved when the element connects. `media`
 is a read-only reference to the underlying `HTMLVideoElement`. Its native
 `controls` property stays false to avoid displaying two sets of controls.
+
+For autoplay, use `autoplay muted playsinline`. Playback starts only when the
+source is eligible under the readiness rules below, and browser autoplay policies
+still apply. With `loop`, reaching the end starts the video again; setting
+`player.loop = false` lets the current playback finish normally.
+
+`asset-id` is passive context for the supplied source. It does not enable
+telemetry. Telemetry integration is a later step.
 
 ## Posters and controls
 

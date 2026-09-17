@@ -1,6 +1,13 @@
 import type { PlaybackErrorDetail } from "../../packages/player/src/index.js";
 
 const player = document.createElement("chunkify-player");
+player.assetId = "asset-123";
+player.assetId = null;
+player.assetId = undefined;
+const assetId: string = player.assetId;
+console.log(assetId);
+// @ts-expect-error Asset IDs are strings.
+player.assetId = 123;
 player.poster = "/poster.jpg";
 player.poster = null;
 player.poster = undefined;

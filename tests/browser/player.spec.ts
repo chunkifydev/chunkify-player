@@ -243,6 +243,7 @@ test("properties set before registration survive upgrade and start playback once
       status: "preparing", src: "/tests/fixtures/media/master.m3u8", player: "hlsjs",
       muted: true, controls: true, playsInline: true, poster: "/tests/fixtures/media/poster.jpg",
       thumbnails: "/tests/fixtures/media/thumbnails/images.vtt",
+      assetId: "asset-before-registration",
       credentials: "include",
     });
     document.body.append(player);
@@ -251,6 +252,7 @@ test("properties set before registration survive upgrade and start playback once
   });
   const player = page.locator("chunkify-player");
   await expect(player).toHaveAttribute("status", "preparing");
+  await expect(player).toHaveAttribute("asset-id", "asset-before-registration");
   await expect(page.getByRole("status")).toHaveText("Your video is being prepared.");
   expect(manifests).toHaveLength(0);
   await player.evaluate((element: ChunkifyPlayer) => { element.status = "ready"; });
