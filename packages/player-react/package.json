@@ -1,0 +1,23 @@
+{
+  "name": "@chunkify/player-react",
+  "version": "0.0.0",
+  "description": "Typed React wrapper for the Chunkify player Web Component",
+  "license": "MIT",
+  "type": "module",
+  "files": ["dist", "src"],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "dependencies": { "@chunkify/player": "0.0.0" },
+  "peerDependencies": { "react": "^19.0.0" }
+}

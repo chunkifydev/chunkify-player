@@ -6,17 +6,18 @@ One repository for the Chunkify player packages described in
 The initial `<chunkify-player>` implementation wraps a native video element and
 loads hls.js only when selected. It supports readiness fallbacks, posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
-cookie credentials, passive asset metadata, and cleanup. React and telemetry remain later steps.
+cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
+reuses that implementation. Telemetry remains a later step.
 
 ## Packages
 
 | Directory | npm package | Status |
 | --- | --- | --- |
 | `packages/player` | `@chunkify/player` | Initial playback wrapper |
-| `packages/player-react` | `@chunkify/player-react` | Planned after the Web Component |
+| `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper |
 | `packages/player-telemetry` | `@chunkify/player-telemetry` | Planned last |
 
-Only the player directory exists for now. The root package is private so it
+The player and React wrapper directories exist. The root package is private so it
 cannot be published. Each package will have its own publishable contents.
 
 ## Development
@@ -31,7 +32,8 @@ npm run check
 
 `npm run check` typechecks the tools and package, builds the package, runs the
 browser tests, and checks the package contents with `npm pack --dry-run`.
-It does not publish anything. Tests run headlessly, so Chromium only needs its
+It also checks server rendering of the React entry. It does not publish anything.
+Tests run headlessly, so Chromium only needs its
 smaller headless shell. The browser installation command also installs system
 dependencies on supported Linux hosts.
 
@@ -50,6 +52,8 @@ Rebuild after editing the source, then reload the page. The local static server
 binds to `127.0.0.1` and disables caching.
 
 See the [player package README](packages/player/README.md) for its interface.
+See the [React package README](packages/player-react/README.md) for props, refs,
+server rendering and React support.
 
 Other useful commands:
 
@@ -63,8 +67,10 @@ npx playwright show-report
 ## Build and verification
 
 TypeScript emits ES modules, declarations, JavaScript source maps, and declaration
-maps into `packages/player/dist`. Source files are included in the package so
-the published maps can resolve their sources. There is no bundler in this setup.
+maps into each package's `dist` directory. Source files are included in the
+packages so the published maps can resolve their sources. Published packages
+are not bundled. esbuild prepares React's development runtime for the local
+browser fixtures, including Strict Mode checks, without adding Vite.
 
 The local example uses an import map to resolve the package, hls.js, Media Chrome,
 and the Demuxed 2022 theme. The wrapper's `import("hls.js")` runs only when the
@@ -96,6 +102,12 @@ Fixtures are checked in under `tests/fixtures/media`. FFmpeg is only needed to
 regenerate them. These browser-engine checks do not certify every Safari/iOS,
 Android, codec, or private-CDN configuration. The full release support matrix
 will be established with the remaining ticket requirements.
+
+React tests cover typed props, ref access, updates, readiness gating,
+Strict Mode callback-ref cleanup, source replacement, unmount/remount and
+unmounting before component registration completes. Both native MP4 and hls.js
+use real local media. React and React DOM are development dependencies for
+these tests; the published React wrapper keeps React external as a peer.
 
 GitHub Actions runs the same checks on pushes and pull requests, and retains
 the Playwright report for seven days. Failed tests retain traces.

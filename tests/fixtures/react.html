@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>React player test fixture</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "/tests/fixtures/dist/react-runtime.js",
+          "@chunkify/player-react": "/packages/player-react/dist/index.js",
+          "@chunkify/player": "/packages/player/dist/index.js",
+          "hls.js": "/node_modules/hls.js/dist/hls.mjs",
+          "@player.style/demuxed-2022": "/node_modules/@player.style/demuxed-2022/dist/media-theme.js",
+          "media-chrome": "/node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "/node_modules/media-chrome/"
+        }
+      }
+    </script>
+    <script type="module" src="/tests/fixtures/dist/react.js"></script>
+  </head>
+  <body><div id="root"></div></body>
+</html>

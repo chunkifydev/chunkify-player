@@ -25,7 +25,8 @@ import "@chunkify/player";
 ```
 
 Importing the package registers the element. It requires a browser DOM; do not
-import it during server rendering. The React wrapper is a later step.
+import it during server rendering. The separate `@chunkify/player-react` entry
+loads this component in the browser and is safe to import on the server.
 
 For plain HTML without a bundler, provide an import map for `@chunkify/player`
 and its dependencies: `hls.js`, `@player.style/demuxed-2022`, `media-chrome`, and the
@@ -267,8 +268,8 @@ recoverable errors before a fatal error reaches this interface.
 ## Current scope
 
 This wrapper includes playback, posters, sprite VTT previews, themed controls,
-cookie credentials, and lifecycle handling. The React wrapper and telemetry
-are not implemented yet. No telemetry listeners or destinations are
+cookie credentials, and lifecycle handling. A separate typed React wrapper
+reuses this implementation. Telemetry is not implemented yet. No telemetry listeners or destinations are
 installed. No DRM or universal private-CDN compatibility is claimed.
 
 The package emits ES modules, TypeScript declarations, and source maps. Sources
