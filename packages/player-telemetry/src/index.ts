@@ -5,10 +5,17 @@ export interface ViewMetrics {
   media_duration_seconds: number | null;
   startup_time_ms: number | null;
   playing_time_ms: number;
+  rebuffer_count: number;
+  rebuffer_duration_ms: number;
+  rebuffer_ratio: number | null;
+  seek_count: number;
+  seek_duration_ms: number;
+  maximum_playhead_seconds: number;
+  completion_ratio: number | null;
 }
 export interface ChunkifyPlayerTelemetryEvent {
   schema_version: 1;
-  event_name: "chunkify.video.view_started" | "chunkify.video.view_ended";
+  event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.view_ended";
   event_id: string;
   sequence: number;
   occurred_at: string;
@@ -49,6 +56,14 @@ interface View {
   startup: number | null;
   playing: number;
   playingSince: number | null;
+  rebufferCount: number;
+  rebufferDuration: number;
+  rebufferSince: number | null;
+  seekCount: number;
+  seekDuration: number;
+  seekSince: number | null;
+  maximumPlayhead: number;
+  nextSnapshotAt: number;
   duration: number | null;
   hostname: string | null;
   source: string;
@@ -83,8 +98,14 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   let destroyed = false;
   let wantsPlay = false;
   let seeking = false;
+  let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
 
   function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null) {
+    const now = performance.now();
+    const playingTime = current.playing + (current.playingSince === null ? 0 : now - current.playingSince);
+    const rebufferDuration = current.rebufferDuration + (current.rebufferSince === null ? 0 : now - current.rebufferSince);
+    const seekDuration = current.seekDuration + (current.seekSince === null ? 0 : now - current.seekSince);
+    const rebufferDenominator = playingTime + rebufferDuration;
     const event: ChunkifyPlayerTelemetryEvent = {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, asset_id: assetId,
@@ -92,7 +113,18 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       connector_name: "html-media", connector_version: sdkVersion,
       player_name: null, player_version: null, delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
-      metrics: { media_duration_seconds: current.duration, startup_time_ms: current.startup, playing_time_ms: current.playing },
+      metrics: {
+        media_duration_seconds: current.duration,
+        startup_time_ms: current.startup,
+        playing_time_ms: playingTime,
+        rebuffer_count: current.rebufferCount,
+        rebuffer_duration_ms: rebufferDuration,
+        rebuffer_ratio: rebufferDenominator > 0 ? rebufferDuration / rebufferDenominator : null,
+        seek_count: current.seekCount,
+        seek_duration_ms: seekDuration,
+        maximum_playhead_seconds: current.maximumPlayhead,
+        completion_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
+      },
     };
     try {
       // A customer destination must not interrupt playback or telemetry cleanup.
@@ -106,27 +138,73 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     wantsPlay = true;
     if (view) return;
     view = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(), startup: null,
-      playing: 0, playingSince: null, duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
+      playing: 0, playingSince: null,
+      rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
+      seekCount: 0, seekDuration: 0, seekSince: null,
+      maximumPlayhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : 0,
+      nextSnapshotAt: 30000,
+      duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2 };
     emit(view, "chunkify.video.view_started");
   }
   function stopPlaying() {
+    if (snapshotTimer !== null) {
+      clearTimeout(snapshotTimer);
+      snapshotTimer = null;
+    }
     if (!view || view.playingSince === null) return;
     view.playing += performance.now() - view.playingSince;
     view.playingSince = null;
+  }
+  function stopRebuffering() {
+    if (!view || view.rebufferSince === null) return;
+    view.rebufferDuration += performance.now() - view.rebufferSince;
+    view.rebufferSince = null;
+  }
+  function stopSeeking() {
+    if (!view || view.seekSince === null) return;
+    view.seekDuration += performance.now() - view.seekSince;
+    view.seekSince = null;
+  }
+  function updatePlaybackPosition() {
+    if (!view || !Number.isFinite(media.currentTime)) return;
+    view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
+  }
+  function scheduleSnapshot() {
+    if (!view || snapshotTimer !== null) return;
+    const playingSince = view.playingSince;
+    if (playingSince === null) return;
+    const current = view;
+    const playingTime = current.playing + performance.now() - playingSince;
+    snapshotTimer = globalThis.setTimeout(() => {
+      snapshotTimer = null;
+      if (view !== current || current.playingSince === null) return;
+      updatePlaybackPosition();
+      metadata();
+      emit(current, "chunkify.video.view_snapshot");
+      const currentPlayingTime = current.playing + performance.now() - current.playingSince;
+      const nextFutureInterval = (Math.floor(currentPlayingTime / 30000) + 1) * 30000;
+      current.nextSnapshotAt = Math.max(current.nextSnapshotAt + 30000, nextFutureInterval);
+      if (view === current) scheduleSnapshot();
+    }, Math.max(0, current.nextSnapshotAt - playingTime));
   }
   function playing() {
     if (!view || !wantsPlay || seeking) return;
     const now = performance.now();
     view.resourceStarted = true;
     view.startup ??= now - view.startedAt;
+    stopRebuffering();
     view.playingSince ??= now;
+    scheduleSnapshot();
   }
   function finish(reason: TelemetryEndReason) {
     if (!view) return;
     const current = view;
     stopPlaying();
+    stopRebuffering();
+    stopSeeking();
+    updatePlaybackPosition();
     view = null;
     wantsPlay = false;
     seeking = false;
@@ -138,7 +216,15 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     view.hostname = deliveryHostname(media);
   }
   const listeners: Record<string, () => void> = {
-    play: startAttempt, playing, waiting: stopPlaying, error: stopPlaying,
+    play: startAttempt, playing,
+    waiting() {
+      stopPlaying();
+      if (view && view.startup !== null && wantsPlay && !seeking && view.rebufferSince === null) {
+        view.rebufferCount++;
+        view.rebufferSince = performance.now();
+      }
+    },
+    error() { stopPlaying(); stopRebuffering(); stopSeeking(); seeking = false; },
     ended() { finish("ended"); },
     emptied() {
       if (!view) return;
@@ -154,9 +240,16 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       view.source = source;
       view.resourceStarted = true;
     },
-    pause() { stopPlaying(); wantsPlay = false; },
-    seeking() { stopPlaying(); seeking = true; },
-    seeked() { seeking = false; },
+    pause() { stopPlaying(); stopRebuffering(); wantsPlay = false; },
+    seeking() {
+      stopPlaying();
+      stopRebuffering();
+      updatePlaybackPosition();
+      if (view && !seeking) { view.seekCount++; view.seekSince = performance.now(); }
+      seeking = true;
+    },
+    seeked() { updatePlaybackPosition(); stopSeeking(); seeking = false; },
+    timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,
   };
   for (const [name, listener] of Object.entries(listeners)) media.addEventListener(name, listener);

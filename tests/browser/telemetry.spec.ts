@@ -56,12 +56,14 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   await dispatch("playing");
   await page.clock.runFor(1000);
   await dispatch("pause");
+  await dispatch("waiting");
   await page.clock.runFor(5000);
   await dispatch("play");
   await page.clock.runFor(1000);
   await dispatch("playing");
   await page.clock.runFor(2000);
   await dispatch("seeking");
+  await dispatch("waiting");
   await page.clock.runFor(3000);
   await dispatch("seeked");
   await page.clock.runFor(1000);
@@ -72,7 +74,148 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   await dispatch("ended");
   const events = await page.evaluate(() => window.telemetryFixture.events);
   expect(events).toHaveLength(2);
-  expect(events[1]).toMatchObject({ metrics: { startup_time_ms: 2000, playing_time_ms: 8000 } });
+  expect(events[1]).toMatchObject({ metrics: {
+    startup_time_ms: 2000,
+    playing_time_ms: 8000,
+    rebuffer_count: 1,
+    rebuffer_duration_ms: 4000,
+    seek_count: 1,
+    seek_duration_ms: 3000,
+  } });
+});
+
+test("final records contain cumulative buffering, seeking and completion measurements", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    Object.defineProperties(f.video, {
+      duration: { configurable: true, value: 100 },
+      currentTime: { configurable: true, writable: true, value: 0 },
+    });
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-metrics", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  const dispatch = (event: string) => page.evaluate((event) => window.telemetryFixture.video.dispatchEvent(new Event(event)), event);
+  await page.clock.runFor(10000);
+  await page.evaluate(() => { window.telemetryFixture.video.currentTime = 10; });
+  await dispatch("timeupdate");
+  await dispatch("waiting");
+  await page.clock.runFor(4000);
+  await dispatch("playing");
+  await page.clock.runFor(5000);
+  await page.evaluate(() => { window.telemetryFixture.video.currentTime = 15; });
+  await dispatch("timeupdate");
+  await dispatch("seeking");
+  await page.evaluate(() => { window.telemetryFixture.video.currentTime = 80; });
+  await page.clock.runFor(3000);
+  await dispatch("seeked");
+  await dispatch("playing");
+  await page.clock.runFor(5000);
+  await page.evaluate(() => { window.telemetryFixture.video.currentTime = 85; });
+  await dispatch("timeupdate");
+  await dispatch("ended");
+  const events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events).toHaveLength(2);
+  expect(events[1]).toMatchObject({ metrics: {
+    playing_time_ms: 20000,
+    rebuffer_count: 1,
+    rebuffer_duration_ms: 4000,
+    rebuffer_ratio: 1 / 6,
+    seek_count: 1,
+    seek_duration_ms: 3000,
+    maximum_playhead_seconds: 85,
+    completion_ratio: 0.85,
+  } });
+});
+
+test("snapshots report cumulative metrics every 30 seconds of active playing time", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-snapshot", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(29999);
+  expect(await page.evaluate(() => window.telemetryFixture.events.length)).toBe(1);
+  await page.clock.runFor(1);
+  await page.evaluate(() => window.telemetryFixture.video.dispatchEvent(new Event("waiting")));
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.telemetryFixture.events.length)).toBe(2);
+  await page.evaluate(() => window.telemetryFixture.video.dispatchEvent(new Event("playing")));
+  await page.clock.runFor(30000);
+  await page.evaluate(() => window.telemetryFixture.video.dispatchEvent(new Event("ended")));
+  const events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started",
+    "chunkify.video.view_snapshot",
+    "chunkify.video.view_snapshot",
+    "chunkify.video.view_ended",
+  ]);
+  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
+  expect(events.slice(1).map((event) => event.metrics.playing_time_ms)).toEqual([30000, 60000, 60000]);
+  expect(events[1]).toMatchObject({ reason: null, metrics: { rebuffer_count: 0 } });
+  expect(events[2]).toMatchObject({ reason: null, metrics: { rebuffer_count: 1, rebuffer_duration_ms: 60000 } });
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => window.telemetryFixture.events.length)).toBe(4);
+});
+
+test("a media error stops an unfinished seek measurement", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-seek-error", provider: "callback", send: (event) => { f.events.push(event); } });
+    for (const event of ["play", "playing", "seeking"]) f.video.dispatchEvent(new Event(event));
+  });
+  await page.clock.runFor(2000);
+  await page.evaluate(() => window.telemetryFixture.video.dispatchEvent(new Event("error")));
+  await page.clock.runFor(5000);
+  await page.evaluate(() => window.telemetryFixture.session!.destroy());
+  const events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events[1]).toMatchObject({ metrics: { seek_count: 1, seek_duration_ms: 2000 } });
+});
+
+test("a delayed snapshot timer emits once and schedules the next future interval", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const state = window as typeof window & {
+      snapshotCallback?: () => void;
+      snapshotDelays: number[];
+      restoreSetTimeout: () => void;
+    };
+    const originalSetTimeout = window.setTimeout;
+    state.snapshotDelays = [];
+    state.restoreSetTimeout = () => { window.setTimeout = originalSetTimeout; };
+    window.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+      state.snapshotDelays.push(timeout ?? 0);
+      state.snapshotCallback = () => { if (typeof handler === "function") handler(); };
+      return 1;
+    }) as typeof window.setTimeout;
+    f.session = f.attachTelemetry(f.video, { assetId: "asset-delayed", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(120000);
+  const result = await page.evaluate(() => {
+    const state = window as typeof window & {
+      snapshotCallback?: () => void;
+      snapshotDelays: number[];
+      restoreSetTimeout: () => void;
+    };
+    state.snapshotCallback!();
+    const result = { delays: state.snapshotDelays, events: window.telemetryFixture.events };
+    window.telemetryFixture.session!.destroy();
+    state.restoreSetTimeout();
+    return result;
+  });
+  expect(result.events.filter((event) => event.event_name === "chunkify.video.view_snapshot")).toHaveLength(1);
+  expect(result.delays).toEqual([30000, 30000]);
 });
 
 test("records use the versioned contract and exclude URLs and unrelated configuration", async ({ page }) => {

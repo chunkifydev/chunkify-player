@@ -6,7 +6,10 @@ const destination: CallbackTelemetryConfig = {
   async send(event) {
     const record: ChunkifyPlayerTelemetryEvent = event;
     const startup: number | null = record.metrics.startup_time_ms;
-    void startup;
+    const buffering: number = record.metrics.rebuffer_duration_ms;
+    const completion: number | null = record.metrics.completion_ratio;
+    const snapshot: boolean = record.event_name === "chunkify.video.view_snapshot";
+    void startup; void buffering; void completion; void snapshot;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;
   },

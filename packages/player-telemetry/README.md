@@ -4,11 +4,11 @@ Optional telemetry for a standard HTML media element, with no runtime dependenci
 playback engine, provider SDK or network transport. Records go only to the callback
 you provide. The package does not contact Chunkify or store a viewer identity.
 
-Version `0.0.0` is unpublished. This is the first telemetry slice from
+Version `0.0.0` is unpublished. This package implements the first telemetry steps from
 [issue #279](https://github.com/chunkifydev/chunkify/issues/279), following the
 [shared contract](https://github.com/chunkifydev/chunkify/issues/272#issuecomment-5426511219).
-It provides start/end records, startup time and playing time. The Web Component
-and React wrapper do not enable or import it yet.
+It provides start/end records, cumulative snapshots, startup/playing/buffering/seek
+timing, and completion. The Web Component and React wrapper do not enable or import it yet.
 
 ## Use
 
@@ -69,6 +69,10 @@ the same open view. Playback after the previous view ended creates a new ID.
 an open view but does not pause, remove or otherwise control the media element.
 Destroying a session that never started a view sends nothing.
 
+While media is playing, `chunkify.video.view_snapshot` reports the cumulative
+view state after each 30 seconds of actual playing time. Pauses, buffering, and
+seeks pause that clock. Ending the view cancels its pending snapshot.
+
 Each record has a `metrics` object:
 
 | Field | Unit and meaning |
@@ -76,12 +80,21 @@ Each record has a `metrics` object:
 | `media_duration_seconds` | Finite media duration when known; otherwise `null`. |
 | `startup_time_ms` | Monotonic elapsed time from the first attempt to the first `playing` event; `null` until then. |
 | `playing_time_ms` | Cumulative elapsed time in the playing state, excluding loading, waiting, pauses and seeks. Starts at zero. |
+| `rebuffer_count` | Number of `waiting` intervals after playback starts, excluding paused and seeking states. |
+| `rebuffer_duration_ms` | Cumulative rebuffer time. |
+| `rebuffer_ratio` | Rebuffer time divided by playing plus rebuffer time; `null` while both are zero. |
+| `seek_count` | Number of seek intervals. |
+| `seek_duration_ms` | Cumulative elapsed seek time. |
+| `maximum_playhead_seconds` | Furthest finite playhead observed in the view. |
+| `completion_ratio` | Maximum playhead divided by known duration, bounded to 0–1; otherwise `null`. |
 
 Playing time counts elapsed time, not distance along the timeline. Seeking forward
 and higher playback rates do not increase it artificially. A seek or waiting state
 stops its clock; a subsequent `playing` event resumes it. A media error also stops
 the clock, without emitting a separate error record in this slice. Startup includes time
 between the first attempt and first playing state, including any intervening pause.
+The package observes `timeupdate` locally to maintain the maximum playhead, but it
+does not forward those high-frequency events.
 
 ## Record contract and delivery
 
@@ -118,10 +131,10 @@ an attachment there are no telemetry listeners or records.
 
 ## Remaining telemetry work
 
-This is not the complete MVP telemetry package. Later steps will add cumulative
-30-second snapshots, normalized playback-error records, buffering/seek/completion
-and frame metrics, sampling, engine enrichment, Datadog/Grafana/OTLP destinations,
-and the player/React property integration. None of those options are exposed yet.
+This is not the complete MVP telemetry package. Later steps will add normalized
+playback-error records, browser frame metrics, sampling, engine enrichment,
+Datadog/Grafana/OTLP destinations, and the player/React property integration.
+None of those options are exposed yet.
 Measurements not exposed by a future connector will remain nullable.
 
 ## Local verification
@@ -132,7 +145,8 @@ local fixture with native controls and prints callback records on the page.
 
 Browser tests exercise the public attachment/callback API with controlled media
 events and a clock, plus actual video playback in Chromium, Firefox and WebKit.
-They cover lifecycle, timing, privacy, destination failures and cleanup. Node checks
+They cover lifecycle, snapshots, cumulative metrics, privacy, destination failures
+and cleanup. Node checks
 verify server-safe imports and agreement between package and payload SDK versions.
 
 The package includes ES modules, declarations, source maps, source and the MIT license.
