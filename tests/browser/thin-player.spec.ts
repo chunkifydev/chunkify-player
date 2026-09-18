@@ -141,3 +141,102 @@ test("removing a newly connected HLS player cannot start a late engine", async (
     return { source: media.getAttribute("src"), hasEngine: Boolean(media.api) };
   })).toEqual({ source: null, hasEngine: false });
 });
+
+test("mirrors standard tracks into HLS and MP4 media", async ({ page }) => {
+  await page.route("**/captions.vtt", (route) => route.fulfill({
+    contentType: "text/vtt",
+    body: "WEBVTT\n\n00:00.000 --> 00:06.000\nHello from Chunkify\n",
+  }));
+  await page.route("**/captions-fr.vtt", (route) => route.fulfill({
+    contentType: "text/vtt",
+    body: "WEBVTT\n\n00:00.000 --> 00:06.000\nBonjour de Chunkify\n",
+  }));
+  await page.route("**/thumbnails.vtt", (route) => route.fulfill({
+    contentType: "text/vtt",
+    body: "WEBVTT\n\n00:00.000 --> 00:06.000\n/tests/fixtures/media/poster.jpg#xywh=0,0,256,144\n",
+  }));
+  await page.evaluate(() => {
+    document.body.innerHTML = `
+      <chunkify-player src="/tests/fixtures/media/master.m3u8" controls muted>
+        <track default kind="captions" srclang="en" label="English" src="/captions.vtt">
+        <track kind="captions" srclang="fr" label="Français" src="/captions-fr.vtt">
+        <track default kind="metadata" label="thumbnails" src="/thumbnails.vtt">
+      </chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    Array.from(element.media.querySelectorAll<HTMLTrackElement>(":scope > track"), (track) => ({
+      kind: track.kind,
+      label: track.label,
+      source: track.getAttribute("src"),
+    })),
+  )).toEqual([
+    { kind: "captions", label: "English", source: "/captions.vtt" },
+    { kind: "captions", label: "Français", source: "/captions-fr.vtt" },
+    { kind: "metadata", label: "thumbnails", source: "/thumbnails.vtt" },
+  ]);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    Array.from(element.media.textTracks, (track) => track.label),
+  )).toEqual(expect.arrayContaining(["English", "Français", "thumbnails"]));
+  await expect(page.locator("media-captions-button")).toBeVisible();
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  const seek = page.getByRole("slider", { name: "seek", exact: true });
+  const seekBounds = await seek.boundingBox();
+  expect(seekBounds).not.toBeNull();
+  await page.mouse.move(seekBounds!.x + seekBounds!.width / 2, seekBounds!.y + seekBounds!.height / 2);
+  const preview = page.locator("media-preview-thumbnail").first();
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveAttribute("mediapreviewimage", /poster\.jpg/);
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    const french = Array.from(element.media.textTracks).find((track) => track.label === "Français")!;
+    for (const track of element.media.textTracks) track.mode = track === french ? "showing" : "disabled";
+    (element as ChunkifyPlayer & { selectedTrack?: TextTrack }).selectedTrack = french;
+    element.querySelector("track[kind=metadata]")?.setAttribute("src", "/thumbnails.vtt?updated");
+  });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const selectedTrack = (element as ChunkifyPlayer & { selectedTrack?: TextTrack }).selectedTrack;
+    return {
+      sameTrack: Array.from(element.media.textTracks).includes(selectedTrack!),
+      mode: selectedTrack?.mode,
+      thumbnailSource: element.media.querySelector("track[kind=metadata]")?.getAttribute("src"),
+    };
+  })).toEqual({ sameTrack: true, mode: "showing", thumbnailSource: "/thumbnails.vtt?updated" });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.querySelector("track[srclang=fr]")?.setAttribute("default", "");
+  });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media as ChunkifyPlayer["media"] & { nativeEl?: HTMLVideoElement };
+    return media.nativeEl?.querySelector("track[srclang=fr]")?.hasAttribute("default");
+  })).toBe(true);
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.querySelector("track[srclang=fr]")?.removeAttribute("default");
+  });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media as ChunkifyPlayer["media"] & { nativeEl?: HTMLVideoElement };
+    const selectedTrack = (element as ChunkifyPlayer & { selectedTrack?: TextTrack }).selectedTrack;
+    return {
+      default: media.nativeEl?.querySelector("track[srclang=fr]")?.hasAttribute("default"),
+      sameTrack: Array.from(element.media.textTracks).includes(selectedTrack!),
+      mode: selectedTrack?.mode,
+    };
+  })).toEqual({ default: false, sameTrack: true, mode: "showing" });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.src = "/tests/fixtures/media/video.mp4";
+  });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => ({
+    media: element.media.localName,
+    tracks: element.media.querySelectorAll(":scope > track").length,
+  }))).toEqual({ media: "video", tracks: 3 });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    const captions = element.querySelector("track[kind=captions]");
+    captions?.setAttribute("label", "English captions");
+    element.querySelector("track[kind=metadata]")?.remove();
+  });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    Array.from(element.media.querySelectorAll<HTMLTrackElement>(":scope > track"), (track) => track.label),
+  )).toEqual(["English captions", "Français"]);
+});

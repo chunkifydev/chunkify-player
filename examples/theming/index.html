@@ -41,12 +41,18 @@
       <article>
         <h2>Default</h2>
         <chunkify-player src="../../tests/fixtures/media/master.m3u8"
-          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline></chunkify-player>
+          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
+          <track default kind="metadata" label="thumbnails"
+            src="../../tests/fixtures/media/thumbnails.vtt" />
+        </chunkify-player>
       </article>
       <article>
         <h2>Customer branding</h2>
         <chunkify-player class="brand-player" src="../../tests/fixtures/media/master.m3u8"
-          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline></chunkify-player>
+          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
+          <track default kind="metadata" label="thumbnails"
+            src="../../tests/fixtures/media/thumbnails.vtt" />
+        </chunkify-player>
       </article>
     </div>
     <script type="module">import "@chunkify/player";</script>

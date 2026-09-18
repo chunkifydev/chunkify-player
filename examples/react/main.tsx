@@ -26,7 +26,10 @@ function App() {
       onPlaying={() => setLastEvent("Playing")}
       onPause={() => setLastEvent("Paused")}
       onEnded={() => setLastEvent("Ended")}
-    />
+    >
+      <track default kind="metadata" label="thumbnails"
+        src="/tests/fixtures/media/thumbnails.vtt" />
+    </ChunkifyPlayer>
     <button onClick={() => { void ref.current?.media.play(); }}>Play through ref</button>
     <button onClick={() => ref.current?.media.pause()}>Pause through ref</button>
     <p aria-live="polite">Last event: {lastEvent}</p>

@@ -26,6 +26,16 @@ Playback props are `src`, `poster`, `preload`, `crossOrigin`, `autoPlay`, `muted
 `loop`, `playsInline`, and `controls`. Standard host props such as `className`,
 `style`, `id`, and ARIA attributes apply to the custom element.
 
+Pass standard `<track>` children for captions, subtitles, chapters, and thumbnail
+metadata:
+
+```tsx
+<ChunkifyPlayer src="/master.m3u8" controls>
+  <track default kind="captions" src="/captions/en.vtt" srcLang="en" label="English" />
+  <track default kind="metadata" src="/thumbnails/images.vtt" label="thumbnails" />
+</ChunkifyPlayer>
+```
+
 The ref points to the Web Component. `ref.current.media` returns its current
 media element. Read it again after changing between HLS and MP4 because that
 change replaces the internal element.

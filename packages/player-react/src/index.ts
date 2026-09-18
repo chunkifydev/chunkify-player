@@ -10,6 +10,7 @@ import {
   type DOMAttributes,
   type HTMLAttributes,
   type ReactElement,
+  type ReactNode,
   type Ref,
 } from "react";
 import type { ChunkifyPlayer as PlayerElement } from "@chunkify/player";
@@ -50,6 +51,7 @@ type MediaCallbacks = {
 type HostProps = Omit<HTMLAttributes<PlayerElement>, keyof DOMAttributes<PlayerElement>>;
 
 export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
+  children?: ReactNode | undefined;
   ref?: Ref<ChunkifyPlayerRef> | undefined;
   src?: string | null | undefined;
   poster?: string | null | undefined;

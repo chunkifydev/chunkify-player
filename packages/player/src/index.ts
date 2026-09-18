@@ -31,6 +31,30 @@ export class ChunkifyPlayer extends HTMLElement {
   #media: ChunkifyMediaElement;
   #theme: ReturnType<typeof createPlayerTheme>;
   #pendingHlsSource: number | undefined;
+  #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
+  #trackObserver = new MutationObserver((records) => {
+    let tracksChanged = false;
+    for (const record of records) {
+      if (record.type === "attributes" && record.target instanceof HTMLTrackElement
+        && record.target.parentElement === this) {
+        const mirroredTrack = this.#mirroredTracks.get(record.target);
+        if (!mirroredTrack) {
+          tracksChanged = true;
+        } else if (record.attributeName && !record.target.hasAttribute(record.attributeName)
+          && this.#media.localName === "hls-video") {
+          this.#syncTrackAttributes(record.target, mirroredTrack);
+          this.#removeHlsNativeTrackAttribute(record.target, record.attributeName);
+        } else {
+          this.#syncTrackAttributes(record.target, mirroredTrack);
+        }
+      }
+      if (record.type === "childList" && record.target === this
+        && [...record.addedNodes, ...record.removedNodes].some((node) => node instanceof HTMLTrackElement)) {
+        tracksChanged = true;
+      }
+    }
+    if (tracksChanged) this.#syncTracks();
+  });
   #forwardMediaEvent = (event: Event) => {
     this.dispatchEvent(new Event(event.type));
   };
@@ -94,11 +118,14 @@ export class ChunkifyPlayer extends HTMLElement {
       Reflect.deleteProperty(this, name);
       Reflect.set(this, name, value);
     }
+    this.#trackObserver.observe(this, { attributes: true, childList: true, subtree: true });
     this.#syncMedia();
   }
 
   disconnectedCallback() {
+    this.#trackObserver.disconnect();
     this.#cancelPendingHlsSource();
+    this.#clearMirroredTracks();
     this.#clearMedia(this.#media);
   }
 
@@ -130,6 +157,74 @@ export class ChunkifyPlayer extends HTMLElement {
     if (this.#pendingHlsSource === undefined) return;
     clearTimeout(this.#pendingHlsSource);
     this.#pendingHlsSource = undefined;
+  }
+
+  #clearMirroredTracks() {
+    for (const track of this.#mirroredTracks.values()) track.remove();
+    this.#mirroredTracks.clear();
+  }
+
+  #removeHlsNativeTrackAttribute(track: HTMLTrackElement, attribute: string) {
+    // custom-media-element converts removed child attributes to empty attributes;
+    // correct its native clone after its observer has finished without replacing the track.
+    globalThis.setTimeout(() => {
+      if (track.hasAttribute(attribute) || this.#media.localName !== "hls-video") return;
+      const mirroredTrack = this.#mirroredTracks.get(track);
+      if (!mirroredTrack) return;
+      const trackIndex = Array.from(this.#media.children)
+        .filter((child): child is HTMLTrackElement => child instanceof HTMLTrackElement)
+        .indexOf(mirroredTrack);
+      const nativeMedia = (this.#media as ChunkifyMediaElement & { nativeEl?: HTMLVideoElement }).nativeEl;
+      const nativeTrack = Array.from(nativeMedia?.children ?? [])
+        .filter((child): child is HTMLTrackElement => child instanceof HTMLTrackElement)[trackIndex];
+      nativeTrack?.removeAttribute(attribute);
+    }, 0);
+  }
+
+  #syncTrackAttributes(track: HTMLTrackElement, mirroredTrack: HTMLTrackElement) {
+    for (const attribute of Array.from(mirroredTrack.attributes)) {
+      if (attribute.name === "slot" || !track.hasAttribute(attribute.name)) {
+        mirroredTrack.removeAttribute(attribute.name);
+      }
+    }
+    for (const attribute of Array.from(track.attributes)) {
+      if (attribute.name !== "slot" && mirroredTrack.getAttribute(attribute.name) !== attribute.value) {
+        mirroredTrack.setAttribute(attribute.name, attribute.value);
+      }
+    }
+  }
+
+  #syncTracks() {
+    if (!this.isConnected || !this.src) {
+      this.#clearMirroredTracks();
+      return;
+    }
+
+    const tracks = Array.from(this.children)
+      .filter((child): child is HTMLTrackElement => child instanceof HTMLTrackElement);
+    const currentTracks = new Set(tracks);
+    for (const [track, mirroredTrack] of this.#mirroredTracks) {
+      if (!currentTracks.has(track) || mirroredTrack.parentElement !== this.#media) {
+        mirroredTrack.remove();
+        this.#mirroredTracks.delete(track);
+      }
+    }
+
+    const mirroredTracks = tracks.map((track) => {
+      let mirroredTrack = this.#mirroredTracks.get(track);
+      if (!mirroredTrack) {
+        mirroredTrack = document.createElement("track");
+        this.#mirroredTracks.set(track, mirroredTrack);
+      }
+      this.#syncTrackAttributes(track, mirroredTrack);
+      return mirroredTrack;
+    });
+    const activeTracks = Array.from(this.#media.children)
+      .filter((child): child is HTMLTrackElement => child instanceof HTMLTrackElement);
+    if (activeTracks.some((track, index) => track !== mirroredTracks[index])
+      || activeTracks.length !== mirroredTracks.length) {
+      this.#media.append(...mirroredTracks);
+    }
   }
 
   #syncMediaAttribute(attribute: typeof mediaAttributes[number]) {
@@ -186,6 +281,7 @@ export class ChunkifyPlayer extends HTMLElement {
     if (replaced || changedAttribute === undefined || changedAttribute === "controls") {
       syncPlayerTheme(this.#theme, this.controls);
     }
+    if (replaced || changedAttribute === undefined || changedAttribute === "src") this.#syncTracks();
   }
 }
 

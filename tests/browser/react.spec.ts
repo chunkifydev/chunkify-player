@@ -16,6 +16,12 @@ test("React props configure playback and expose the player through a ref", async
     muted: true,
     playsInline: true,
     className: "customer-player",
+    children: window.reactFixture.createElement("track", {
+      default: true,
+      kind: "metadata",
+      label: "thumbnails",
+      src: "/tests/fixtures/media/thumbnails.vtt",
+    }),
   }));
 
   const player = page.locator("chunkify-player");
@@ -29,6 +35,7 @@ test("React props configure playback and expose the player through a ref", async
       poster: element?.poster,
       crossOrigin: element?.crossOrigin,
       controls: element?.controls,
+      tracks: element?.media.querySelectorAll(":scope > track").length,
     };
   })).toEqual({
     sameElement: true,
@@ -36,6 +43,7 @@ test("React props configure playback and expose the player through a ref", async
     poster: "/tests/fixtures/media/poster.jpg",
     crossOrigin: "anonymous",
     controls: true,
+    tracks: 1,
   });
 });
 

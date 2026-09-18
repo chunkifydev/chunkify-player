@@ -6,5 +6,6 @@ customer media or external service is used.
 
 `video.mp4` is a fast-start MP4. `master.m3u8` points to `stream.m3u8`, which uses
 three fMP4 segments and `init.mp4`. `poster.jpg` is a frame from the same clip.
+`thumbnails.vtt` uses that image as a seek-preview fixture.
 
 CI uses the checked-in files and does not need FFmpeg.

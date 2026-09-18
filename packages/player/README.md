@@ -57,6 +57,26 @@ Properties reflect to attributes. Setting a string property to `null` or
 The component forwards standard media events such as `loadedmetadata`, `play`,
 `pause`, `timeupdate`, `ended`, and `error` from the current media element.
 
+## Tracks
+
+Add direct-child `<track>` elements for captions, subtitles, chapters, or
+thumbnail metadata. The player mirrors them into the active media element and
+keeps them synchronized when their attributes change or playback switches
+between HLS and ordinary video.
+
+```html
+<chunkify-player src="/master.m3u8" controls>
+  <track default kind="captions" srclang="en" label="English" src="/captions/en.vtt" />
+  <track kind="captions" srclang="fr" label="Français" src="/captions/fr.vtt" />
+  <track default kind="metadata" label="thumbnails" src="/thumbnails/images.vtt" />
+</chunkify-player>
+```
+
+Use `kind="metadata"` and `label="thumbnails"` for Media Chrome seek previews.
+Remote WebVTT files must allow CORS, and cross-origin tracks may require a matching
+`crossorigin` setting on the player. Read active tracks through
+`player.media.textTracks`.
+
 ## Controls and customization
 
 Media Chrome renders the Demuxed 2022 theme. The internal media element keeps its

@@ -7,6 +7,9 @@ const ref = createRef<ChunkifyPlayerRef>();
   className="video" style={{ width: "100%" }} aria-label="Product video" />;
 <ChunkifyPlayer src={null} />;
 <ChunkifyPlayer />;
+<ChunkifyPlayer src="/master.m3u8" controls>
+  <track default kind="captions" src="/captions.vtt" srcLang="en" label="English" />
+</ChunkifyPlayer>;
 
 const media: HTMLVideoElement | undefined = ref.current?.media;
 void media;

@@ -3,7 +3,8 @@
 This repository contains a small video player Web Component and its React 19
 wrapper. The player uses the browser's `<video>` element for ordinary media and
 `hls-video-element` for HLS manifests. Media Chrome renders the Demuxed 2022
-controls for both paths.
+controls for both paths. Standard `<track>` children provide captions, subtitles,
+chapters, and thumbnail metadata.
 
 ## Packages
 
