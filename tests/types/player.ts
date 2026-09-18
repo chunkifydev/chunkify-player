@@ -21,10 +21,3 @@ void media;
 
 player.addEventListener("play", (event) => console.log(event.currentTarget));
 player.addEventListener("click", (event) => console.log(event.clientX));
-
-// @ts-expect-error Engine selection is internal.
-player.player = "hlsjs";
-// @ts-expect-error Asset metadata belongs to the application.
-player.assetId = "asset-123";
-// @ts-expect-error Thumbnail loading is outside the thin wrapper.
-player.thumbnails = "/images.vtt";

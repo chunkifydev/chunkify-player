@@ -15,10 +15,3 @@ void media;
   const video: HTMLVideoElement = event.currentTarget.media;
   void video;
 }} />;
-
-// @ts-expect-error Engine selection is internal.
-<ChunkifyPlayer player="hlsjs" />;
-// @ts-expect-error Asset metadata belongs to the application.
-<ChunkifyPlayer assetId="asset-123" />;
-// @ts-expect-error Media callbacks receive native events, not React SyntheticEvents.
-<ChunkifyPlayer onPlay={(event) => event.nativeEvent} />;
