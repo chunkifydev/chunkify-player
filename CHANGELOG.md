@@ -11,6 +11,8 @@
   thumbnail metadata.
 - Fixed vertical media overflowing the player and pushing controls outside the
   visible area.
+- Corrected Demuxed control-icon alignment with the current Media Chrome
+  button layout.
 - Removed asset metadata, manual engine selection, thumbnail loading, custom
   credential handling, and normalized playback errors from this branch.
 

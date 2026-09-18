@@ -103,14 +103,33 @@ test("keeps the theme and controls inside a fixed player box", async ({ page }) 
     const controlBar = theme?.shadowRoot?.querySelector("media-control-bar");
     const themeBounds = theme?.getBoundingClientRect();
     const controlBounds = controlBar?.getBoundingClientRect();
+    const iconCenterOffsets = Array.from(theme?.shadowRoot?.querySelectorAll<HTMLElement>(".small-button") ?? [])
+      .filter((button) => button.getBoundingClientRect().width > 0)
+      .map((button) => {
+        const buttonBounds = button.getBoundingClientRect();
+        const icon = Array.from(button.children)
+          .find((child) => child.getBoundingClientRect().width > 0);
+        const iconBounds = icon?.getBoundingClientRect();
+        return iconBounds
+          ? Math.round(((iconBounds.left + iconBounds.width / 2)
+            - (buttonBounds.left + buttonBounds.width / 2)) * 100) / 100
+          : null;
+      });
     return {
       themeHeight: themeBounds?.height,
       playerHeight: playerBounds.height,
       controlsInside: Boolean(controlBounds
         && controlBounds.top >= playerBounds.top
         && controlBounds.bottom <= playerBounds.bottom),
+      iconsCentered: iconCenterOffsets.length > 0
+        && iconCenterOffsets.every((offset) => offset === 0),
     };
-  })).toEqual({ themeHeight: 225, playerHeight: 225, controlsInside: true });
+  })).toEqual({
+    themeHeight: 225,
+    playerHeight: 225,
+    controlsInside: true,
+    iconsCentered: true,
+  });
 });
 
 for (const source of ["/tests/fixtures/media/master.m3u8", "/tests/fixtures/media/video.mp4"]) {

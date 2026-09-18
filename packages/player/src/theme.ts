@@ -23,6 +23,10 @@ style.textContent = `
   }
   .small-button {
     background: var(--chunkify-player-control-background, white);
+    padding: 0;
+  }
+  .small-button svg {
+    left: 0;
   }
   div[slot="centered-chrome"] media-play-button {
     background: var(--chunkify-player-control-background, rgb(0 0 0 / 0.8));
