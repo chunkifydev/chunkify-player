@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/private-media.js";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
+import type { ChunkifyPlayerTelemetryEvent } from "../../packages/player-telemetry/src/index.js";
 
 test("hls.js switches to a lower resolution when delivery slows while preserving cookies", async ({ page, context, mediaServer }) => {
   test.setTimeout(60_000);
@@ -8,8 +9,20 @@ test("hls.js switches to a lower resolution when delivery slows while preserving
   await page.goto("/tests/fixtures/player.html");
   await page.evaluate(() => customElements.whenDefined("chunkify-player"));
   await page.evaluate((origin) => {
+    const state = window as typeof window & { adaptiveTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.adaptiveTelemetryEvents = [];
     const player = document.createElement("chunkify-player");
-    Object.assign(player, { player: "hlsjs", credentials: "include", muted: true, src: `${origin}/cookies/adaptive/master.m3u8` });
+    Object.assign(player, {
+      assetId: "asset-adaptive",
+      player: "hlsjs",
+      credentials: "include",
+      muted: true,
+      src: `${origin}/cookies/adaptive/master.m3u8`,
+      telemetry: {
+        provider: "callback",
+        send: (event: ChunkifyPlayerTelemetryEvent) => { state.adaptiveTelemetryEvents.push(event); },
+      },
+    });
     player.addEventListener("playback-error", (event) => { player.dataset.error = event.detail.code; });
     document.body.append(player);
   }, mediaServer.origin);
@@ -24,6 +37,28 @@ test("hls.js switches to a lower resolution when delivery slows while preserving
   mediaServer.bandwidthBytesPerSecond = 128_000;
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.ended), { timeout: 25_000 }).toBe(true);
   await expect(player).not.toHaveAttribute("data-error");
+  const telemetry = await page.evaluate(() => (
+    window as typeof window & { adaptiveTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).adaptiveTelemetryEvents);
+  const finalEvent = telemetry.find((event) => event.event_name === "chunkify.video.view_ended");
+  expect(finalEvent).toMatchObject({
+    connector_name: "hls.js",
+    player_name: "hls.js",
+    reason: "ended",
+  });
+  expect([
+    [128, 72],
+    [256, 144],
+  ]).toContainEqual([
+    finalEvent?.metrics.selected_rendition_width,
+    finalEvent?.metrics.selected_rendition_height,
+  ]);
+  expect(finalEvent?.connector_version).toMatch(/^1\.7\./);
+  expect(finalEvent?.player_version).toBe(finalEvent?.connector_version);
+  expect(finalEvent?.metrics.rendition_switch_count).toBeGreaterThanOrEqual(1);
+  expect(finalEvent?.metrics.delivery_request_count).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_throughput_bps).toBeGreaterThan(0);
   expect(mediaServer.requests.map((request) => request.path)).toEqual(expect.arrayContaining([
     "/cookies/adaptive/low/stream.m3u8", "/cookies/adaptive/high/stream.m3u8",
     "/cookies/adaptive/low/video.mp4", "/cookies/adaptive/high/video.mp4",

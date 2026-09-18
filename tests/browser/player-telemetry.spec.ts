@@ -208,3 +208,230 @@ test("browser-generated native failures reach telemetry before player teardown",
   expect(error?.error_playhead_seconds).toBe(0);
   expect(JSON.stringify(error)).not.toContain("media unavailable");
 });
+
+test("fatal hls.js failures emit a sanitized engine error before teardown", async ({ page }) => {
+  test.setTimeout(30_000);
+  let releaseRequest!: () => void;
+  let requestStarted!: () => void;
+  const requestGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+  const requestSeen = new Promise<void>((resolve) => { requestStarted = resolve; });
+  await page.route("**/private-token/broken.m3u8?signature=secret", async (route) => {
+    requestStarted();
+    await requestGate;
+    await route.fulfill({ status: 404, contentType: "application/vnd.apple.mpegurl", body: "private manifest missing" });
+  });
+  await page.evaluate(() => {
+    const state = window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.playerTelemetryEvents = [];
+    const player = document.createElement("chunkify-player");
+    Object.assign(player, {
+      assetId: "asset-hls-error",
+      player: "hlsjs",
+      src: "/private-token/broken.m3u8?signature=secret",
+      telemetry: {
+        provider: "callback",
+        send: (event: ChunkifyPlayerTelemetryEvent) => { state.playerTelemetryEvents.push(event); },
+      },
+    });
+    document.body.append(player);
+  });
+  await requestSeen;
+  const player = page.locator("chunkify-player");
+  await player.evaluate((element: ChunkifyPlayer) => { void element.media.play().catch(() => {}); });
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
+  releaseRequest();
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents.find((event) => event.event_name === "chunkify.video.playback_error")), { timeout: 15_000 }).toMatchObject({
+    connector_name: "hls.js",
+    player_name: "hls.js",
+    error_category: "network",
+    error_code: "manifestLoadError",
+    error_fatal: true,
+  });
+  const events = await page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents);
+  expect(JSON.stringify(events)).not.toMatch(/private-token|signature|secret|private manifest missing/);
+});
+
+test("telemetry enabled after hls.js creation observes fatal errors before teardown", async ({ page }) => {
+  let releaseRequest!: () => void;
+  let requestStarted!: () => void;
+  const requestGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+  const requestSeen = new Promise<void>((resolve) => { requestStarted = resolve; });
+  await page.route("**/late-failure.m3u8", async (route) => {
+    requestStarted();
+    await requestGate;
+    await route.fulfill({ status: 500, contentType: "application/vnd.apple.mpegurl", body: "unavailable" });
+  });
+  await page.evaluate(() => {
+    const player = document.createElement("chunkify-player");
+    Object.assign(player, { player: "hlsjs", src: "/late-failure.m3u8" });
+    document.body.append(player);
+  });
+  await requestSeen;
+  await page.locator("chunkify-player").evaluate((player: ChunkifyPlayer) => {
+    const state = window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.playerTelemetryEvents = [];
+    player.assetId = "asset-late-error";
+    player.telemetry = {
+      provider: "callback",
+      send: (event: ChunkifyPlayerTelemetryEvent) => { state.playerTelemetryEvents.push(event); },
+    };
+    player.media.dispatchEvent(new Event("play"));
+  });
+  releaseRequest();
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents.find((event) => event.event_name === "chunkify.video.playback_error"))).toMatchObject({
+    connector_name: "hls.js",
+    error_category: "network",
+    error_code: "manifestLoadError",
+    error_fatal: true,
+  });
+});
+
+test("hls.js enrichment listeners exist only while telemetry is enabled", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html?defer");
+  await page.evaluate(async () => {
+    const { default: Hls } = await import("hls.js");
+    const calls = { on: [] as string[], off: [] as string[] };
+    const originalOn = Hls.prototype.on;
+    const originalOff = Hls.prototype.off;
+    Reflect.set(Hls.prototype, "on", function(this: object, event: string, ...args: unknown[]) {
+      calls.on.push(event);
+      return Reflect.apply(originalOn, this, [event, ...args]);
+    });
+    Reflect.set(Hls.prototype, "off", function(this: object, event: string, ...args: unknown[]) {
+      calls.off.push(event);
+      return Reflect.apply(originalOff, this, [event, ...args]);
+    });
+    (window as typeof window & { hlsTelemetryListenerCalls: typeof calls }).hlsTelemetryListenerCalls = calls;
+    await import("@chunkify/player");
+    const player = document.createElement("chunkify-player");
+    Object.assign(player, { player: "hlsjs", muted: true, src: "/tests/fixtures/media/master.m3u8" });
+    document.body.append(player);
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  const before = await page.evaluate(() => {
+    const calls = (window as typeof window & {
+      hlsTelemetryListenerCalls: { on: string[]; off: string[] };
+    }).hlsTelemetryListenerCalls;
+    return { on: calls.on.length, off: calls.off.length };
+  });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    const state = window as typeof window & { lateTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.lateTelemetryEvents = [];
+    element.assetId = "asset-listeners";
+    element.telemetry = {
+      provider: "callback",
+      send: (event: ChunkifyPlayerTelemetryEvent) => { state.lateTelemetryEvents.push(event); },
+    };
+    element.media.dispatchEvent(new Event("play"));
+  });
+  const enabled = await page.evaluate((before) => {
+    const calls = (window as typeof window & {
+      hlsTelemetryListenerCalls: { on: string[]; off: string[] };
+    }).hlsTelemetryListenerCalls;
+    return calls.on.slice(before.on);
+  }, before);
+  expect(enabled).toHaveLength(7);
+  const startEvent = await page.evaluate(() => (
+    window as typeof window & { lateTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).lateTelemetryEvents[0]);
+  expect(startEvent).toMatchObject({
+    connector_name: "hls.js",
+    metrics: {
+      selected_rendition_width: 256,
+      selected_rendition_height: 144,
+      rendition_switch_count: 0,
+      delivery_request_count: 0,
+    },
+  });
+  await player.evaluate((element: ChunkifyPlayer) => { element.telemetry = null; });
+  const disabled = await page.evaluate((before) => {
+    const calls = (window as typeof window & {
+      hlsTelemetryListenerCalls: { on: string[]; off: string[] };
+    }).hlsTelemetryListenerCalls;
+    return calls.off.slice(before.off);
+  }, before);
+  expect(disabled).toHaveLength(7);
+});
+
+test("source replacement finalizes the old hls.js view before changing connectors", async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.playerTelemetryEvents = [];
+    const player = document.createElement("chunkify-player");
+    Object.assign(player, {
+      assetId: "asset-source-replacement",
+      player: "hlsjs",
+      muted: true,
+      src: "/tests/fixtures/media/master.m3u8",
+      telemetry: {
+        provider: "callback",
+        send: (event: ChunkifyPlayerTelemetryEvent) => { state.playerTelemetryEvents.push(event); },
+      },
+    });
+    document.body.append(player);
+    player.media.dispatchEvent(new Event("play"));
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents.find((event) => event.event_name === "chunkify.video.view_ended"))).toMatchObject({
+    connector_name: "hls.js",
+    player_name: "hls.js",
+    reason: "source_changed",
+  });
+  const finalEvent = (await page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents)).find((event) => event.event_name === "chunkify.video.view_ended");
+  expect(finalEvent?.metrics.selected_rendition_width).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_request_count).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
+});
+
+test("hls.js source replacement preserves the outgoing connector totals", async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] };
+    state.playerTelemetryEvents = [];
+    const player = document.createElement("chunkify-player");
+    Object.assign(player, {
+      assetId: "asset-hls-replacement",
+      player: "hlsjs",
+      muted: true,
+      src: "/tests/fixtures/media/master.m3u8",
+      telemetry: {
+        provider: "callback",
+        send: (event: ChunkifyPlayerTelemetryEvent) => { state.playerTelemetryEvents.push(event); },
+      },
+    });
+    document.body.append(player);
+    player.media.dispatchEvent(new Event("play"));
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.src = "/tests/fixtures/media/master.m3u8?replacement=1";
+  });
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents.find((event) => event.event_name === "chunkify.video.view_ended"))).toMatchObject({
+    connector_name: "hls.js",
+    player_name: "hls.js",
+    reason: "source_changed",
+  });
+  const finalEvent = (await page.evaluate(() => (
+    window as typeof window & { playerTelemetryEvents: ChunkifyPlayerTelemetryEvent[] }
+  ).playerTelemetryEvents)).find((event) => event.event_name === "chunkify.video.view_ended");
+  expect(finalEvent?.metrics.selected_rendition_width).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_request_count).toBeGreaterThan(0);
+  expect(finalEvent?.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
+});

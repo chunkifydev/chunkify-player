@@ -8,7 +8,8 @@ Version `0.0.0` is unpublished. This package implements the first telemetry step
 [issue #279](https://github.com/chunkifydev/chunkify/issues/279), following the
 [shared contract](https://github.com/chunkifydev/chunkify/issues/272#issuecomment-5426511219).
 It provides start/end/error records, cumulative snapshots, startup/playing/buffering/
-seek timing, completion, and browser frame counts. The Web Component and React
+seek timing, completion, browser frame counts, and an optional engine connector seam.
+The Web Component and React
 wrapper expose this package through their optional callback telemetry property/prop.
 
 ## Use
@@ -47,6 +48,10 @@ emits no `play` event unless you call `startAttempt()`. It does not reconstruct 
 that passed before attachment. Keep the returned session and call `destroy()` when
 removing the media element; removing a raw element alone is not a cleanup signal.
 Reattach with a new `assetId` when changing to a different asset.
+Wrappers that tear down or replace a playback engine should call
+`session.sourceChanged()` before removing that engine so its final aggregate metrics
+are emitted synchronously. Direct HTML media source changes remain observable through
+the element's standard `emptied` and `loadstart` events.
 
 `assetId` must be a non-empty string. `provider` must be `callback`, with a `send`
 function. Invalid configuration throws a fixed `TypeError` before installing
@@ -92,6 +97,13 @@ Each record has a `metrics` object:
 | `completion_ratio` | Maximum playhead divided by known duration, bounded to 0–1; otherwise `null`. |
 | `dropped_video_frames` | Frames dropped during this view when the browser exposes reliable counters; otherwise `null`. |
 | `total_video_frames` | Total frames during this view when exposed; otherwise `null`. |
+| `selected_rendition_width` / `selected_rendition_height` | Current rendition dimensions when an engine connector exposes them; otherwise `null`. |
+| `selected_rendition_codec` | Current rendition video codec when exposed; otherwise `null`. |
+| `selected_rendition_bitrate_bps` | Current nominal rendition bitrate when exposed; otherwise `null`. |
+| `rendition_switch_count` | Level changes during the view when exposed; otherwise `null`. |
+| `delivery_request_count` | Completed delivery requests observed during the view when exposed; otherwise `null`. |
+| `delivery_transferred_bytes` | Bytes transferred by those completed requests when exposed; otherwise `null`. |
+| `delivery_throughput_bps` | Aggregate transferred bits divided by aggregate request duration when exposed; otherwise `null`. |
 
 Playing time counts elapsed time, not distance along the timeline. Seeking forward
 and higher playback rates do not increase it artificially. A seek or waiting state
@@ -108,7 +120,7 @@ An HTML media `error` during an open view immediately emits one
 | --- | --- |
 | `error_category` | `aborted`, `network`, `decode`, `unsupported`, or `unknown`. |
 | `error_code` | The browser's numeric `MediaError.code`, or `null` when unavailable. |
-| `error_fatal` | `true` for an HTML media error. Engine connectors may classify their own errors later. |
+| `error_fatal` | `true` for an HTML media error, or the engine connector's normalized fatal flag. |
 | `error_playhead_seconds` | Finite playhead at failure, or `null`. |
 
 Other record types set these four fields to `null`. Only the first media error in a
@@ -142,15 +154,16 @@ The initial schema version is `1`. Each record includes:
 - `event_name`, a random `event_id`, `occurred_at` as an ISO timestamp, and `sequence`
   increasing from 1 within each view;
 - ephemeral `view_id`, caller-supplied `asset_id`, and SDK name/version;
-- `connector_name: "html-media"` and connector version;
-- `player_name` and `player_version`, currently `null` because an HTML element does
-  not reliably identify the playback library attached to it;
+- connector and player name/version (`html-media` and null player fields without an engine connector);
 - `delivery_hostname` only, plus optional `environment` and `viewer_id`, or `null`;
 - `metrics` and `reason`, which is `null` on a start record.
 
 Hostname comes from the current media URL, or `src` before the source is selected.
-Blob and other non-HTTP URLs have no delivery hostname in this core. A future engine
-connector can supply information unavailable through the media element.
+Blob and other non-HTTP URLs have no delivery hostname in this core. The Chunkify
+Web Component installs its hls.js connector automatically. That connector supplies
+the selected rendition, switch count, aggregate completed manifest/playlist/media
+requests, transferred bytes, throughput, and normalized fatal engine errors. It
+does not expose raw request records, URLs, byte ranges, error messages, or stacks.
 
 Records are constructed from an explicit field list. Full page/media URLs, signed
 query parameters, cookies, headers, arbitrary options, raw errors and stacks are
@@ -170,10 +183,9 @@ an attachment there are no telemetry listeners or records.
 
 ## Remaining telemetry work
 
-This is not the complete MVP telemetry package. Later steps will add engine
-enrichment and Datadog/Grafana/OTLP destinations.
-None of those options are exposed yet.
-Measurements not exposed by a future connector will remain nullable.
+This is not the complete MVP telemetry package. Datadog, Grafana Faro, and OTLP
+destinations are not exposed yet. Measurements unavailable from the selected
+engine remain nullable.
 
 ## Local verification
 

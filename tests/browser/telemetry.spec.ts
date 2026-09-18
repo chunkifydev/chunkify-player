@@ -320,6 +320,163 @@ test("browser playback quality reports frame totals for the current view", async
   expect(events[1]).toMatchObject({ metrics: { total_video_frames: 120, dropped_video_frames: 6 } });
 });
 
+test("an engine connector enriches a view with normalized rendition and delivery aggregates", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    type ConnectorError = {
+      category: "network";
+      code: string;
+      fatal: boolean;
+    };
+    let emitError = (_error: ConnectorError) => {};
+    const snapshot = {
+      renditionWidth: 1920,
+      renditionHeight: 1080,
+      renditionCodec: "avc1.640028",
+      renditionBitrate: 4_500_000,
+      renditionSwitchCount: 2,
+      deliveryRequestCount: 10,
+      deliveryTransferredBytes: 1_000_000,
+      deliveryDurationMs: 4_000,
+    };
+    const connector = {
+      name: "hls.js",
+      version: "1.7.3",
+      playerName: "hls.js",
+      playerVersion: "1.7.3",
+      snapshot: () => ({ ...snapshot }),
+      subscribeToErrors(listener: (error: ConnectorError) => void) {
+        emitError = listener;
+        return () => { emitError = () => {}; };
+      },
+    };
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-engine", provider: "callback", send: (event) => { f.events.push(event); },
+    });
+    f.session.setConnector(connector);
+    f.session.startAttempt();
+    snapshot.renditionWidth = 1280;
+    snapshot.renditionHeight = 720;
+    snapshot.renditionBitrate = 2_000_000;
+    snapshot.renditionSwitchCount = 4;
+    snapshot.deliveryRequestCount = 15;
+    snapshot.deliveryTransferredBytes = 2_500_000;
+    snapshot.deliveryDurationMs = 10_000;
+    emitError({ category: "network", code: "fragLoadError", fatal: true });
+    f.session.destroy();
+    return f.events;
+  });
+
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
+  ]);
+  expect(events[0]).toMatchObject({
+    connector_name: "hls.js",
+    connector_version: "1.7.3",
+    player_name: "hls.js",
+    player_version: "1.7.3",
+    metrics: {
+      selected_rendition_width: 1920,
+      selected_rendition_height: 1080,
+      selected_rendition_codec: "avc1.640028",
+      selected_rendition_bitrate_bps: 4_500_000,
+      rendition_switch_count: 0,
+      delivery_request_count: 0,
+      delivery_transferred_bytes: 0,
+      delivery_throughput_bps: null,
+    },
+  });
+  expect(events[1]).toMatchObject({
+    error_category: "network",
+    error_code: "fragLoadError",
+    error_fatal: true,
+    metrics: {
+      selected_rendition_width: 1280,
+      selected_rendition_height: 720,
+      selected_rendition_bitrate_bps: 2_000_000,
+      rendition_switch_count: 2,
+      delivery_request_count: 5,
+      delivery_transferred_bytes: 1_500_000,
+      delivery_throughput_bps: 2_000_000,
+    },
+  });
+  expect(JSON.stringify(events)).not.toMatch(/url|secret|stack|message/i);
+});
+
+test("a fatal connector error stops active timing before its error and final records", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    let emitError = (_error: { category: "decode"; code: string; fatal: boolean }) => {};
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-fatal-engine", provider: "callback", send: (event) => { f.events.push(event); },
+    });
+    f.session.setConnector({
+      name: "test-engine", version: "1", playerName: "test-engine", playerVersion: "1",
+      snapshot: () => ({
+        renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
+        renditionSwitchCount: 0, deliveryRequestCount: 0, deliveryTransferredBytes: 0, deliveryDurationMs: 0,
+      }),
+      subscribeToErrors(listener) { emitError = listener; return () => {}; },
+    });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    (window as typeof window & { emitFatalConnectorError: () => void }).emitFatalConnectorError = () => {
+      emitError({ category: "decode", code: "mediaError", fatal: true });
+    };
+  });
+  await page.clock.runFor(1000);
+  await page.evaluate(() => (
+    window as typeof window & { emitFatalConnectorError: () => void }
+  ).emitFatalConnectorError());
+  await page.clock.runFor(5000);
+  await page.evaluate(() => window.telemetryFixture.session!.destroy());
+  const events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events.map((event) => event.event_name)).toEqual([
+    "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
+  ]);
+  expect(events[1]).toMatchObject({ metrics: { playing_time_ms: 1000 } });
+  expect(events[2]).toMatchObject({ metrics: { playing_time_ms: 1000 } });
+});
+
+test("connector subscriptions cannot outlive a destroyed or reentrantly destroyed session", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    let subscribed = 0;
+    let cleaned = 0;
+    const connector = {
+      name: "test-engine", version: "1", playerName: "test-engine", playerVersion: "1",
+      snapshot: () => ({
+        renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
+        renditionSwitchCount: 0, deliveryRequestCount: 0, deliveryTransferredBytes: 0, deliveryDurationMs: 0,
+      }),
+      subscribeToErrors() { subscribed++; return () => { cleaned++; }; },
+    };
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-destroyed-connector", provider: "callback", send() {},
+    });
+    f.session.destroy();
+    f.session.setConnector(connector);
+    const afterDestroyed = { subscribed, cleaned };
+
+    f.session = f.attachTelemetry(f.video, {
+      assetId: "asset-reentrant-connector", provider: "callback", send() {},
+    });
+    f.session.setConnector({
+      ...connector,
+      subscribeToErrors() {
+        subscribed++;
+        f.session!.destroy();
+        return () => { cleaned++; };
+      },
+    });
+    return { afterDestroyed, final: { subscribed, cleaned } };
+  });
+  expect(result.afterDestroyed).toEqual({ subscribed: 0, cleaned: 0 });
+  expect(result.final).toEqual({ subscribed: 1, cleaned: 1 });
+});
+
 test("WebKit frame counters are supported and unavailable counters remain null", async ({ page }) => {
   const results = await page.evaluate(() => {
     const f = window.telemetryFixture;

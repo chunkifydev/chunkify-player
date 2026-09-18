@@ -15,6 +15,14 @@ export interface ViewMetrics {
   completion_ratio: number | null;
   dropped_video_frames: number | null;
   total_video_frames: number | null;
+  selected_rendition_width: number | null;
+  selected_rendition_height: number | null;
+  selected_rendition_codec: string | null;
+  selected_rendition_bitrate_bps: number | null;
+  rendition_switch_count: number | null;
+  delivery_request_count: number | null;
+  delivery_transferred_bytes: number | null;
+  delivery_throughput_bps: number | null;
 }
 export interface ChunkifyPlayerTelemetryEvent {
   schema_version: 1;
@@ -26,10 +34,10 @@ export interface ChunkifyPlayerTelemetryEvent {
   asset_id: string;
   sdk_name: "@chunkify/player-telemetry";
   sdk_version: string;
-  connector_name: "html-media";
-  connector_version: string;
-  player_name: null;
-  player_version: null;
+  connector_name: string;
+  connector_version: string | null;
+  player_name: string | null;
+  player_version: string | null;
   delivery_hostname: string | null;
   environment: string | null;
   viewer_id: string | null;
@@ -50,9 +58,36 @@ export interface CallbackTelemetryConfig {
 export interface TelemetryOptions extends CallbackTelemetryConfig {
   assetId: string;
 }
+export interface TelemetryConnectorSnapshot {
+  renditionWidth: number | null;
+  renditionHeight: number | null;
+  renditionCodec: string | null;
+  renditionBitrate: number | null;
+  renditionSwitchCount: number;
+  deliveryRequestCount: number;
+  deliveryTransferredBytes: number;
+  deliveryDurationMs: number;
+}
+export interface TelemetryConnectorError {
+  category: TelemetryErrorCategory;
+  code: string | number | null;
+  fatal: boolean;
+}
+export interface TelemetryConnector {
+  name: string;
+  version: string | null;
+  playerName: string | null;
+  playerVersion: string | null;
+  snapshot(): TelemetryConnectorSnapshot;
+  subscribeToErrors(listener: (error: TelemetryConnectorError) => void): () => void;
+}
 export interface TelemetrySession {
   /** Call immediately before play() to include attempts that reject before a play event. */
   startAttempt(): void;
+  /** Finish the current view before its media source or playback engine is replaced. */
+  sourceChanged(): void;
+  /** Add or replace optional engine-specific measurements for subsequent records. */
+  setConnector(connector: TelemetryConnector | null): void;
   /** End the current view, if any, and remove all telemetry listeners. Idempotent. */
   destroy(): void;
 }
@@ -81,6 +116,7 @@ interface View {
   framePrevious: FrameCounts | null;
   frameMetricsValid: boolean;
   sampled: boolean;
+  connectorBaseline: TelemetryConnectorSnapshot | null;
 }
 
 interface FrameCounts {
@@ -93,6 +129,56 @@ interface NormalizedError {
   code: string | number | null;
   fatal: boolean;
   playhead: number | null;
+}
+
+function finiteNonNegative(value: number | null): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function connectorMetrics(connector: TelemetryConnector | null, baseline: TelemetryConnectorSnapshot | null): Pick<ViewMetrics,
+  "selected_rendition_width" | "selected_rendition_height" | "selected_rendition_codec" |
+  "selected_rendition_bitrate_bps" | "rendition_switch_count" | "delivery_request_count" |
+  "delivery_transferred_bytes" | "delivery_throughput_bps"> {
+  if (!connector || !baseline) return {
+    selected_rendition_width: null,
+    selected_rendition_height: null,
+    selected_rendition_codec: null,
+    selected_rendition_bitrate_bps: null,
+    rendition_switch_count: null,
+    delivery_request_count: null,
+    delivery_transferred_bytes: null,
+    delivery_throughput_bps: null,
+  };
+  let current: TelemetryConnectorSnapshot;
+  try {
+    current = connector.snapshot();
+  } catch {
+    return {
+      selected_rendition_width: null,
+      selected_rendition_height: null,
+      selected_rendition_codec: null,
+      selected_rendition_bitrate_bps: null,
+      rendition_switch_count: null,
+      delivery_request_count: null,
+      delivery_transferred_bytes: null,
+      delivery_throughput_bps: null,
+    };
+  }
+  const switches = finiteNonNegative(current.renditionSwitchCount - baseline.renditionSwitchCount);
+  const requests = finiteNonNegative(current.deliveryRequestCount - baseline.deliveryRequestCount);
+  const bytes = finiteNonNegative(current.deliveryTransferredBytes - baseline.deliveryTransferredBytes);
+  const deliveryDuration = finiteNonNegative(current.deliveryDurationMs - baseline.deliveryDurationMs);
+  return {
+    selected_rendition_width: finiteNonNegative(current.renditionWidth),
+    selected_rendition_height: finiteNonNegative(current.renditionHeight),
+    selected_rendition_codec: typeof current.renditionCodec === "string" && current.renditionCodec ? current.renditionCodec : null,
+    selected_rendition_bitrate_bps: finiteNonNegative(current.renditionBitrate),
+    rendition_switch_count: switches,
+    delivery_request_count: requests,
+    delivery_transferred_bytes: bytes,
+    delivery_throughput_bps: bytes !== null && deliveryDuration !== null && deliveryDuration > 0
+      ? bytes * 8 * 1000 / deliveryDuration : null,
+  };
 }
 
 function deliveryHostname(media: HTMLMediaElement): string | null {
@@ -153,6 +239,8 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   let wantsPlay = false;
   let seeking = false;
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+  let connector: TelemetryConnector | null = null;
+  let unsubscribeConnector: (() => void) | null = null;
 
   function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null,
     error: NormalizedError | null = null) {
@@ -175,12 +263,14 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       }
     }
     if (frames) current.framePrevious = frames;
+    const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
     const event: ChunkifyPlayerTelemetryEvent = {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, asset_id: assetId,
       sdk_name: "@chunkify/player-telemetry", sdk_version: sdkVersion,
-      connector_name: "html-media", connector_version: sdkVersion,
-      player_name: null, player_version: null, delivery_hostname: current.hostname,
+      connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
+      player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
+      delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
       error_category: error?.category ?? null,
       error_code: error?.code ?? null,
@@ -199,6 +289,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
         completion_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
         dropped_video_frames: viewFrames?.dropped ?? null,
         total_video_frames: viewFrames?.total ?? null,
+        ...engineMetrics,
       },
     };
     try {
@@ -224,7 +315,8 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
       errorEmitted: false, frameBaseline: initialFrames, framePrevious: initialFrames,
-      frameMetricsValid: initialFrames !== null, sampled };
+      frameMetricsValid: initialFrames !== null, sampled,
+      connectorBaseline: connector ? safeConnectorSnapshot(connector) : null };
     emit(view, "chunkify.video.view_started");
     if (media.error) reportMediaError();
   }
@@ -260,6 +352,42 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       category: mediaErrorCategory(code), code, fatal: true,
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
+  }
+  function reportConnectorError(error: TelemetryConnectorError) {
+    if (!view || view.errorEmitted) return;
+    if (error.fatal) {
+      stopPlaying();
+      stopRebuffering();
+      stopSeeking();
+      seeking = false;
+      wantsPlay = false;
+    }
+    updatePlaybackPosition();
+    view.errorEmitted = true;
+    emit(view, "chunkify.video.playback_error", null, {
+      category: error.category,
+      code: typeof error.code === "string" || typeof error.code === "number" ? error.code : null,
+      fatal: Boolean(error.fatal),
+      playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
+    });
+  }
+  function setConnector(next: TelemetryConnector | null) {
+    if (destroyed) return;
+    const previousUnsubscribe = unsubscribeConnector;
+    unsubscribeConnector = null;
+    try { previousUnsubscribe?.(); } catch {}
+    if (destroyed) return;
+    connector = next;
+    if (view) view.connectorBaseline = connector ? safeConnectorSnapshot(connector) : null;
+    if (connector) {
+      let unsubscribe: (() => void) | null = null;
+      try { unsubscribe = connector.subscribeToErrors(reportConnectorError); } catch {}
+      if (destroyed) {
+        try { unsubscribe?.(); } catch {}
+        return;
+      }
+      unsubscribeConnector = unsubscribe;
+    }
   }
   function scheduleSnapshot() {
     if (!view || !view.sampled || snapshotTimer !== null) return;
@@ -351,12 +479,21 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   page?.addEventListener("pagehide", pagehide);
   return {
     startAttempt,
+    sourceChanged() { finish("source_changed"); },
+    setConnector,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       for (const [name, listener] of Object.entries(listeners)) media.removeEventListener(name, listener);
       page?.removeEventListener("pagehide", pagehide);
       finish("destroyed");
+      try { unsubscribeConnector?.(); } catch {}
+      unsubscribeConnector = null;
+      connector = null;
     },
   };
+}
+
+function safeConnectorSnapshot(connector: TelemetryConnector): TelemetryConnectorSnapshot | null {
+  try { return connector.snapshot(); } catch { return null; }
 }

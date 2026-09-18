@@ -2,6 +2,7 @@ import type Hls from "hls.js";
 import { attachTelemetry, type CallbackTelemetryConfig, type TelemetrySession } from "@chunkify/player-telemetry";
 import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview, setThumbnailCredentials } from "./theme.js";
 import { loadThumbnails } from "./thumbnails.js";
+import { createHlsTelemetryConnector, type HlsTelemetryConnector } from "./hls-telemetry.js";
 
 export type PlayerEngine = "auto" | "native" | "hlsjs";
 export type TelemetryConfig = CallbackTelemetryConfig;
@@ -56,6 +57,8 @@ export class ChunkifyPlayer extends HTMLElement {
   #updatePending = false;
   #generation = 0;
   #hls: Hls | null = null;
+  #hlsClass: typeof Hls | null = null;
+  #hlsTelemetry: HlsTelemetryConnector | null = null;
   #engine: Exclude<PlayerEngine, "auto"> | null = null;
   #thumbnailCleanup: (() => void) | null = null;
   #telemetryConfig: TelemetryConfig | null = null;
@@ -240,8 +243,11 @@ export class ChunkifyPlayer extends HTMLElement {
 
   #stopTelemetry() {
     const session = this.#telemetrySession;
+    const hlsTelemetry = this.#hlsTelemetry;
     this.#telemetrySession = null;
+    this.#hlsTelemetry = null;
     session?.destroy();
+    hlsTelemetry?.destroy();
   }
 
   #syncTelemetry() {
@@ -256,6 +262,13 @@ export class ChunkifyPlayer extends HTMLElement {
       return;
     }
     this.#telemetrySession = session;
+    this.#syncHlsTelemetry();
+  }
+
+  #syncHlsTelemetry() {
+    if (!this.#telemetrySession || !this.#hls || !this.#hlsClass) return;
+    this.#hlsTelemetry ??= createHlsTelemetryConnector(this.#hls, this.#hlsClass);
+    this.#telemetrySession.setConnector(this.#hlsTelemetry);
   }
 
   #scheduleUpdate() {
@@ -268,13 +281,17 @@ export class ChunkifyPlayer extends HTMLElement {
   }
 
   #stop() {
+    this.#telemetrySession?.sourceChanged();
     this.#generation++;
     this.#active = false;
     this.#theme.hidden = true;
     this.#syncPoster();
     this.#syncThumbnails();
+    this.#hlsTelemetry?.destroy();
+    this.#hlsTelemetry = null;
     this.#hls?.destroy();
     this.#hls = null;
+    this.#hlsClass = null;
     this.#engine = null;
     if (this.#media.hasAttribute("src")) {
       this.#media.pause();
@@ -325,6 +342,7 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#syncPoster();
     if (useNative) {
       this.#engine = "native";
+      this.#telemetrySession?.setConnector(null);
       if (!isMp4 && !nativeHls) {
         this.#fail("unsupported-engine");
         return;
@@ -350,11 +368,19 @@ export class ChunkifyPlayer extends HTMLElement {
         xhrSetup: (xhr) => { xhr.withCredentials = includeCredentials; },
       });
       this.#hls = hls;
+      this.#hlsClass = Hls;
+      this.#syncHlsTelemetry();
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal || generation !== this.#generation) return;
-        this.#fail(data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR ? "unsupported-source"
+        const code = data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR ? "unsupported-source"
           : data.type === Hls.ErrorTypes.NETWORK_ERROR ? "network-error"
-          : data.type === Hls.ErrorTypes.MEDIA_ERROR ? "decode-error" : "playback-failed");
+          : data.type === Hls.ErrorTypes.MEDIA_ERROR ? "decode-error" : "playback-failed";
+        // Let later hls.js listeners, including telemetry enabled after engine
+        // creation, observe the fatal error before teardown removes them.
+        globalThis.setTimeout(() => {
+          if (!this.#active || generation !== this.#generation) return;
+          this.#fail(code);
+        }, 0);
       });
       hls.attachMedia(this.#media);
       hls.loadSource(url.href);

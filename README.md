@@ -8,8 +8,9 @@ loads hls.js only when selected. It supports posters,
 Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
 cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
 reuses that implementation. A standalone telemetry package provides callback
-start/end/snapshot/error records, cumulative playback metrics, and per-view sampling;
-the Web Component exposes that callback core through its optional `telemetry` property.
+start/end/snapshot/error records, cumulative playback metrics, and per-view sampling.
+The Web Component exposes that callback core through its optional `telemetry` property
+and enriches hls.js views with rendition, switching, aggregate delivery, and fatal error data.
 The React wrapper exposes the same configuration through a typed prop.
 
 ## Packages
@@ -127,10 +128,12 @@ these tests; the published React wrapper keeps React external as a peer.
 Standalone telemetry tests cover attempt boundaries, snapshots, startup/playing/
 buffering/seek timing, completion, source changes, replay, page exit, listener cleanup,
 normalized media errors, browser frame counts, callback failures and payload privacy.
-They also verify complete-view sampling and fresh decisions on replay.
+They also verify engine connector normalization, complete-view sampling and fresh decisions on replay.
 They combine controlled-clock checks with actual native video playback.
 Web Component integration tests cover callback configuration, asset context,
 pre-registration properties, source clearing, replay, disabling, and disconnect cleanup.
+Real adaptive playback verifies hls.js rendition switching, aggregate delivery metrics,
+and sanitized fatal engine errors.
 
 GitHub Actions runs the same checks on pushes and pull requests, and retains
 the Playwright report for seven days. Failed tests retain traces.

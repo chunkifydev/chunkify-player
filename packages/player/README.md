@@ -107,6 +107,12 @@ Reconnecting restores the retained configuration. Source replacement and replay 
 observed by the same attachment. See the telemetry package README for records,
 sampling, privacy, and callback delivery behavior.
 
+With hls.js playback, the component also reports the selected rendition, level
+switch count, aggregate completed delivery requests, transferred bytes, throughput,
+and normalized fatal hls.js errors. Native playback leaves engine-only fields null.
+Raw request events, URLs, signed query parameters, and engine error messages are not
+included.
+
 ## Posters and controls
 
 The poster appears before playback using the browser's video poster behavior.
@@ -301,9 +307,10 @@ recoverable errors before a fatal error reaches this interface.
 
 This wrapper includes playback, posters, sprite VTT previews, themed controls,
 cookie credentials, and lifecycle handling. A separate typed React wrapper
-reuses this implementation. Player telemetry integration is not implemented yet. The separate
-`@chunkify/player-telemetry` package has an initial standalone callback core. No
-telemetry listeners or destinations are installed by this player. No DRM or universal private-CDN compatibility is claimed.
+reuses this implementation. Optional callback telemetry includes common HTML-media
+measurements and hls.js enrichment. It remains disabled unless the application sets
+the `telemetry` property and a non-empty `asset-id`. No DRM or universal private-CDN
+compatibility is claimed.
 
 The package emits ES modules, TypeScript declarations, and source maps. Sources
 are included so source and declaration maps remain usable. Chunkify-authored
