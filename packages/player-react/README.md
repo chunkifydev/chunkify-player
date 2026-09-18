@@ -1,11 +1,6 @@
 # @chunkify/player-react
 
-Typed React 19 wrapper over `@chunkify/player`. The Web Component owns playback,
-controls and cleanup. This package adds no playback engine.
-
-Version `0.0.0` is an unpublished development package. Both packages are linked
-locally through the repository's npm workspaces. React is a peer dependency;
-the package does not bundle React, React DOM or the Web Component.
+This package provides a typed React 19 wrapper for `@chunkify/player`.
 
 ```tsx
 import { useRef } from "react";
@@ -19,6 +14,7 @@ function Video({ src }: { src: string }) {
       src={src}
       controls
       playsInline
+      onPlaying={(event) => console.log(event.currentTarget.media.currentTime)}
     />
   );
 }
@@ -26,95 +22,23 @@ function Video({ src }: { src: string }) {
 
 ## Props and refs
 
-Props include `src`, `poster`, `thumbnails`, `assetId`, `player`,
-`credentials`, `autoPlay`, `muted`, `loop`, `playsInline`, and `controls`.
-They follow the [Web Component's behavior](../player/README.md). Use React's
-`autoPlay` spelling. `className`, `style`, `id`, ARIA attributes and other standard
-host attributes apply to the custom element. There is no extra container.
+Playback props are `src`, `poster`, `preload`, `crossOrigin`, `autoPlay`, `muted`,
+`loop`, `playsInline`, and `controls`. Standard host props such as `className`,
+`style`, `id`, and ARIA attributes apply to the custom element.
 
-`src` is optional. Omitting it or passing `null`, `undefined`, an empty string or
-whitespace leaves the player idle. Supplying a valid URL initializes playback;
-clearing it stops playback and releases the engine. Runtime URL validation remains
-in the Web Component. Removing a prop clears the corresponding setting.
+The ref points to the Web Component. `ref.current.media` returns its current
+media element. Read it again after changing between HLS and MP4 because that
+change replaces the internal element.
 
-The ref points directly to the `ChunkifyPlayer` Web Component. `ref.current.media`
-is the underlying `HTMLVideoElement`; use its `play()`, `pause()` and `currentTime`
-API. Wait for media readiness before seeking and handle rejected `play()` promises.
-Object refs and React 19 callback refs with cleanup functions are supported.
+Media callbacks receive native events whose `currentTarget` is the player. The
+supported callbacks match the standard media events forwarded by the Web
+Component, including `onLoadedMetadata`, `onPlay`, `onPlaying`, `onPause`,
+`onTimeUpdate`, `onEnded`, and `onError`.
 
-## Rendering and lifecycle
+## Server rendering
 
-The entry has a `use client` directive and is safe to import and render on the
-server. It renders nothing on the server or during initial client registration.
-After the browser loads the Web Component, React renders it and assigns the ref.
-Reserve space with a parent layout if needed. Registration failures reach the
-nearest React error boundary. Browser-only Web Component imports must not be
-added separately to server code.
+The entry has a `use client` directive and does not import the Web Component at
+module evaluation time. It renders nothing on the server and loads the component
+after mounting in the browser. React is a peer dependency and is not bundled.
 
-Development Strict Mode, source replacement, source clearing and real
-unmount/remount are covered by browser tests. Unmounting while registration is
-pending cannot start playback for the removed component. The Web Component
-releases playback resources when removed from the DOM; the wrapper does not
-manually invoke custom-element lifecycle callbacks.
-
-React 19 is required. Automated tests currently use React and React DOM 19.3
-in Chromium, Firefox and WebKit. React 18 and earlier are not supported.
-
-Telemetry and real preview/CDN/device validation remain pending. Asset IDs are
-passive metadata and do not trigger asset lookup or enable telemetry.
-
-## Events
-
-Media callbacks receive native browser events. During the callback,
-`event.currentTarget` is typed as the player Web Component. `onPlaybackError`
-receives a `CustomEvent` with the Web Component's normalized `detail`, containing
-`code`, `message` and `engine`. It does not expose source URLs or raw errors.
-
-```tsx
-<ChunkifyPlayer
-  src="https://media.example.com/manifest.m3u8"
-  controls
-  onPlaying={(event) => console.log(event.currentTarget.media.currentTime)}
-  onPlaybackError={(event) => console.log(event.detail.code, event.detail.message)}
-/>
-
-```
-
-The callback props are `onAbort`, `onCanPlay`, `onCanPlayThrough`,
-`onDurationChange`, `onEmptied`, `onEnded`, `onError`, `onLoadedData`,
-`onLoadedMetadata`, `onLoadStart`, `onPause`, `onPlay`, `onPlaying`, `onProgress`,
-`onRateChange`, `onResize`, `onSeeked`, `onSeeking`, `onStalled`, `onSuspend`,
-`onTimeUpdate`, `onVolumeChange`, `onWaiting`, and `onPlaybackError`.
-Use `onPlaybackError` for actionable playback failures; `onError` forwards the
-native media error event. Callbacks are not React SyntheticEvents. Listener
-updates and unmount cleanup do not restart playback. Other host event callbacks
-are not part of this wrapper's API; use the component ref for additional native
-listeners and clean them up in your application.
-
-## Application-owned asset readiness
-
-The application checks asset progression and decides what to display. The player
-has no `status`, `preparingFallback`, `failedFallback` or `expiredFallback` props.
-Render your own messages and mount the player when a usable URL is available:
-
-```tsx
-function AssetVideo({ src, processing }: { src?: string; processing: boolean }) {
-  if (processing) return <p role="status">Your video is processing.</p>;
-  if (!src) return <p>This video is unavailable.</p>;
-  return <ChunkifyPlayer src={src} controls playsInline />;
-}
-```
-
-You can also keep the player mounted and omit or clear `src` until playback is
-wanted. `assetId` never triggers an asset lookup.
-
-The local [React example](../../examples/react/main.tsx) demonstrates application-owned readiness,
-event callbacks, ref access and unmount/remount. Build it with
-`npm run build && npm run build:react-fixtures`, run `npm run serve`, then open
-[the React example](http://127.0.0.1:4173/examples/react/).
-
-## Package contents
-
-TypeScript emits ES modules, declarations and source maps. Source files and the
-MIT license are included. The repository uses esbuild only to bundle the local
-React browser fixtures; it is not part of the published runtime.
+Version `0.0.0` is an unreleased development version.

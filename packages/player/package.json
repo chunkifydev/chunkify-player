@@ -19,13 +19,14 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepack": "npm run build"
   },
   "dependencies": {
     "@player.style/demuxed-2022": "~0.1.2",
-    "hls.js": "~1.7.3",
+    "hls-video-element": "~1.5.11",
     "media-chrome": "~4.19.2"
   }
 }

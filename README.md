@@ -1,28 +1,23 @@
 # Chunkify Player
 
-One repository for the Chunkify player packages described in
-[issue #279](https://github.com/chunkifydev/chunkify/issues/279).
-
-The initial `<chunkify-player>` implementation wraps a native video element and
-loads hls.js only when selected. It supports posters,
-Demuxed 2022 controls, sprite WebVTT previews, media events, source replacement,
-cookie credentials, passive asset metadata, and cleanup. A typed React 19 wrapper
-reuses that implementation. Telemetry remains a later step.
+This repository contains a small video player Web Component and its React 19
+wrapper. The player uses the browser's `<video>` element for ordinary media and
+`hls-video-element` for HLS manifests. Media Chrome renders the Demuxed 2022
+controls for both paths.
 
 ## Packages
 
-| Directory | npm package | Status |
-| --- | --- | --- |
-| `packages/player` | `@chunkify/player` | Initial playback wrapper |
-| `packages/player-react` | `@chunkify/player-react` | Typed React 19 wrapper |
-| `packages/player-telemetry` | `@chunkify/player-telemetry` | Planned last |
+| Directory | npm package |
+| --- | --- |
+| `packages/player` | `@chunkify/player` |
+| `packages/player-react` | `@chunkify/player-react` |
 
-The player and React wrapper directories exist. The root package is private so it
-cannot be published. Each package will have its own publishable contents.
+The root npm package is private. Each package directory contains a publishable
+package.
 
 ## Development
 
-Use Node.js 24 and npm 11. `.nvmrc` selects Node.js 24 if you use nvm.
+Use Node.js 24 and npm 11.
 
 ```sh
 npm ci
@@ -30,105 +25,42 @@ npx playwright install --with-deps --only-shell chromium firefox webkit
 npm run check
 ```
 
-`npm run check` typechecks the tools and package, builds the package, runs the
-browser tests, and checks the package contents with `npm pack --dry-run`.
-It also checks server rendering of the React entry. It does not publish anything.
-Tests run headlessly, so Chromium only needs its
-smaller headless shell. The browser installation command also installs system
-dependencies on supported Linux hosts.
+`npm run check` builds and typechecks both packages, tests server rendering and
+browser behavior, and checks the package contents. It does not publish anything.
 
-To open the plain HTML example:
+To open the examples:
 
 ```sh
 npm run build
+npm run build:react-fixtures
 npm run serve
 ```
 
-Visit [the local example](http://127.0.0.1:4173/examples/basic/) and press Play.
-Use the engine and source selectors to try playback and source clearing.
-Hover or drag the seek bar to preview frames from the two local sprite images.
-The clip is a local synthetic fixture; playback makes no Chunkify API calls.
-Rebuild after editing the source, then reload the page. The local static server
-binds to `127.0.0.1` and disables caching.
+Then open:
 
-See the [player package README](packages/player/README.md) for its interface.
-See the [React package README](packages/player-react/README.md) for props, refs,
-server rendering and React support.
+- `http://127.0.0.1:4173/examples/basic/`
+- `http://127.0.0.1:4173/examples/theming/`
+- `http://127.0.0.1:4173/examples/react/`
 
-For the React example, also run `npm run build:react-fixtures`, then visit
-[the React example](http://127.0.0.1:4173/examples/react/). It includes application-owned
-readiness content, media callbacks, ref access and mount/unmount controls.
+The examples use a checked-in six-second media fixture and make no Chunkify API
+calls. Rebuild after changing package source files.
 
-Other useful commands:
+See [the player package README](packages/player/README.md) and
+[the React package README](packages/player-react/README.md) for their public APIs.
 
-```sh
-npm run typecheck
-npm run build --workspace @chunkify/player
-npm test -- --project=chromium
-npx playwright show-report
-```
+## Project choices
 
-## Build and verification
+The player has no public engine selector. A `.m3u8` URL creates an `<hls-video>`;
+other URLs create a native `<video>`. `hls-video-element` owns hls.js setup and
+cleanup. The wrapper owns element selection, a consistent API, the controls, and
+Chunkify theme variables.
 
-TypeScript emits ES modules, declarations, JavaScript source maps, and declaration
-maps into each package's `dist` directory. Source files are included in the
-packages so the published maps can resolve their sources. Published packages
-are not bundled. esbuild prepares React's development runtime for the local
-browser fixtures, including Strict Mode checks, without adding Vite.
+Asset readiness stays in the application. The player does not fetch asset state,
+construct playback URLs, or show processing and failure screens. Telemetry work
+continues separately on the `codex/player-telemetry` branch.
 
-The local example uses an import map to resolve the package, hls.js, Media Chrome,
-and the Demuxed 2022 theme. The wrapper's `import("hls.js")` runs only when the
-hls.js engine is selected. The controls do not add another playback engine.
+The repository uses TypeScript without Vite. Plain HTML examples use import maps,
+and esbuild only prepares the React test fixture and example.
 
-Playwright tests run in Chromium, Firefox, and WebKit. They cover local HLS/fMP4
-playback through hls.js, automatic engine selection, native MP4 playback, media
-events, idle sources, property upgrades, errors, and teardown. They also verify
-muted autoplay, looping, and asset ID changes that preserve playback. Controls tests
-cover poster requests, keyboard operation, accessible control names, controls
-visibility, and layouts at 320, 768, and 1280 pixels. Fullscreen/PiP tests substitute
-the browser API boundary to verify supported and unsupported behavior without OS
-windows. Actual OS fullscreen/PiP remains part of release browser/device QA. Native HLS
-uses the browser's reported support; unsupported native playback fails explicitly.
-Capability tests also simulate a browser without native HLS to verify fallback.
-Thumbnail tests cover multiple sprites and crops, cross-origin files, idle sources,
-source/thumbnail replacement, cancellation, reconnection, and non-fatal failures.
-Private-playback tests use a second local origin with real cookie checks and
-CORS responses. They cover credentialed playlists, segments, posters, previews,
-HTTP byte ranges, authorized path URLs, denial, and credential changes. Native
-HLS cases run where supported; all three browsers test hls.js and native MP4.
-An additional two-quality fixture verifies an actual decoded resolution change
-when hls.js delivery slows, including cookie forwarding across the switch.
-Native/auto checks play and seek the same public master without prescribing
-the browser's rendition choice. These checks use controlled local throughput;
-deployed preview/CDN URLs and real device compatibility remain separate checks.
-
-Fixtures are checked in under `tests/fixtures/media`. FFmpeg is only needed to
-regenerate them. These browser-engine checks do not certify every Safari/iOS,
-Android, codec, or private-CDN configuration. The full release support matrix
-will be established with the remaining ticket requirements.
-
-React tests cover typed props, ref access, updates, idle sources,
-Strict Mode callback-ref cleanup, source replacement, unmount/remount and
-unmounting before component registration completes. They also verify callback
-replacement/removal and normalized errors.
-Both native MP4 and hls.js
-use real local media. React and React DOM are development dependencies for
-these tests; the published React wrapper keeps React external as a peer.
-
-GitHub Actions runs the same checks on pushes and pull requests, and retains
-the Playwright report for seven days. Failed tests retain traces.
-
-## Dependencies and releases
-
-Dependencies use `~` ranges to stay within a selected major/minor
-line. The committed `package-lock.json` fixes the full dependency tree, and CI
-uses `npm ci`. Dependency updates must pass the checks before adoption.
-
-The current `0.0.0` package is an unreleased development version. Public
-releases will use semantic versioning. Changelog and upgrade instructions must
-accompany the first release and subsequent public API changes. Publishing is a
-separate step; this repository does not configure automatic publication.
-
-Chunkify-authored code is licensed under [MIT](LICENSE). hls.js is a separate
-npm dependency under its own Apache-2.0 license. Media Chrome and the Demuxed 2022
-theme are separate MIT-licensed dependencies.
+Chunkify-authored code is licensed under [MIT](LICENSE). Runtime dependencies
+retain their own licenses.

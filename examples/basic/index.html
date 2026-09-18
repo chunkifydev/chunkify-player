@@ -6,15 +6,16 @@
     <title>Chunkify Player</title>
     <style>
       body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
-      label { display: inline-block; margin: 0 1rem 1rem 0; }
-      select { font: inherit; }
-      chunkify-player { margin: 1rem 0; }
+      chunkify-player { width: 100%; aspect-ratio: 16 / 9; margin: 1rem 0; }
     </style>
     <script type="importmap">
       {
         "imports": {
           "@chunkify/player": "../../packages/player/dist/index.js",
-          "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
+          "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
+          "custom-media-element": "../../node_modules/custom-media-element/dist/custom-media-element.js",
+          "media-tracks": "../../node_modules/media-tracks/dist/index.js",
+          "hls.js/": "../../node_modules/hls.js/",
           "@player.style/demuxed-2022": "../../node_modules/@player.style/demuxed-2022/dist/media-theme.js",
           "media-chrome": "../../node_modules/media-chrome/dist/index.js",
           "media-chrome/": "../../node_modules/media-chrome/"
@@ -24,45 +25,16 @@
   </head>
   <body>
     <h1>Chunkify Player</h1>
-    <p>A local six-second HLS test clip, using the Demuxed 2022 controls. Hover or drag the seek bar to preview frames.</p>
-    <label>Playback engine
-      <select id="engine">
-        <option value="auto">Auto</option>
-        <option value="native">Native</option>
-        <option value="hlsjs">hls.js</option>
-      </select>
-    </label>
-    <label>Video source
-      <select id="source">
-        <option value="loaded">Local clip</option>
-        <option value="empty">None</option>
-      </select>
-    </label>
-    <chunkify-player id="player"
+    <p>The component chooses HLS playback for the manifest and displays the Demuxed controls.</p>
+    <chunkify-player
       src="../../tests/fixtures/media/master.m3u8"
       poster="../../tests/fixtures/media/poster.jpg"
-      thumbnails="../../tests/fixtures/media/thumbnails/images.vtt" controls muted playsinline>
+      controls muted playsinline>
     </chunkify-player>
     <p id="module-status" role="status">Loading player package...</p>
-    <p id="playback-error" role="alert" hidden></p>
     <script type="module">
       import "@chunkify/player";
-
-      const player = document.querySelector("#player");
-      const error = document.querySelector("#playback-error");
       document.querySelector("#module-status").textContent = "Player package loaded.";
-      document.querySelector("#engine").addEventListener("change", (event) => {
-        error.hidden = true;
-        player.player = event.target.value;
-      });
-      document.querySelector("#source").addEventListener("change", (event) => {
-        error.hidden = true;
-        player.src = event.target.value === "loaded" ? "../../tests/fixtures/media/master.m3u8" : null;
-      });
-      player.addEventListener("playback-error", (event) => {
-        error.textContent = event.detail.message;
-        error.hidden = false;
-      });
     </script>
   </body>
 </html>

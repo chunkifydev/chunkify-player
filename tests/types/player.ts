@@ -1,43 +1,30 @@
-import type { PlaybackErrorDetail } from "../../packages/player/src/index.js";
+import "@chunkify/player";
 
 const player = document.createElement("chunkify-player");
-player.assetId = "asset-123";
-player.assetId = null;
-player.assetId = undefined;
-const assetId: string = player.assetId;
-console.log(assetId);
-// @ts-expect-error Asset IDs are strings.
-player.assetId = 123;
+
+player.src = "/master.m3u8";
+player.src = null;
+player.src = undefined;
 player.poster = "/poster.jpg";
 player.poster = null;
-player.poster = undefined;
-const poster: string = player.poster;
-console.log(poster);
-player.thumbnails = "/thumbnails/images.vtt";
-player.thumbnails = null;
-player.thumbnails = undefined;
-const thumbnails: string = player.thumbnails;
-console.log(thumbnails);
-player.credentials = "include";
-player.credentials = null;
-player.credentials = undefined;
-const credentials: "include" | null = player.credentials;
-console.log(credentials);
-// @ts-expect-error The component accepts only include or an omitted credential setting.
-player.credentials = "omit";
+player.preload = "metadata";
+player.crossOrigin = "anonymous";
+player.crossOrigin = null;
+player.autoplay = true;
+player.controls = true;
+player.loop = true;
+player.muted = true;
+player.playsInline = true;
 
-player.addEventListener("playback-error", (event) => {
-  const detail: PlaybackErrorDetail = event.detail;
-  console.log(detail.code, detail.engine);
-  // @ts-expect-error The public error contract must not expose source URLs.
-  event.detail.url;
-});
+const media: HTMLVideoElement = player.media;
+void media;
 
-const onPlaybackError = (event: CustomEvent<PlaybackErrorDetail>) => {
-  console.log(event.detail.message);
-};
-player.addEventListener("playback-error", onPlaybackError);
-player.removeEventListener("playback-error", onPlaybackError);
-
-// Native event overloads must remain available.
+player.addEventListener("play", (event) => console.log(event.currentTarget));
 player.addEventListener("click", (event) => console.log(event.clientX));
+
+// @ts-expect-error Engine selection is internal.
+player.player = "hlsjs";
+// @ts-expect-error Asset metadata belongs to the application.
+player.assetId = "asset-123";
+// @ts-expect-error Thumbnail loading is outside the thin wrapper.
+player.thumbnails = "/images.vtt";

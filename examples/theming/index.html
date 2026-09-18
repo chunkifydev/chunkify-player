@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chunkify Player theming</title>
+    <style>
+      body { max-width: 70rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; background: #f8fafc; color: #172033; }
+      .players { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 2rem; }
+      article { padding: 1rem; border: 1px solid #d7deea; border-radius: 1rem; background: white; }
+      chunkify-player { width: 100%; aspect-ratio: 16 / 9; }
+      .brand-player {
+        --chunkify-player-accent-color: #a78bfa;
+        --chunkify-player-control-color: #2e1065;
+        --chunkify-player-control-background: #f5f3ff;
+        --chunkify-player-font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+        --chunkify-player-border-radius: 18px;
+        --chunkify-player-progress-color: #c4b5fd;
+      }
+      .brand-player::part(media) { object-fit: cover; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@chunkify/player": "../../packages/player/dist/index.js",
+          "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
+          "custom-media-element": "../../node_modules/custom-media-element/dist/custom-media-element.js",
+          "media-tracks": "../../node_modules/media-tracks/dist/index.js",
+          "hls.js/": "../../node_modules/hls.js/",
+          "@player.style/demuxed-2022": "../../node_modules/@player.style/demuxed-2022/dist/media-theme.js",
+          "media-chrome": "../../node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "../../node_modules/media-chrome/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Player theming</h1>
+    <p>Both players use the Demuxed theme. The second changes the documented Chunkify CSS variables.</p>
+    <div class="players">
+      <article>
+        <h2>Default</h2>
+        <chunkify-player src="../../tests/fixtures/media/master.m3u8"
+          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline></chunkify-player>
+      </article>
+      <article>
+        <h2>Customer branding</h2>
+        <chunkify-player class="brand-player" src="../../tests/fixtures/media/master.m3u8"
+          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline></chunkify-player>
+      </article>
+    </div>
+    <script type="module">import "@chunkify/player";</script>
+  </body>
+</html>

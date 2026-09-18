@@ -1,332 +1,191 @@
-import type Hls from "hls.js";
-import { connectPlayerTheme, createPlayerTheme, refreshThumbnailPreview, setThumbnailCredentials } from "./theme.js";
-import { loadThumbnails } from "./thumbnails.js";
+import "hls-video-element";
+import { createPlayerTheme, syncPlayerTheme } from "./theme.js";
 
-export type PlayerEngine = "auto" | "native" | "hlsjs";
+export type ChunkifyMediaElement = HTMLVideoElement;
 
-const errorMessages = {
-  "invalid-source": "Provide a valid HTTP or HTTPS video URL.",
-  "invalid-player": "Use auto, native, or hlsjs for player.",
-  "invalid-credentials": "Use include for credentials, or omit the attribute.",
-  "unsupported-engine": "The selected playback engine is not supported by this browser.",
-  "unsupported-source": "The selected engine cannot play this media format.",
-  "engine-load-failed": "The playback engine could not load. Check your module configuration and connection.",
-  "network-error": "The video could not load. Check the source URL and access permissions.",
-  "decode-error": "The browser could not decode this video.",
-  "playback-failed": "Video playback failed.",
-};
+const mediaAttributes = [
+  "autoplay", "crossorigin", "loop", "muted", "playsinline", "poster", "preload", "src",
+] as const;
 
-export type PlaybackErrorCode = keyof typeof errorMessages;
-export interface PlaybackErrorDetail {
-  code: PlaybackErrorCode;
-  message: string;
-  engine: Exclude<PlayerEngine, "auto"> | null;
-}
+const playerAttributes = [...mediaAttributes, "controls"] as const;
 
-const mediaAttributes = ["autoplay", "muted", "loop", "playsinline", "controls"];
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
   "error", "loadeddata", "loadedmetadata", "loadstart", "pause", "play", "playing",
   "progress", "ratechange", "resize", "seeked", "seeking", "stalled", "suspend",
   "timeupdate", "volumechange", "waiting",
-];
+] as const;
+
+function isHlsSource(source: string): boolean {
+  if (!source) return false;
+  try {
+    return new URL(source, document.baseURI).pathname.toLowerCase().endsWith(".m3u8");
+  } catch {
+    return false;
+  }
+}
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = ["src", "poster", "thumbnails", "player", "credentials", ...mediaAttributes];
+  static observedAttributes = [...playerAttributes];
 
-  // Add payload inference without changing the browser's listener implementation.
-  declare addEventListener: ((
-    type: "playback-error",
-    listener: ((this: ChunkifyPlayer, event: CustomEvent<PlaybackErrorDetail>) => void) | null,
-    options?: boolean | AddEventListenerOptions,
-  ) => void) & HTMLElement["addEventListener"];
-
-  declare removeEventListener: ((
-    type: "playback-error",
-    listener: ((this: ChunkifyPlayer, event: CustomEvent<PlaybackErrorDetail>) => void) | null,
-    options?: boolean | EventListenerOptions,
-  ) => void) & HTMLElement["removeEventListener"];
-
-  #media: HTMLVideoElement;
+  #media: ChunkifyMediaElement;
   #theme: ReturnType<typeof createPlayerTheme>;
-  #fallback: HTMLDivElement;
-  #active = false;
-  #updatePending = false;
-  #generation = 0;
-  #hls: Hls | null = null;
-  #engine: Exclude<PlayerEngine, "auto"> | null = null;
-  #thumbnailCleanup: (() => void) | null = null;
+  #pendingHlsSource: number | undefined;
+  #forwardMediaEvent = (event: Event) => {
+    this.dispatchEvent(new Event(event.type));
+  };
 
   constructor() {
     super();
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>
-        :host { display: block; }
-        video { display: block; width: 100%; }
-        [hidden] { display: none !important; }
-      </style>
-      <video part="media" aria-label="Video player" hidden></video>
-      <div part="fallback" role="status"></div>
-    `;
-    this.#media = root.querySelector("video")!;
-    this.#fallback = root.querySelector("div")!;
-    this.#theme = createPlayerTheme();
-    root.insertBefore(this.#theme, this.#media);
-    this.#media.slot = "media";
-    this.#theme.append(this.#media);
-    for (const event of mediaEvents) {
-      this.#media.addEventListener(event, () => {
-        if (!this.#active) return;
-        this.dispatchEvent(new Event(event));
-        if (event === "error" && this.#media.error) {
-          const code = this.#media.error.code;
-          this.#fail(code === 2 ? "network-error" : code === 3 ? "decode-error"
-            : code === 4 ? "unsupported-source" : "playback-failed");
+        :host {
+          display: block;
+          overflow: hidden;
+          border-radius: var(--chunkify-player-border-radius, 0);
         }
-      });
-    }
+        video, hls-video { display: block; width: 100%; height: 100%; }
+      </style>
+    `;
+    this.#theme = createPlayerTheme();
+    this.#media = this.#createMedia("video");
+    this.#theme.append(this.#media);
+    root.append(this.#theme);
   }
 
-  get media(): HTMLVideoElement {
+  get media(): ChunkifyMediaElement {
     return this.#media;
   }
 
-  // Passive context: changing an asset ID must not restart playback.
-  get assetId(): string {
-    return this.getAttribute("asset-id") ?? "";
-  }
-  set assetId(value: string | null | undefined) {
-    this.#setStringAttribute("asset-id", value);
-  }
+  get src(): string { return this.getAttribute("src") ?? ""; }
+  set src(value: string | null | undefined) { this.#setStringAttribute("src", value); }
 
-  get src(): string {
-    return this.getAttribute("src") ?? "";
-  }
-  set src(value: string | null | undefined) {
-    this.#setStringAttribute("src", value);
-  }
+  get poster(): string { return this.getAttribute("poster") ?? ""; }
+  set poster(value: string | null | undefined) { this.#setStringAttribute("poster", value); }
 
-  get poster(): string {
-    return this.getAttribute("poster") ?? "";
-  }
-  set poster(value: string | null | undefined) {
-    this.#setStringAttribute("poster", value);
-  }
+  get preload(): string { return this.getAttribute("preload") ?? "metadata"; }
+  set preload(value: string | null | undefined) { this.#setStringAttribute("preload", value); }
 
-  get thumbnails(): string {
-    return this.getAttribute("thumbnails") ?? "";
-  }
-  set thumbnails(value: string | null | undefined) {
-    this.#setStringAttribute("thumbnails", value);
-  }
-
-  get credentials(): "include" | null {
-    return this.getAttribute("credentials") === "include" ? "include" : null;
-  }
-  set credentials(value: "include" | null | undefined) {
-    this.#setStringAttribute("credentials", value);
-  }
-
-  get player(): PlayerEngine {
-    const value = this.getAttribute("player");
-    return value === "native" || value === "hlsjs" ? value : "auto";
-  }
-  set player(value: PlayerEngine) {
-    this.setAttribute("player", value);
-  }
+  get crossOrigin(): string | null { return this.getAttribute("crossorigin"); }
+  set crossOrigin(value: string | null | undefined) { this.#setStringAttribute("crossorigin", value); }
 
   get autoplay(): boolean { return this.hasAttribute("autoplay"); }
   set autoplay(value: boolean) { this.toggleAttribute("autoplay", value); }
-  get muted(): boolean { return this.hasAttribute("muted"); }
-  set muted(value: boolean) { this.toggleAttribute("muted", value); }
-  get loop(): boolean { return this.hasAttribute("loop"); }
-  set loop(value: boolean) { this.toggleAttribute("loop", value); }
-  get playsInline(): boolean { return this.hasAttribute("playsinline"); }
-  set playsInline(value: boolean) { this.toggleAttribute("playsinline", value); }
+
   get controls(): boolean { return this.hasAttribute("controls"); }
   set controls(value: boolean) { this.toggleAttribute("controls", value); }
+
+  get loop(): boolean { return this.hasAttribute("loop"); }
+  set loop(value: boolean) { this.toggleAttribute("loop", value); }
+
+  get muted(): boolean { return this.hasAttribute("muted"); }
+  set muted(value: boolean) { this.toggleAttribute("muted", value); }
+
+  get playsInline(): boolean { return this.hasAttribute("playsinline"); }
+  set playsInline(value: boolean) { this.toggleAttribute("playsinline", value); }
+
+  connectedCallback() {
+    for (const name of [
+      "src", "poster", "preload", "crossOrigin", "autoplay", "controls", "loop", "muted", "playsInline",
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
+      const value: unknown = Reflect.get(this, name);
+      Reflect.deleteProperty(this, name);
+      Reflect.set(this, name, value);
+    }
+    this.#syncMedia();
+  }
+
+  disconnectedCallback() {
+    this.#cancelPendingHlsSource();
+    this.#clearMedia(this.#media);
+  }
+
+  attributeChangedCallback(name: typeof playerAttributes[number], oldValue: string | null, value: string | null) {
+    if (this.isConnected && oldValue !== value) this.#syncMedia(name);
+  }
 
   #setStringAttribute(name: string, value: string | null | undefined) {
     if (value == null) this.removeAttribute(name);
     else this.setAttribute(name, value);
   }
 
-  connectedCallback() {
-    // Preserve properties assigned before the custom element was registered.
-    for (const name of ["assetId", "src", "poster", "thumbnails", "player", "credentials", "autoplay", "muted", "loop", "playsInline", "controls"]) {
-      if (Object.prototype.hasOwnProperty.call(this, name)) {
-        const value: unknown = Reflect.get(this, name);
-        Reflect.deleteProperty(this, name);
-        Reflect.set(this, name, value);
-      }
-    }
-    for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
-    connectPlayerTheme(this.#theme);
-    this.#scheduleUpdate();
+  #createMedia(tagName: "video" | "hls-video"): ChunkifyMediaElement {
+    const media = document.createElement(tagName) as ChunkifyMediaElement;
+    media.setAttribute("part", "media");
+    media.setAttribute("slot", "media");
+    media.setAttribute("aria-label", "Video player");
+    for (const event of mediaEvents) media.addEventListener(event, this.#forwardMediaEvent);
+    return media;
   }
 
-  disconnectedCallback() {
-    this.#stop();
+  #clearMedia(media: ChunkifyMediaElement) {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
   }
 
-  attributeChangedCallback(name: string, oldValue: string | null, value: string | null) {
-    if (oldValue === value) return;
-    if (name === "poster") {
-      this.#syncPoster();
-    } else if (name === "thumbnails") {
-      this.#syncThumbnails();
-    } else if (mediaAttributes.includes(name)) {
-      this.#syncMediaAttribute(name);
-    } else if (this.isConnected) {
-      this.#stop();
-      this.#scheduleUpdate();
-    }
+  #cancelPendingHlsSource() {
+    if (this.#pendingHlsSource === undefined) return;
+    clearTimeout(this.#pendingHlsSource);
+    this.#pendingHlsSource = undefined;
   }
 
-  #syncMediaAttribute(name: string) {
-    if (name === "controls") {
-      this.#theme.toggleAttribute("controls", this.controls);
-      this.#theme.toggleAttribute("disabled", !this.controls);
-      this.#theme.toggleAttribute("nohotkeys", !this.controls);
-      this.#theme.render();
-      return;
-    }
-    this.#media.toggleAttribute(name, this.hasAttribute(name));
-    if (name === "muted") this.#media.muted = this.hasAttribute(name);
-  }
+  #syncMediaAttribute(attribute: typeof mediaAttributes[number]) {
+    const value = this.getAttribute(attribute);
+    const currentValue = this.#media.getAttribute(attribute);
 
-  #syncPoster() {
-    const poster = this.poster.trim();
-    if (this.#active && this.isConnected && poster) this.#media.setAttribute("poster", poster);
-    else this.#media.removeAttribute("poster");
-  }
-
-  #syncThumbnails() {
-    this.#thumbnailCleanup?.();
-    this.#thumbnailCleanup = null;
-    refreshThumbnailPreview(this.#theme);
-    const source = this.thumbnails.trim();
-    if (this.#active && this.isConnected && source) {
-      this.#thumbnailCleanup = loadThumbnails(this.#media, source, this.credentials ?? "same-origin",
-        () => refreshThumbnailPreview(this.#theme));
-    }
-  }
-
-  #scheduleUpdate() {
-    if (this.#updatePending) return;
-    this.#updatePending = true;
-    queueMicrotask(() => {
-      this.#updatePending = false;
-      if (this.isConnected) void this.#render();
-    });
-  }
-
-  #stop() {
-    this.#generation++;
-    this.#active = false;
-    this.#theme.hidden = true;
-    this.#syncPoster();
-    this.#syncThumbnails();
-    this.#hls?.destroy();
-    this.#hls = null;
-    this.#engine = null;
-    if (this.#media.hasAttribute("src")) {
-      this.#media.pause();
-      this.#media.removeAttribute("src");
-      this.#media.load();
-    }
-  }
-
-  async #render() {
-    const generation = this.#generation;
-    this.#media.hidden = true;
-    this.#theme.hidden = true;
-    this.#fallback.hidden = false;
-    const src = this.getAttribute("src")?.trim();
-    if (!src) {
-      this.#fallback.textContent = "No video source provided.";
-      return;
-    }
-    let url: URL;
-    try {
-      url = new URL(src, this.baseURI);
-      if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
-    } catch {
-      this.#fail("invalid-source");
-      return;
-    }
-    const player = this.getAttribute("player") ?? "auto";
-    if (player !== "auto" && player !== "native" && player !== "hlsjs") {
-      this.#fail("invalid-player");
-      return;
-    }
-    if (this.hasAttribute("credentials") && this.credentials === null) {
-      this.#fail("invalid-credentials");
-      return;
-    }
-    const isMp4 = url.pathname.toLowerCase().endsWith(".mp4");
-    const nativeHls = Boolean(this.#media.canPlayType("application/vnd.apple.mpegurl"));
-    const useNative = player === "native" || (player === "auto" && (isMp4 || nativeHls));
-    if (this.credentials === "include") this.#media.crossOrigin = "use-credentials";
-    // Chromium's native HLS byte-range reads require CORS for cross-origin media.
-    else if (useNative && !isMp4) this.#media.crossOrigin = "anonymous";
-    else this.#media.removeAttribute("crossorigin");
-    setThumbnailCredentials(this.#theme, this.credentials === "include");
-    this.#fallback.hidden = true;
-    this.#media.hidden = false;
-    this.#theme.hidden = false;
-    this.#active = true;
-    this.#syncPoster();
-    if (useNative) {
-      this.#engine = "native";
-      if (!isMp4 && !nativeHls) {
-        this.#fail("unsupported-engine");
-        return;
-      }
-      this.#media.src = url.href;
-      this.#syncThumbnails();
-      return;
-    }
-    this.#engine = "hlsjs";
-    if (isMp4) {
-      this.#fail("unsupported-source");
-      return;
-    }
-    try {
-      const { default: Hls } = await import("hls.js");
-      if (generation !== this.#generation || !this.isConnected) return;
-      if (!Hls.isSupported()) {
-        this.#fail("unsupported-engine");
-        return;
-      }
-      const includeCredentials = this.credentials === "include";
-      const hls = new Hls({
-        xhrSetup: (xhr) => { xhr.withCredentials = includeCredentials; },
+    if (attribute === "src" && this.#media.localName === "hls-video") {
+      this.#cancelPendingHlsSource();
+      if (currentValue !== null) this.#media.removeAttribute("src");
+      if (value === null) return;
+      const media = this.#media;
+      this.#pendingHlsSource = window.setTimeout(() => {
+        this.#pendingHlsSource = undefined;
+        if (this.isConnected && this.#media === media && this.src === value) {
+          media.setAttribute("src", value);
+        }
       });
-      this.#hls = hls;
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal || generation !== this.#generation) return;
-        this.#fail(data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR ? "unsupported-source"
-          : data.type === Hls.ErrorTypes.NETWORK_ERROR ? "network-error"
-          : data.type === Hls.ErrorTypes.MEDIA_ERROR ? "decode-error" : "playback-failed");
-      });
-      hls.attachMedia(this.#media);
-      hls.loadSource(url.href);
-      this.#syncThumbnails();
-    } catch {
-      if (generation !== this.#generation || !this.isConnected) return;
-      this.#fail("engine-load-failed");
+      return;
     }
+
+    if (value === null) {
+      if (currentValue === null) return;
+      if (attribute === "src") this.#clearMedia(this.#media);
+      else {
+        this.#media.removeAttribute(attribute);
+        if (attribute === "muted") this.#media.muted = false;
+      }
+      return;
+    }
+    if (currentValue !== value) this.#media.setAttribute(attribute, value);
+    if (attribute === "muted") this.#media.muted = this.muted;
   }
 
-  #fail(code: PlaybackErrorCode) {
-    const detail: PlaybackErrorDetail = { code, message: errorMessages[code], engine: this.#engine };
-    this.#stop();
-    this.#media.hidden = true;
-    this.#fallback.hidden = false;
-    this.#fallback.textContent = detail.message;
-    this.dispatchEvent(new CustomEvent<PlaybackErrorDetail>("playback-error", { detail }));
+  #syncMedia(changedAttribute?: typeof playerAttributes[number]) {
+    const tagName = isHlsSource(this.src) ? "hls-video" : "video";
+    let replaced = false;
+    if (this.#media.localName !== tagName) {
+      this.#cancelPendingHlsSource();
+      for (const event of mediaEvents) this.#media.removeEventListener(event, this.#forwardMediaEvent);
+      const previous = this.#media;
+      this.#clearMedia(previous);
+      this.#media = this.#createMedia(tagName);
+      previous.replaceWith(this.#media);
+      replaced = true;
+    }
+
+    if (replaced || changedAttribute === undefined) {
+      for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
+      this.#media.muted = this.muted;
+    } else if (changedAttribute !== "controls") {
+      this.#syncMediaAttribute(changedAttribute);
+    }
+    if (!this.hasAttribute("preload")) this.#media.preload = "metadata";
+    if (replaced || changedAttribute === undefined || changedAttribute === "controls") {
+      syncPlayerTheme(this.#theme, this.controls);
+    }
   }
 }
 
