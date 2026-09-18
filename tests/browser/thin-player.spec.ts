@@ -91,6 +91,28 @@ test("exposes stable theme variables and CSS parts", async ({ page }) => {
   })).toEqual({ radius: "18px", accent: "rgb(167, 139, 250)", mediaPart: "media", themePart: "theme" });
 });
 
+test("keeps the theme and controls inside a fixed player box", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player controls
+      style="display:block;width:400px;height:225px"></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const playerBounds = element.getBoundingClientRect();
+    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const controlBar = theme?.shadowRoot?.querySelector("media-control-bar");
+    const themeBounds = theme?.getBoundingClientRect();
+    const controlBounds = controlBar?.getBoundingClientRect();
+    return {
+      themeHeight: themeBounds?.height,
+      playerHeight: playerBounds.height,
+      controlsInside: Boolean(controlBounds
+        && controlBounds.top >= playerBounds.top
+        && controlBounds.bottom <= playerBounds.bottom),
+    };
+  })).toEqual({ themeHeight: 225, playerHeight: 225, controlsInside: true });
+});
+
 for (const source of ["/tests/fixtures/media/master.m3u8", "/tests/fixtures/media/video.mp4"]) {
   test(`clearing ${source.endsWith("m3u8") ? "HLS" : "MP4"} stops playback and leaves an idle video`, async ({ page }) => {
     await page.evaluate((source) => {

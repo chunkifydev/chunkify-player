@@ -69,7 +69,13 @@ export class ChunkifyPlayer extends HTMLElement {
           overflow: hidden;
           border-radius: var(--chunkify-player-border-radius, 0);
         }
-        video, hls-video { display: block; width: 100%; height: 100%; }
+        media-theme-demuxed-2022,
+        video,
+        hls-video {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
       </style>
     `;
     this.#theme = createPlayerTheme();
