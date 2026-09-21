@@ -24,10 +24,10 @@ function Video({ src }: { src: string }) {
 
 Playback props are `src`, `poster`, `preload`, `crossOrigin`, `credentials`,
 `theme`, `primaryColor`, `secondaryColor`, `accentColor`, `autoPlay`, `muted`,
-`loop`, `playsInline`, `controls`, and `noAutoSeekToLive`. Set
-`noAutoSeekToLive` to preserve the current position when live playback starts.
-Set `credentials` to `"include"` after the application backend has set a signed
-playback cookie.
+`loop`, `playsInline`, `controls`, and `autoSeekToLive`. The player preserves the
+current position when live playback starts by default. Set `autoSeekToLive` to
+opt into an automatic seek to the live edge. Set `credentials` to `"include"`
+after the application backend has set a signed playback cookie.
 Standard host props such as `className`, `style`, `id`, and ARIA attributes apply
 to the custom element.
 

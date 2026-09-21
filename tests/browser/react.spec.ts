@@ -136,19 +136,35 @@ test("React forwards private-playback options and errors", async ({ page }) => {
 });
 
 test("React forwards the live auto-seek preference", async ({ page }) => {
-  await page.evaluate(() => window.reactFixture.render({ noAutoSeekToLive: true }));
+  await page.evaluate(() => window.reactFixture.render({}));
   const player = page.locator("chunkify-player");
-  await expect(player).toHaveAttribute("noautoseektolive");
+  await expect(player).not.toHaveAttribute("autoseektolive");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
     const theme = element.shadowRoot?.querySelector("[part=theme]");
     return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
   })).toBe(true);
 
-  await page.evaluate(() => window.reactFixture.render({ noAutoSeekToLive: false }));
-  await expect(player).not.toHaveAttribute("noautoseektolive");
+  await page.evaluate(() => window.reactFixture.render({ autoSeekToLive: true }));
+  await expect(player).toHaveAttribute("autoseektolive");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
+    return {
+      property: element.autoSeekToLive,
+      controller: theme?.shadowRoot?.querySelector("media-controller")
+        ?.hasAttribute("noautoseektolive"),
+    };
+  })).toEqual({ property: true, controller: false });
 
   await page.evaluate(() => window.reactFixture.render({}));
-  await expect(player).not.toHaveAttribute("noautoseektolive");
+  await expect(player).not.toHaveAttribute("autoseektolive");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
+    return {
+      property: element.autoSeekToLive,
+      controller: theme?.shadowRoot?.querySelector("media-controller")
+        ?.hasAttribute("noautoseektolive"),
+    };
+  })).toEqual({ property: false, controller: true });
 });
 
 test("React forwards the selected theme", async ({ page }) => {

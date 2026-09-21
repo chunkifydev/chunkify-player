@@ -147,22 +147,27 @@ test("maps public colors to Media Chrome and exposes CSS parts", async ({ page }
   })).toBe("");
 });
 
-test("forwards the live auto-seek preference to Media Chrome", async ({ page }) => {
+test("disables automatic live seeking by default and supports an explicit opt-in", async ({ page }) => {
   await page.evaluate(() => {
-    document.body.innerHTML = "<chunkify-player noautoseektolive></chunkify-player>";
+    document.body.innerHTML = "<chunkify-player></chunkify-player>";
   });
   const player = page.locator("chunkify-player");
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("[part=theme]");
-    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
-  })).toBe(true);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => ({
+    property: element.autoSeekToLive,
+    controller: element.shadowRoot?.querySelector("[part=theme]")
+      ?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive"),
+  }))).toEqual({ property: false, controller: true });
 
-  await player.evaluate((element: ChunkifyPlayer) => { element.noAutoSeekToLive = false; });
-  await expect(player).not.toHaveAttribute("noautoseektolive");
+  await player.evaluate((element: ChunkifyPlayer) => { element.autoSeekToLive = true; });
+  await expect(player).toHaveAttribute("autoseektolive");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
     const theme = element.shadowRoot?.querySelector("[part=theme]");
-    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
-  })).toBe(false);
+    return {
+      property: element.autoSeekToLive,
+      controller: theme?.shadowRoot?.querySelector("media-controller")
+        ?.hasAttribute("noautoseektolive"),
+    };
+  })).toEqual({ property: true, controller: false });
 });
 
 test("keeps the theme and controls inside a fixed player box", async ({ page }) => {

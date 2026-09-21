@@ -34,7 +34,7 @@
   </head>
   <body>
     <h1>Player theming</h1>
-    <p>Both players use the Demuxed theme. The second uses the public colors and advanced CSS parts.</p>
+    <p>Both players use the Demuxed theme. The second uses public colors, advanced CSS parts, and an inline variable that hides Picture in Picture.</p>
     <div class="players">
       <article>
         <h2>Default</h2>
@@ -48,6 +48,7 @@
         <h2>Customer branding</h2>
         <chunkify-player class="brand-player"
           primary-color="#700cd4" secondary-color="#bb1111" accent-color="#cf2626"
+          style="--media-pip-button-display: none"
           src="../../tests/fixtures/media/master.m3u8"
           poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
           <track default kind="metadata" label="thumbnails"

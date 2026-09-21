@@ -32,7 +32,7 @@ const mediaAttributes = [
 ] as const;
 
 const themeAttributes = [
-  "controls", "noautoseektolive", "primary-color", "secondary-color", "accent-color",
+  "controls", "autoseektolive", "primary-color", "secondary-color", "accent-color",
 ] as const;
 
 const playerAttributes = [...mediaAttributes, ...themeAttributes, "credentials", "theme"] as const;
@@ -200,8 +200,8 @@ export class ChunkifyPlayer extends HTMLElement {
   get muted(): boolean { return this.hasAttribute("muted"); }
   set muted(value: boolean) { this.toggleAttribute("muted", value); }
 
-  get noAutoSeekToLive(): boolean { return this.hasAttribute("noautoseektolive"); }
-  set noAutoSeekToLive(value: boolean) { this.toggleAttribute("noautoseektolive", value); }
+  get autoSeekToLive(): boolean { return this.hasAttribute("autoseektolive"); }
+  set autoSeekToLive(value: boolean) { this.toggleAttribute("autoseektolive", value); }
 
   get playsInline(): boolean { return this.hasAttribute("playsinline"); }
   set playsInline(value: boolean) { this.toggleAttribute("playsinline", value); }
@@ -209,7 +209,7 @@ export class ChunkifyPlayer extends HTMLElement {
   connectedCallback() {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
-      "noAutoSeekToLive", "playsInline", "theme", "primaryColor", "secondaryColor", "accentColor",
+      "autoSeekToLive", "playsInline", "theme", "primaryColor", "secondaryColor", "accentColor",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -464,7 +464,7 @@ export class ChunkifyPlayer extends HTMLElement {
     if (!this.hasAttribute("preload")) this.#media.preload = "metadata";
     if (replaced || changedAttribute === undefined || changedAttribute === "theme"
       || isThemeAttribute(changedAttribute)) {
-      syncPlayerTheme(this.#theme, this.controls, this.noAutoSeekToLive, {
+      syncPlayerTheme(this.#theme, this.controls, !this.autoSeekToLive, {
         primary: this.getAttribute("primary-color"),
         secondary: this.getAttribute("secondary-color"),
         accent: this.getAttribute("accent-color"),
