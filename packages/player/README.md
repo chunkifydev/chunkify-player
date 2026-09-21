@@ -94,6 +94,19 @@ The application remains responsible for creating, refreshing, and revoking
 tokens and cookies. The player does not provide DRM or bypass browser cookie
 restrictions.
 
+To run the private-playback browser tests locally, stop any existing server on
+port `4173`, build the packages, and run the focused Playwright suite:
+
+```sh
+npm run build
+npx playwright test tests/browser/private-playback.spec.ts
+```
+
+Add `--project=chromium` to test only Chromium. The full suite tests Chromium,
+Firefox, and WebKit. It covers cookie forwarding through native playback and
+hls.js, HLS child manifests and byte ranges, unchanged path-token URLs, denied
+access, and recovery with a replacement source.
+
 ## Tracks
 
 Add direct-child `<track>` elements for captions, subtitles, chapters, or
@@ -110,9 +123,19 @@ between HLS and ordinary video.
 ```
 
 Use `kind="metadata"` and `label="thumbnails"` for Media Chrome seek previews.
-Remote WebVTT files must allow CORS, and cross-origin tracks may require a matching
-`crossorigin` setting on the player. Read active tracks through
-`player.media.textTracks`.
+The VTT file and every sprite image referenced by it must be accessible from the
+page:
+
+- Same-origin thumbnail files need no `crossorigin` attribute.
+- Public cross-origin thumbnail files require `crossorigin="anonymous"` and an
+  `Access-Control-Allow-Origin` response header from the media server.
+- Cookie-protected cross-origin thumbnail files require `credentials="include"`,
+  `Access-Control-Allow-Credentials: true`, and an explicit
+  `Access-Control-Allow-Origin` value matching the page origin. Do not also set
+  `crossorigin="anonymous"`; the player uses `use-credentials` internally.
+
+A different scheme, hostname, or port makes a URL cross-origin. Read active
+tracks through `player.media.textTracks`.
 
 ## Controls and customization
 
