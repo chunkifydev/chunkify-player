@@ -169,6 +169,30 @@ The attributes set `--media-primary-color`, `--media-secondary-color`, and
 `--media-accent-color` on the theme. Remove an attribute to restore the Demuxed
 default for that color.
 
+The bundled Demuxed theme exposes Mux-style player variables for selectively
+hiding its buttons. Set a variable to `none` on the player:
+
+```html
+<chunkify-player
+  style="--pip-button: none; --captions-button: none"
+  src="/master.m3u8"
+  controls
+></chunkify-player>
+```
+
+| Variable | Control |
+| --- | --- |
+| `--play-button` | Center and control-bar play buttons |
+| `--mute-button` | Mute button |
+| `--captions-button` | Captions button |
+| `--pip-button` | Picture-in-Picture button |
+| `--fullscreen-button` | Fullscreen button |
+| `--airplay-button` | AirPlay button |
+| `--cast-button` | Cast button |
+
+These variables are part of Chunkify's bundled-theme contract. A custom theme
+must map them to its own controls if it wants to support the same interface.
+
 For advanced styling, use ordinary CSS on the player and Media Chrome variables
 through the `theme` part:
 
@@ -187,12 +211,13 @@ through the `theme` part:
 }
 ```
 
-Use either the color attributes or the corresponding `--media-*` colors on the
-`theme` part. Following the shadow-DOM cascade, a color set through the part
-overrides the matching attribute. The component exposes `theme` and `media` as
-its supported CSS parts. Removing the `controls` attribute hides the complete
-control interface. Selectively hiding individual buttons is not currently part
-of the supported API.
+The bundled theme supports the range variables shown above. Other Media Chrome
+variables may be overridden by a theme's layout and are not part of Chunkify's
+public contract. Use either the color attributes or the corresponding
+`--media-*` colors on the `theme` part. Following the shadow-DOM cascade, a color
+set through the part overrides the matching attribute. The component exposes
+`theme` and `media` as its supported CSS parts. Removing the `controls`
+attribute hides the complete control interface.
 
 ### Custom themes
 

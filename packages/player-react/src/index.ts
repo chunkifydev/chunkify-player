@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type DOMAttributes,
   type HTMLAttributes,
   type ReactElement,
@@ -58,7 +59,20 @@ type MediaCallbacks = {
     ? PlayerPlaybackErrorEvent
     : PlayerMediaEvent) => void) | undefined;
 };
-type HostProps = Omit<HTMLAttributes<PlayerElement>, keyof DOMAttributes<PlayerElement>>;
+
+export type ChunkifyPlayerStyle = CSSProperties & {
+  "--play-button"?: CSSProperties["display"] | undefined;
+  "--mute-button"?: CSSProperties["display"] | undefined;
+  "--captions-button"?: CSSProperties["display"] | undefined;
+  "--pip-button"?: CSSProperties["display"] | undefined;
+  "--fullscreen-button"?: CSSProperties["display"] | undefined;
+  "--airplay-button"?: CSSProperties["display"] | undefined;
+  "--cast-button"?: CSSProperties["display"] | undefined;
+};
+type HostProps = Omit<
+  HTMLAttributes<PlayerElement>,
+  keyof DOMAttributes<PlayerElement> | "style"
+> & { style?: ChunkifyPlayerStyle | undefined };
 
 export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   children?: ReactNode | undefined;

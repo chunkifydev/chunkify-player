@@ -6,7 +6,8 @@ const ref = createRef<ChunkifyPlayerRef>();
   crossOrigin="anonymous" credentials="include" autoPlay muted loop playsInline controls
   autoSeekToLive theme="demuxed"
   primaryColor="#700cd4" secondaryColor="#bb1111" accentColor="#cf2626"
-  className="video" style={{ width: "100%" }} aria-label="Product video" />;
+  className="video" style={{ width: "100%", "--pip-button": "none" }}
+  aria-label="Product video" />;
 <ChunkifyPlayer src={null} />;
 <ChunkifyPlayer />;
 <ChunkifyPlayer src="/master.m3u8" controls>

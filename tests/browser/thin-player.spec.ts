@@ -147,6 +147,69 @@ test("maps public colors to Media Chrome and exposes CSS parts", async ({ page }
   })).toBe("");
 });
 
+test("the bundled theme supports player-level control visibility variables", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player controls
+      style="display:block;width:800px;height:450px"></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
+    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("breakpointsm");
+  })).toBe(true);
+
+  const displayedControls = async () => player.evaluate((element: ChunkifyPlayer) => {
+    const root = element.shadowRoot?.querySelector("[part=theme]")?.shadowRoot;
+    const displays = (selector: string) => Array.from(root?.querySelectorAll<HTMLElement>(selector) ?? [])
+      .map((control) => getComputedStyle(control).display);
+    return {
+      play: displays("media-play-button"),
+      mute: displays("media-mute-button"),
+      captions: displays("media-captions-button"),
+      pip: displays("media-pip-button"),
+      fullscreen: displays("media-fullscreen-button"),
+      airplay: displays("media-airplay-button"),
+      cast: displays("media-cast-button"),
+    };
+  });
+
+  const defaults = await displayedControls();
+  expect(defaults.play).toEqual(["flex", "flex"]);
+  expect(defaults.mute).toEqual(["flex"]);
+  expect(defaults.pip).toEqual(["flex"]);
+  expect(defaults.fullscreen).toEqual(["flex"]);
+
+  await player.evaluate((element) => {
+    for (const name of ["play", "mute", "captions", "pip", "fullscreen", "airplay", "cast"] as const) {
+      element.style.setProperty(`--${name}-button`, "none");
+    }
+  });
+  await expect.poll(displayedControls).toEqual({
+    play: ["none", "none"],
+    mute: ["none"],
+    captions: ["none"],
+    pip: ["none"],
+    fullscreen: ["none"],
+    airplay: ["none"],
+    cast: ["none"],
+  });
+
+  await player.evaluate((element) => { element.style.width = "400px"; });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
+    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("breakpointsm");
+  })).toBe(false);
+  await expect.poll(displayedControls).toEqual({
+    play: ["none", "none"],
+    mute: ["none"],
+    captions: ["none"],
+    pip: ["none"],
+    fullscreen: ["none"],
+    airplay: ["none"],
+    cast: ["none"],
+  });
+});
+
 test("disables automatic live seeking by default and supports an explicit opt-in", async ({ page }) => {
   await page.evaluate(() => {
     document.body.innerHTML = "<chunkify-player></chunkify-player>";

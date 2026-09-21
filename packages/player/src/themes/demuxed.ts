@@ -53,6 +53,34 @@ export const demuxedThemeMarkup = String.raw`
     border-radius: 9999px;
   }
 
+  media-cast-button.small-button {
+    display: var(--cast-button, flex);
+  }
+
+  media-airplay-button.small-button {
+    display: var(--airplay-button, flex);
+  }
+
+  media-play-button.small-button {
+    display: var(--play-button, flex);
+  }
+
+  media-mute-button.small-button {
+    display: var(--mute-button, flex);
+  }
+
+  media-captions-button.small-button {
+    display: var(--captions-button, flex);
+  }
+
+  media-pip-button.small-button {
+    display: var(--pip-button, flex);
+  }
+
+  media-fullscreen-button.small-button {
+    display: var(--fullscreen-button, flex);
+  }
+
   .small-button svg {
     position: absolute;
     overflow: hidden;
@@ -69,7 +97,7 @@ export const demuxedThemeMarkup = String.raw`
   div[slot="centered-chrome"] media-play-button {
     position: relative;
     flex: none;
-    display: flex;
+    display: var(--play-button, flex);
     margin-bottom: 10px;
     align-items: center;
     justify-items: center;
@@ -192,12 +220,19 @@ export const demuxedThemeMarkup = String.raw`
   }
 
   media-controller:not([breakpointsm]) div[slot="top-chrome"] .small-button {
-    display: flex;
     margin: 22px 7px;
   }
 
+  media-controller:not([breakpointsm]) div[slot="top-chrome"] media-cast-button.small-button {
+    display: var(--cast-button, flex);
+  }
+
+  media-controller:not([breakpointsm]) div[slot="top-chrome"] media-airplay-button.small-button {
+    display: var(--airplay-button, flex);
+  }
+
   media-controller:not([breakpointsm]) media-fullscreen-button.small-button {
-    display: flex;
+    display: var(--fullscreen-button, flex);
   }
 
   media-controller:not([breakpointsm]) media-airplay-button[mediaairplayunavailable].small-button {
@@ -209,7 +244,7 @@ export const demuxedThemeMarkup = String.raw`
   }
 
   media-controller:not([breakpointsm]) media-mute-button.small-button {
-    display: flex;
+    display: var(--mute-button, flex);
   }
 
   media-controller:not([breakpointsm]) media-captions-button.small-button {
