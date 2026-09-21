@@ -24,7 +24,11 @@ const mediaAttributes = [
   "autoplay", "crossorigin", "loop", "muted", "playsinline", "poster", "preload", "src",
 ] as const;
 
-const playerAttributes = [...mediaAttributes, "controls", "credentials", "noautoseektolive"] as const;
+const themeAttributes = [
+  "controls", "noautoseektolive", "primary-color", "secondary-color", "accent-color",
+] as const;
+
+const playerAttributes = [...mediaAttributes, ...themeAttributes, "credentials"] as const;
 
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -40,6 +44,18 @@ function isHlsSource(source: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isMediaAttribute(
+  attribute: typeof playerAttributes[number],
+): attribute is typeof mediaAttributes[number] {
+  return (mediaAttributes as readonly string[]).includes(attribute);
+}
+
+function isThemeAttribute(
+  attribute: typeof playerAttributes[number],
+): attribute is typeof themeAttributes[number] {
+  return (themeAttributes as readonly string[]).includes(attribute);
 }
 
 export class ChunkifyPlayer extends HTMLElement {
@@ -113,7 +129,6 @@ export class ChunkifyPlayer extends HTMLElement {
         :host {
           display: block;
           overflow: hidden;
-          border-radius: var(--chunkify-player-border-radius, 0);
         }
         media-theme-demuxed-2022,
         video,
@@ -153,6 +168,15 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("credentials", value);
   }
 
+  get primaryColor(): string { return this.getAttribute("primary-color") ?? ""; }
+  set primaryColor(value: string | null | undefined) { this.#setStringAttribute("primary-color", value); }
+
+  get secondaryColor(): string { return this.getAttribute("secondary-color") ?? ""; }
+  set secondaryColor(value: string | null | undefined) { this.#setStringAttribute("secondary-color", value); }
+
+  get accentColor(): string { return this.getAttribute("accent-color") ?? ""; }
+  set accentColor(value: string | null | undefined) { this.#setStringAttribute("accent-color", value); }
+
   get autoplay(): boolean { return this.hasAttribute("autoplay"); }
   set autoplay(value: boolean) { this.toggleAttribute("autoplay", value); }
 
@@ -174,7 +198,7 @@ export class ChunkifyPlayer extends HTMLElement {
   connectedCallback() {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
-      "noAutoSeekToLive", "playsInline",
+      "noAutoSeekToLive", "playsInline", "primaryColor", "secondaryColor", "accentColor",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -409,14 +433,16 @@ export class ChunkifyPlayer extends HTMLElement {
     if (replaced || changedAttribute === undefined) {
       for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
       this.#media.muted = this.muted;
-    } else if (changedAttribute !== "controls" && changedAttribute !== "credentials"
-      && changedAttribute !== "noautoseektolive") {
+    } else if (isMediaAttribute(changedAttribute)) {
       this.#syncMediaAttribute(changedAttribute);
     }
     if (!this.hasAttribute("preload")) this.#media.preload = "metadata";
-    if (replaced || changedAttribute === undefined || changedAttribute === "controls"
-      || changedAttribute === "noautoseektolive") {
-      syncPlayerTheme(this.#theme, this.controls, this.noAutoSeekToLive);
+    if (replaced || changedAttribute === undefined || isThemeAttribute(changedAttribute)) {
+      syncPlayerTheme(this.#theme, this.controls, this.noAutoSeekToLive, {
+        primary: this.getAttribute("primary-color"),
+        secondary: this.getAttribute("secondary-color"),
+        accent: this.getAttribute("accent-color"),
+      });
     }
     if (replaced || changedAttribute === undefined || changedAttribute === "src") this.#syncTracks();
   }

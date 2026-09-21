@@ -18,6 +18,10 @@ player.loop = true;
 player.muted = true;
 player.playsInline = true;
 player.noAutoSeekToLive = true;
+player.primaryColor = "#700cd4";
+player.primaryColor = null;
+player.secondaryColor = "#bb1111";
+player.accentColor = "#cf2626";
 
 const media: HTMLVideoElement = player.media;
 void media;

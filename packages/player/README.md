@@ -45,6 +45,9 @@ of keeping an old reference.
 | `preload` | `preload` | Standard media preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Set to `include` to send cookies during playback. |
+| `primary-color` | `primaryColor` | Primary Media Chrome color for control foregrounds. |
+| `secondary-color` | `secondaryColor` | Secondary Media Chrome color for control backgrounds. |
+| `accent-color` | `accentColor` | Media Chrome accent color for active and highlighted controls. |
 | `autoplay` | `autoplay` | Standard boolean autoplay setting. |
 | `muted` | `muted` | Standard boolean muted setting. |
 | `loop` | `loop` | Standard boolean loop setting. |
@@ -147,33 +150,46 @@ tracks through `player.media.textTracks`.
 Media Chrome renders the Demuxed 2022 theme. The internal media element keeps its
 native controls disabled so the page never shows two control interfaces.
 
-Set these supported CSS custom properties on `chunkify-player`:
+Set the same three colors exposed by Mux Player:
 
-| Property | Default | Effect |
-| --- | --- | --- |
-| `--chunkify-player-accent-color` | `#7596cc` | Accent and range thumb color. |
-| `--chunkify-player-control-color` | `black` | Control icon color. |
-| `--chunkify-player-control-background` | `white` | Control background color. |
-| `--chunkify-player-font-family` | `system-ui, sans-serif` | Control font. |
-| `--chunkify-player-progress-color` | `white` | Filled range color. |
-| `--chunkify-player-border-radius` | `0` | Player corner radius. |
+```html
+<chunkify-player
+  primary-color="#700cd4"
+  secondary-color="#bb1111"
+  accent-color="#cf2626"
+  src="/master.m3u8"
+  controls
+></chunkify-player>
+```
+
+The attributes set `--media-primary-color`, `--media-secondary-color`, and
+`--media-accent-color` on the theme. Remove an attribute to restore the Demuxed
+default for that color.
+
+For advanced styling, use ordinary CSS on the player and Media Chrome variables
+through the `theme` part:
 
 ```css
 .brand-player {
-  --chunkify-player-accent-color: #a78bfa;
-  --chunkify-player-control-color: #2e1065;
-  --chunkify-player-control-background: #f5f3ff;
-  --chunkify-player-border-radius: 18px;
+  border-radius: 18px;
 }
 
 .brand-player::part(media) {
   object-fit: cover;
 }
+
+.brand-player::part(theme) {
+  --media-range-bar-color: #c4b5fd;
+  --media-range-track-background: rgb(46 16 101 / 0.35);
+}
 ```
 
-The component exposes `theme` and `media` CSS parts. The documented
-`--chunkify-player-*` variables and these parts form its supported styling API.
-Media Chrome's internal variables may change with that dependency.
+Use either the color attributes or the corresponding `--media-*` colors on the
+`theme` part. Following the shadow-DOM cascade, a color set through the part
+overrides the matching attribute. The component exposes `theme` and `media` as
+its supported CSS parts. Removing the `controls` attribute hides the complete
+control interface. Selectively hiding individual buttons is not currently part
+of the supported API.
 
 ## Plain HTML without a bundler
 

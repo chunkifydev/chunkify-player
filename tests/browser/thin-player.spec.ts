@@ -72,23 +72,48 @@ test("reflects standard video options and forwards media events", async ({ page 
   }))).toEqual({ hostMuted: false, mediaMuted: false });
 });
 
-test("exposes stable theme variables and CSS parts", async ({ page }) => {
+test("maps public colors to Media Chrome and exposes CSS parts", async ({ page }) => {
   await page.evaluate(() => {
-    document.body.innerHTML = `<chunkify-player controls style="
-      --chunkify-player-accent-color: rgb(167, 139, 250);
-      --chunkify-player-border-radius: 18px;
-    "></chunkify-player>`;
+    document.body.innerHTML = `<style>
+      chunkify-player { border-radius: 18px; }
+      chunkify-player::part(theme) {
+        --media-primary-color: rgb(1, 2, 3);
+        --media-range-bar-color: rgb(196, 181, 253);
+      }
+    </style><chunkify-player controls
+      primary-color="rgb(112, 12, 212)"
+      secondary-color="rgb(187, 17, 17)"
+      accent-color="rgb(207, 38, 38)"></chunkify-player>`;
   });
   const player = page.locator("chunkify-player");
   expect(await player.evaluate((element: ChunkifyPlayer) => {
     const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const themeStyle = theme ? getComputedStyle(theme) : null;
     return {
       radius: getComputedStyle(element).borderRadius,
-      accent: theme ? getComputedStyle(theme).getPropertyValue("--media-accent-color").trim() : null,
+      primary: themeStyle?.getPropertyValue("--media-primary-color").trim(),
+      secondary: themeStyle?.getPropertyValue("--media-secondary-color").trim(),
+      accent: themeStyle?.getPropertyValue("--media-accent-color").trim(),
+      rangeBar: themeStyle?.getPropertyValue("--media-range-bar-color").trim(),
       mediaPart: element.media.getAttribute("part"),
       themePart: theme?.getAttribute("part"),
     };
-  })).toEqual({ radius: "18px", accent: "rgb(167, 139, 250)", mediaPart: "media", themePart: "theme" });
+  })).toEqual({
+    radius: "18px",
+    primary: "rgb(1, 2, 3)",
+    secondary: "rgb(187, 17, 17)",
+    accent: "rgb(207, 38, 38)",
+    rangeBar: "rgb(196, 181, 253)",
+    mediaPart: "media",
+    themePart: "theme",
+  });
+
+  await player.evaluate((element: ChunkifyPlayer) => { element.primaryColor = null; });
+  await expect(player).not.toHaveAttribute("primary-color");
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector<HTMLElement>("media-theme-demuxed-2022");
+    return theme?.style.getPropertyValue("--media-primary-color");
+  })).toBe("");
 });
 
 test("forwards the live auto-seek preference to Media Chrome", async ({ page }) => {

@@ -150,3 +150,28 @@ test("React forwards the live auto-seek preference", async ({ page }) => {
   await page.evaluate(() => window.reactFixture.render({}));
   await expect(player).not.toHaveAttribute("noautoseektolive");
 });
+
+test("React forwards and removes player colors", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({
+    primaryColor: "#700cd4",
+    secondaryColor: "#bb1111",
+    accentColor: "#cf2626",
+  }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("primary-color", "#700cd4");
+  await expect(player).toHaveAttribute("secondary-color", "#bb1111");
+  await expect(player).toHaveAttribute("accent-color", "#cf2626");
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector<HTMLElement>("media-theme-demuxed-2022");
+    return {
+      primary: theme?.style.getPropertyValue("--media-primary-color"),
+      secondary: theme?.style.getPropertyValue("--media-secondary-color"),
+      accent: theme?.style.getPropertyValue("--media-accent-color"),
+    };
+  })).toEqual({ primary: "#700cd4", secondary: "#bb1111", accent: "#cf2626" });
+
+  await page.evaluate(() => window.reactFixture.render({}));
+  await expect(player).not.toHaveAttribute("primary-color");
+  await expect(player).not.toHaveAttribute("secondary-color");
+  await expect(player).not.toHaveAttribute("accent-color");
+});

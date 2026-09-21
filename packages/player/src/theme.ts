@@ -10,13 +10,6 @@ style.textContent = `
   :host {
     display: block;
     width: 100%;
-    --media-accent-color: var(--chunkify-player-accent-color, #7596cc);
-    --media-tertiary-color: var(--chunkify-player-accent-color, #7596cc);
-    --media-primary-color: var(--chunkify-player-control-color, black);
-    --media-secondary-color: var(--chunkify-player-control-background, white);
-    --media-font-family: var(--chunkify-player-font-family, system-ui, sans-serif);
-    --media-range-bar-color: var(--chunkify-player-progress-color, white);
-    --media-range-thumb-background: var(--chunkify-player-accent-color, #7596cc);
   }
   :host(:not([controls])) media-control-bar,
   :host(:not([controls])) [slot="centered-chrome"],
@@ -24,21 +17,10 @@ style.textContent = `
     display: none;
   }
   .small-button {
-    background: var(--chunkify-player-control-background, white);
     padding: 0;
   }
   .small-button svg {
     left: 0;
-  }
-  div[slot="centered-chrome"] media-play-button {
-    background: var(--chunkify-player-control-background, rgb(0 0 0 / 0.8));
-  }
-  div[slot="centered-chrome"] media-play-button svg {
-    fill: var(--chunkify-player-control-color, white);
-  }
-  media-time-display,
-  media-preview-time-display {
-    font-family: var(--chunkify-player-font-family, system-ui, sans-serif);
   }
 `;
 template.content.append(style);
@@ -54,10 +36,20 @@ export function syncPlayerTheme(
   theme: ReturnType<typeof createPlayerTheme>,
   controls: boolean,
   noAutoSeekToLive: boolean,
+  colors: {
+    primary: string | null;
+    secondary: string | null;
+    accent: string | null;
+  },
 ) {
   theme.toggleAttribute("controls", controls);
   theme.toggleAttribute("disabled", !controls);
   theme.toggleAttribute("nohotkeys", !controls);
   theme.toggleAttribute("noautoseektolive", noAutoSeekToLive);
+  for (const [name, value] of Object.entries(colors)) {
+    const property = `--media-${name}-color`;
+    if (value === null) theme.style.removeProperty(property);
+    else theme.style.setProperty(property, value);
+  }
   theme.render();
 }

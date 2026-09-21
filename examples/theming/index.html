@@ -10,14 +10,13 @@
       article { padding: 1rem; border: 1px solid #d7deea; border-radius: 1rem; background: white; }
       chunkify-player { width: 100%; aspect-ratio: 16 / 9; }
       .brand-player {
-        --chunkify-player-accent-color: #a78bfa;
-        --chunkify-player-control-color: #2e1065;
-        --chunkify-player-control-background: #f5f3ff;
-        --chunkify-player-font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
-        --chunkify-player-border-radius: 18px;
-        --chunkify-player-progress-color: #c4b5fd;
+        border-radius: 18px;
       }
       .brand-player::part(media) { object-fit: cover; }
+      .brand-player::part(theme) {
+        --media-range-bar-color: #c4b5fd;
+        --media-range-track-background: rgb(46 16 101 / 0.35);
+      }
     </style>
     <script type="importmap">
       {
@@ -36,7 +35,7 @@
   </head>
   <body>
     <h1>Player theming</h1>
-    <p>Both players use the Demuxed theme. The second changes the documented Chunkify CSS variables.</p>
+    <p>Both players use the Demuxed theme. The second uses the public colors and advanced CSS parts.</p>
     <div class="players">
       <article>
         <h2>Default</h2>
@@ -48,7 +47,9 @@
       </article>
       <article>
         <h2>Customer branding</h2>
-        <chunkify-player class="brand-player" src="../../tests/fixtures/media/master.m3u8"
+        <chunkify-player class="brand-player"
+          primary-color="#700cd4" secondary-color="#bb1111" accent-color="#cf2626"
+          src="../../tests/fixtures/media/master.m3u8"
           poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
           <track default kind="metadata" label="thumbnails"
             src="../../tests/fixtures/media/thumbnails.vtt" />

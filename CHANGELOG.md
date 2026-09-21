@@ -4,8 +4,8 @@
 
 - Replaced the custom playback-engine layer with automatic `<video>` and
   `<hls-video>` selection.
-- Kept the Demuxed 2022 Media Chrome controls and documented Chunkify CSS theme
-  variables.
+- Kept the Demuxed 2022 Media Chrome controls and added Mux-compatible primary,
+  secondary, and accent color options.
 - Reduced the Web Component and React APIs to standard media options.
 - Added standard `<track>` mirroring for captions, subtitles, chapters, and
   thumbnail metadata.
