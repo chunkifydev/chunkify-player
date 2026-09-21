@@ -134,3 +134,19 @@ test("React forwards private-playback options and errors", async ({ page }) => {
     /"code":"network-error".*"engine":"hlsjs"/,
   );
 });
+
+test("React forwards the live auto-seek preference", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({ noAutoSeekToLive: true }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("noautoseektolive");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
+  })).toBe(true);
+
+  await page.evaluate(() => window.reactFixture.render({ noAutoSeekToLive: false }));
+  await expect(player).not.toHaveAttribute("noautoseektolive");
+
+  await page.evaluate(() => window.reactFixture.render({}));
+  await expect(player).not.toHaveAttribute("noautoseektolive");
+});

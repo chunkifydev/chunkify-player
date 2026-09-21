@@ -15,6 +15,8 @@
   button layout.
 - Added credentialed native and HLS playback for signed-cookie media, including
   sanitized `playback-error` events.
+- Added `noautoseektolive` / `noAutoSeekToLive` to control Media Chrome's live
+  playback positioning.
 - Removed asset metadata, manual engine selection, and custom thumbnail loading
   from this branch.
 

@@ -91,6 +91,24 @@ test("exposes stable theme variables and CSS parts", async ({ page }) => {
   })).toEqual({ radius: "18px", accent: "rgb(167, 139, 250)", mediaPart: "media", themePart: "theme" });
 });
 
+test("forwards the live auto-seek preference to Media Chrome", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = "<chunkify-player noautoseektolive></chunkify-player>";
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
+  })).toBe(true);
+
+  await player.evaluate((element: ChunkifyPlayer) => { element.noAutoSeekToLive = false; });
+  await expect(player).not.toHaveAttribute("noautoseektolive");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
+  })).toBe(false);
+});
+
 test("keeps the theme and controls inside a fixed player box", async ({ page }) => {
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player controls

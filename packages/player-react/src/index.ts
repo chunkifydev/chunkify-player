@@ -71,6 +71,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   autoPlay?: boolean | undefined;
   loop?: boolean | undefined;
   muted?: boolean | undefined;
+  noAutoSeekToLive?: boolean | undefined;
   controls?: boolean | undefined;
   playsInline?: boolean | undefined;
 };
@@ -129,6 +130,7 @@ export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null 
     loop: props.loop ?? false,
     playsInline: props.playsInline ?? false,
     controls: props.controls ?? false,
+    noAutoSeekToLive: props.noAutoSeekToLive ?? false,
   };
   for (const name of callbackNames) delete elementProps[name];
   return createElement("chunkify-player", elementProps);

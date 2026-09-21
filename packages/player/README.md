@@ -50,6 +50,7 @@ of keeping an old reference.
 | `loop` | `loop` | Standard boolean loop setting. |
 | `playsinline` | `playsInline` | Standard boolean inline playback setting. |
 | `controls` | `controls` | Shows the Demuxed Media Chrome controls. |
+| `noautoseektolive` | `noAutoSeekToLive` | Prevents an automatic seek to the live edge when live playback starts. |
 
 Properties reflect to attributes. Setting a string property to `null` or
 `undefined` removes its attribute. Boolean attributes follow HTML rules, so
@@ -57,6 +58,10 @@ Properties reflect to attributes. Setting a string property to `null` or
 
 The component forwards standard media events such as `loadedmetadata`, `play`,
 `pause`, `timeupdate`, `ended`, and `error` from the current media element.
+
+For a live stream without a DVR window, Media Chrome normally seeks to the live
+edge when playback starts. Add `noautoseektolive` to preserve the media element's
+current position instead.
 
 ## Private playback
 

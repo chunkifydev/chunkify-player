@@ -24,7 +24,7 @@ const mediaAttributes = [
   "autoplay", "crossorigin", "loop", "muted", "playsinline", "poster", "preload", "src",
 ] as const;
 
-const playerAttributes = [...mediaAttributes, "controls", "credentials"] as const;
+const playerAttributes = [...mediaAttributes, "controls", "credentials", "noautoseektolive"] as const;
 
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -165,12 +165,16 @@ export class ChunkifyPlayer extends HTMLElement {
   get muted(): boolean { return this.hasAttribute("muted"); }
   set muted(value: boolean) { this.toggleAttribute("muted", value); }
 
+  get noAutoSeekToLive(): boolean { return this.hasAttribute("noautoseektolive"); }
+  set noAutoSeekToLive(value: boolean) { this.toggleAttribute("noautoseektolive", value); }
+
   get playsInline(): boolean { return this.hasAttribute("playsinline"); }
   set playsInline(value: boolean) { this.toggleAttribute("playsinline", value); }
 
   connectedCallback() {
     for (const name of [
-      "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted", "playsInline",
+      "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
+      "noAutoSeekToLive", "playsInline",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -405,12 +409,14 @@ export class ChunkifyPlayer extends HTMLElement {
     if (replaced || changedAttribute === undefined) {
       for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
       this.#media.muted = this.muted;
-    } else if (changedAttribute !== "controls" && changedAttribute !== "credentials") {
+    } else if (changedAttribute !== "controls" && changedAttribute !== "credentials"
+      && changedAttribute !== "noautoseektolive") {
       this.#syncMediaAttribute(changedAttribute);
     }
     if (!this.hasAttribute("preload")) this.#media.preload = "metadata";
-    if (replaced || changedAttribute === undefined || changedAttribute === "controls") {
-      syncPlayerTheme(this.#theme, this.controls);
+    if (replaced || changedAttribute === undefined || changedAttribute === "controls"
+      || changedAttribute === "noautoseektolive") {
+      syncPlayerTheme(this.#theme, this.controls, this.noAutoSeekToLive);
     }
     if (replaced || changedAttribute === undefined || changedAttribute === "src") this.#syncTracks();
   }

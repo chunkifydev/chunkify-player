@@ -23,8 +23,10 @@ function Video({ src }: { src: string }) {
 ## Props and refs
 
 Playback props are `src`, `poster`, `preload`, `crossOrigin`, `credentials`,
-`autoPlay`, `muted`, `loop`, `playsInline`, and `controls`. Set `credentials` to
-`"include"` after the application backend has set a signed playback cookie.
+`autoPlay`, `muted`, `loop`, `playsInline`, `controls`, and `noAutoSeekToLive`.
+Set `noAutoSeekToLive` to preserve the current position when live playback
+starts. Set `credentials` to `"include"` after the application backend has set a
+signed playback cookie.
 Standard host props such as `className`, `style`, `id`, and ARIA attributes apply
 to the custom element.
 

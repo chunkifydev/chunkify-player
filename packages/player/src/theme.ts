@@ -2,6 +2,8 @@ import DemuxedTheme from "@player.style/demuxed-2022";
 
 const template = document.createElement("template");
 template.content.append(DemuxedTheme.template.content.cloneNode(true));
+template.content.querySelector("media-controller")
+  ?.setAttribute("noautoseektolive", "{{noautoseektolive}}");
 
 const style = document.createElement("style");
 style.textContent = `
@@ -48,9 +50,14 @@ export function createPlayerTheme() {
   return theme;
 }
 
-export function syncPlayerTheme(theme: ReturnType<typeof createPlayerTheme>, controls: boolean) {
+export function syncPlayerTheme(
+  theme: ReturnType<typeof createPlayerTheme>,
+  controls: boolean,
+  noAutoSeekToLive: boolean,
+) {
   theme.toggleAttribute("controls", controls);
   theme.toggleAttribute("disabled", !controls);
   theme.toggleAttribute("nohotkeys", !controls);
+  theme.toggleAttribute("noautoseektolive", noAutoSeekToLive);
   theme.render();
 }
