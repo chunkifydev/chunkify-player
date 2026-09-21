@@ -173,14 +173,38 @@ test("the bundled theme supports player-level control visibility variables", asy
     };
   });
 
-  const defaults = await displayedControls();
-  expect(defaults.play).toEqual(["flex", "flex"]);
-  expect(defaults.mute).toEqual(["flex"]);
-  expect(defaults.captions).toEqual(["none"]);
-  expect(defaults.pip).toEqual(["flex"]);
-  expect(defaults.fullscreen).toEqual(["flex"]);
-  expect(defaults.airplay).toEqual(["none"]);
-  expect(defaults.cast).toEqual(["none"]);
+  const defaults = await player.evaluate((element: ChunkifyPlayer) => {
+    const root = element.shadowRoot?.querySelector("[part=theme]")?.shadowRoot;
+    const displays = (selector: string) => Array.from(root?.querySelectorAll<HTMLElement>(selector) ?? [])
+      .map((control) => getComputedStyle(control).display);
+    return {
+      controls: {
+        play: displays("media-play-button"),
+        mute: displays("media-mute-button"),
+        captions: displays("media-captions-button"),
+        pip: displays("media-pip-button"),
+        fullscreen: displays("media-fullscreen-button"),
+        airplay: displays("media-airplay-button"),
+        cast: displays("media-cast-button"),
+      },
+      available: {
+        captions: root?.querySelector("media-captions-button")?.hasAttribute("mediasubtitleslist") ?? false,
+        pip: !(root?.querySelector("media-pip-button")?.hasAttribute("mediapipunavailable") ?? true),
+        fullscreen: !(root?.querySelector("media-fullscreen-button")
+          ?.hasAttribute("mediafullscreenunavailable") ?? true),
+        airplay: !(root?.querySelector("media-airplay-button")
+          ?.hasAttribute("mediaairplayunavailable") ?? true),
+        cast: !(root?.querySelector("media-cast-button")?.hasAttribute("mediacastunavailable") ?? true),
+      },
+    };
+  });
+  expect(defaults.controls.play).toEqual(["flex", "flex"]);
+  expect(defaults.controls.mute).toEqual(["flex"]);
+  expect(defaults.controls.captions).toEqual([defaults.available.captions ? "flex" : "none"]);
+  expect(defaults.controls.pip).toEqual([defaults.available.pip ? "flex" : "none"]);
+  expect(defaults.controls.fullscreen).toEqual([defaults.available.fullscreen ? "flex" : "none"]);
+  expect(defaults.controls.airplay).toEqual([defaults.available.airplay ? "flex" : "none"]);
+  expect(defaults.controls.cast).toEqual([defaults.available.cast ? "flex" : "none"]);
 
   await player.evaluate((element) => {
     for (const name of ["play", "mute", "captions", "pip", "fullscreen", "airplay", "cast"] as const) {
