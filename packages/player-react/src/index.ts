@@ -68,6 +68,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   preload?: string | null | undefined;
   crossOrigin?: string | null | undefined;
   credentials?: PlayerCredentials | null | undefined;
+  theme?: string | null | undefined;
   primaryColor?: string | null | undefined;
   secondaryColor?: string | null | undefined;
   accentColor?: string | null | undefined;

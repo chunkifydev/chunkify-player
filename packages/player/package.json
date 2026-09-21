@@ -6,7 +6,8 @@
   "type": "module",
   "files": [
     "dist",
-    "src"
+    "src",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,7 +26,6 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@player.style/demuxed-2022": "~0.1.2",
     "hls-video-element": "~1.5.11",
     "media-chrome": "~4.19.2"
   }

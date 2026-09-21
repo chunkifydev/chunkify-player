@@ -140,7 +140,7 @@ test("React forwards the live auto-seek preference", async ({ page }) => {
   const player = page.locator("chunkify-player");
   await expect(player).toHaveAttribute("noautoseektolive");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
     return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
   })).toBe(true);
 
@@ -149,6 +149,13 @@ test("React forwards the live auto-seek preference", async ({ page }) => {
 
   await page.evaluate(() => window.reactFixture.render({}));
   await expect(player).not.toHaveAttribute("noautoseektolive");
+});
+
+test("React forwards the selected theme", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({ theme: "demuxed" }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("theme", "demuxed");
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.theme)).toBe("demuxed");
 });
 
 test("React forwards and removes player colors", async ({ page }) => {
@@ -162,7 +169,7 @@ test("React forwards and removes player colors", async ({ page }) => {
   await expect(player).toHaveAttribute("secondary-color", "#bb1111");
   await expect(player).toHaveAttribute("accent-color", "#cf2626");
   expect(await player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector<HTMLElement>("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector<HTMLElement>("[part=theme]");
     return {
       primary: theme?.style.getPropertyValue("--media-primary-color"),
       secondary: theme?.style.getPropertyValue("--media-secondary-color"),

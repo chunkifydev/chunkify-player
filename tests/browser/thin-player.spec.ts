@@ -6,6 +6,37 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => customElements.whenDefined("chunkify-player"));
 });
 
+test("selects a registered theme by name without replacing the media element", async ({ page }) => {
+  await page.evaluate(async () => {
+    const { registerPlayerTheme } = await import("@chunkify/player");
+    const template = document.createElement("template");
+    template.innerHTML = `<media-controller data-theme="fixture">
+      <slot name="media" slot="media"></slot>
+    </media-controller>`;
+    registerPlayerTheme("fixture", template);
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/video.mp4" controls></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  expect(await player.evaluate((element: ChunkifyPlayer) => ({
+    property: element.theme,
+    hasControls: Boolean(element.shadowRoot?.querySelector("[part=theme]")
+      ?.shadowRoot?.querySelector("media-control-bar")),
+  }))).toEqual({ property: "demuxed", hasControls: true });
+
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media;
+    element.theme = "fixture";
+    return {
+      preservedMedia: element.media === media,
+      property: element.theme,
+      rendered: element.shadowRoot?.querySelector("[part=theme]")
+        ?.shadowRoot?.querySelector("media-controller")?.getAttribute("data-theme"),
+    };
+  })).toEqual({ preservedMedia: true, property: "fixture", rendered: "fixture" });
+  await expect(player).toHaveAttribute("theme", "fixture");
+});
+
 test("uses hls-video for HLS and video for ordinary media", async ({ page }) => {
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player
@@ -15,7 +46,7 @@ test("uses hls-video for HLS and video for ordinary media", async ({ page }) => 
   expect(await player.evaluate((element: ChunkifyPlayer) => ({
     tag: element.media.localName,
     nativeControls: element.media.controls,
-    themedControls: element.shadowRoot?.querySelector("media-theme-demuxed-2022")?.hasAttribute("controls"),
+    themedControls: element.shadowRoot?.querySelector("[part=theme]")?.hasAttribute("controls"),
     muted: element.media.muted,
     playsInline: element.media.hasAttribute("playsinline"),
   }))).toEqual({ tag: "hls-video", nativeControls: false, themedControls: true, muted: true, playsInline: true });
@@ -54,7 +85,7 @@ test("reflects standard video options and forwards media events", async ({ page 
     preload: element.media.preload,
     crossOrigin: element.media.crossOrigin,
     nativeControls: element.media.controls,
-    themedControls: element.shadowRoot?.querySelector("media-theme-demuxed-2022")?.hasAttribute("controls"),
+    themedControls: element.shadowRoot?.querySelector("[part=theme]")?.hasAttribute("controls"),
     muted: element.media.muted,
   }))).toEqual({
     src: "/tests/fixtures/media/video.mp4",
@@ -87,7 +118,7 @@ test("maps public colors to Media Chrome and exposes CSS parts", async ({ page }
   });
   const player = page.locator("chunkify-player");
   expect(await player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
     const themeStyle = theme ? getComputedStyle(theme) : null;
     return {
       radius: getComputedStyle(element).borderRadius,
@@ -111,7 +142,7 @@ test("maps public colors to Media Chrome and exposes CSS parts", async ({ page }
   await player.evaluate((element: ChunkifyPlayer) => { element.primaryColor = null; });
   await expect(player).not.toHaveAttribute("primary-color");
   expect(await player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector<HTMLElement>("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector<HTMLElement>("[part=theme]");
     return theme?.style.getPropertyValue("--media-primary-color");
   })).toBe("");
 });
@@ -122,14 +153,14 @@ test("forwards the live auto-seek preference to Media Chrome", async ({ page }) 
   });
   const player = page.locator("chunkify-player");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
     return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
   })).toBe(true);
 
   await player.evaluate((element: ChunkifyPlayer) => { element.noAutoSeekToLive = false; });
   await expect(player).not.toHaveAttribute("noautoseektolive");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
     return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
   })).toBe(false);
 });
@@ -142,7 +173,7 @@ test("keeps the theme and controls inside a fixed player box", async ({ page }) 
   const player = page.locator("chunkify-player");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
     const playerBounds = element.getBoundingClientRect();
-    const theme = element.shadowRoot?.querySelector("media-theme-demuxed-2022");
+    const theme = element.shadowRoot?.querySelector("[part=theme]");
     const controlBar = theme?.shadowRoot?.querySelector("media-control-bar");
     const themeBounds = theme?.getBoundingClientRect();
     const controlBounds = controlBar?.getBoundingClientRect();

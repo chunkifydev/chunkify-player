@@ -1,33 +1,35 @@
-import DemuxedTheme from "@player.style/demuxed-2022";
+import "media-chrome";
+import { MediaTheme } from "media-chrome/dist/media-theme.js";
+import { demuxedThemeMarkup } from "./themes/demuxed.js";
 
-const template = document.createElement("template");
-template.content.append(DemuxedTheme.template.content.cloneNode(true));
-template.content.querySelector("media-controller")
-  ?.setAttribute("noautoseektolive", "{{noautoseektolive}}");
+export const defaultPlayerTheme = "demuxed";
 
-const style = document.createElement("style");
-style.textContent = `
-  :host {
-    display: block;
-    width: 100%;
-  }
-  :host(:not([controls])) media-control-bar,
-  :host(:not([controls])) [slot="centered-chrome"],
-  :host(:not([controls])) .demuxed-gradient-bottom {
-    display: none;
-  }
-  .small-button {
-    padding: 0;
-  }
-  .small-button svg {
-    left: 0;
-  }
-`;
-template.content.append(style);
+const themeTemplates = new Map<string, HTMLTemplateElement>();
 
-export function createPlayerTheme() {
-  const theme = new DemuxedTheme();
-  theme.template = template;
+function createTemplate(markup: string): HTMLTemplateElement {
+  const template = document.createElement("template");
+  template.innerHTML = markup;
+  return template;
+}
+
+themeTemplates.set(defaultPlayerTheme, createTemplate(demuxedThemeMarkup));
+
+export function registerPlayerTheme(name: string, template: HTMLTemplateElement): void {
+  const normalizedName = name.trim();
+  if (!normalizedName) throw new TypeError("A player theme needs a name.");
+  if (template.localName !== "template") {
+    throw new TypeError("A player theme must be an HTML template element.");
+  }
+  themeTemplates.set(normalizedName, template);
+}
+
+export function resolvePlayerTheme(name: string | null): string {
+  return name && themeTemplates.has(name) ? name : defaultPlayerTheme;
+}
+
+export function createPlayerTheme(name: string) {
+  const theme = new MediaTheme();
+  theme.template = themeTemplates.get(resolvePlayerTheme(name))!;
   theme.setAttribute("part", "theme");
   return theme;
 }

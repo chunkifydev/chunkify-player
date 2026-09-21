@@ -1,5 +1,12 @@
 import { Hls, type HlsVideoElement } from "hls-video-element";
-import { createPlayerTheme, syncPlayerTheme } from "./theme.js";
+import {
+  createPlayerTheme,
+  defaultPlayerTheme,
+  resolvePlayerTheme,
+  syncPlayerTheme,
+} from "./theme.js";
+
+export { registerPlayerTheme } from "./theme.js";
 
 export type ChunkifyMediaElement = HTMLVideoElement;
 export type PlayerCredentials = "include";
@@ -28,7 +35,7 @@ const themeAttributes = [
   "controls", "noautoseektolive", "primary-color", "secondary-color", "accent-color",
 ] as const;
 
-const playerAttributes = [...mediaAttributes, ...themeAttributes, "credentials"] as const;
+const playerAttributes = [...mediaAttributes, ...themeAttributes, "credentials", "theme"] as const;
 
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -75,6 +82,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   #media: ChunkifyMediaElement;
   #theme: ReturnType<typeof createPlayerTheme>;
+  #themeName = defaultPlayerTheme;
   #pendingHlsSource: number | undefined;
   #hlsErrorCleanup: (() => void) | null = null;
   #failedMedia: ChunkifyMediaElement | null = null;
@@ -130,7 +138,7 @@ export class ChunkifyPlayer extends HTMLElement {
           display: block;
           overflow: hidden;
         }
-        media-theme-demuxed-2022,
+        media-theme,
         video,
         hls-video {
           display: block;
@@ -139,7 +147,7 @@ export class ChunkifyPlayer extends HTMLElement {
         }
       </style>
     `;
-    this.#theme = createPlayerTheme();
+    this.#theme = createPlayerTheme(this.#themeName);
     this.#media = this.#createMedia("video");
     this.#theme.append(this.#media);
     root.append(this.#theme);
@@ -167,6 +175,9 @@ export class ChunkifyPlayer extends HTMLElement {
   set credentials(value: PlayerCredentials | null | undefined) {
     this.#setStringAttribute("credentials", value);
   }
+
+  get theme(): string { return resolvePlayerTheme(this.getAttribute("theme")); }
+  set theme(value: string | null | undefined) { this.#setStringAttribute("theme", value); }
 
   get primaryColor(): string { return this.getAttribute("primary-color") ?? ""; }
   set primaryColor(value: string | null | undefined) { this.#setStringAttribute("primary-color", value); }
@@ -198,7 +209,7 @@ export class ChunkifyPlayer extends HTMLElement {
   connectedCallback() {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
-      "noAutoSeekToLive", "playsInline", "primaryColor", "secondaryColor", "accentColor",
+      "noAutoSeekToLive", "playsInline", "theme", "primaryColor", "secondaryColor", "accentColor",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -405,6 +416,16 @@ export class ChunkifyPlayer extends HTMLElement {
     if (attribute === "muted") this.#media.muted = this.muted;
   }
 
+  #syncThemeSelection() {
+    const themeName = this.theme;
+    if (themeName === this.#themeName) return;
+    const theme = createPlayerTheme(themeName);
+    this.#theme.replaceWith(theme);
+    theme.append(this.#media);
+    this.#theme = theme;
+    this.#themeName = themeName;
+  }
+
   #syncMedia(changedAttribute?: typeof playerAttributes[number]) {
     if (changedAttribute === undefined || changedAttribute === "src" || changedAttribute === "credentials") {
       this.#playbackGeneration++;
@@ -413,6 +434,10 @@ export class ChunkifyPlayer extends HTMLElement {
     if (this.hasAttribute("credentials") && this.credentials === null) {
       this.#fail("invalid-credentials", null);
       return;
+    }
+
+    if (changedAttribute === undefined || changedAttribute === "theme") {
+      this.#syncThemeSelection();
     }
 
     const tagName = isHlsSource(this.src) ? "hls-video" : "video";
@@ -437,7 +462,8 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#syncMediaAttribute(changedAttribute);
     }
     if (!this.hasAttribute("preload")) this.#media.preload = "metadata";
-    if (replaced || changedAttribute === undefined || isThemeAttribute(changedAttribute)) {
+    if (replaced || changedAttribute === undefined || changedAttribute === "theme"
+      || isThemeAttribute(changedAttribute)) {
       syncPlayerTheme(this.#theme, this.controls, this.noAutoSeekToLive, {
         primary: this.getAttribute("primary-color"),
         secondary: this.getAttribute("secondary-color"),

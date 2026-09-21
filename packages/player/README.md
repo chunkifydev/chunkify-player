@@ -45,6 +45,7 @@ of keeping an old reference.
 | `preload` | `preload` | Standard media preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Set to `include` to send cookies during playback. |
+| `theme` | `theme` | Registered control theme. Defaults to `demuxed`. |
 | `primary-color` | `primaryColor` | Primary Media Chrome color for control foregrounds. |
 | `secondary-color` | `secondaryColor` | Secondary Media Chrome color for control backgrounds. |
 | `accent-color` | `accentColor` | Media Chrome accent color for active and highlighted controls. |
@@ -147,8 +148,10 @@ tracks through `player.media.textTracks`.
 
 ## Controls and customization
 
-Media Chrome renders the Demuxed 2022 theme. The internal media element keeps its
-native controls disabled so the page never shows two control interfaces.
+Media Chrome renders Chunkify's local adaptation of the Demuxed 2022 theme. The
+internal media element keeps its native controls disabled so the page never
+shows two control interfaces. `theme="demuxed"` is optional because it is the
+default.
 
 Set the same three colors exposed by Mux Player:
 
@@ -190,6 +193,41 @@ overrides the matching attribute. The component exposes `theme` and `media` as
 its supported CSS parts. Removing the `controls` attribute hides the complete
 control interface. Selectively hiding individual buttons is not currently part
 of the supported API.
+
+### Custom themes
+
+Register a custom Media Chrome template once before creating players, then
+select it by name:
+
+```js
+import { registerPlayerTheme } from "@chunkify/player";
+
+const template = document.createElement("template");
+template.innerHTML = `
+  <media-controller>
+    <slot name="media" slot="media"></slot>
+    <media-control-bar>
+      <media-play-button></media-play-button>
+      <media-time-range></media-time-range>
+      <media-mute-button></media-mute-button>
+      <media-fullscreen-button></media-fullscreen-button>
+    </media-control-bar>
+  </media-controller>
+`;
+
+registerPlayerTheme("customer", template);
+```
+
+```html
+<chunkify-player theme="customer" src="/master.m3u8" controls></chunkify-player>
+```
+
+Registration belongs in the theme module or application setup, not on each
+player. The template must provide a `media` slot so the selected video element
+can connect to its `media-controller`. An unknown theme name uses `demuxed`.
+
+The bundled Demuxed adaptation and its license notice are included in this
+package. It no longer depends on the Player.style Demuxed package at runtime.
 
 ## Plain HTML without a bundler
 
