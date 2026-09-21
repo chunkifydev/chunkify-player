@@ -263,6 +263,15 @@ export const demuxedThemeMarkup = String.raw`
     margin-left: -2px;
     height: 48px;
   }
+
+  media-captions-button:not([mediasubtitleslist]),
+  media-airplay-button[mediaairplayunavailable],
+  media-fullscreen-button[mediafullscreenunavailable],
+  media-cast-button[mediacastunavailable],
+  media-pip-button[mediapipunavailable] {
+    display: none !important;
+  }
+
   :host { display: block; width: 100%; }
 
   :host(:not([controls])) media-control-bar,

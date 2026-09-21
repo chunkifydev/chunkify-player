@@ -176,8 +176,11 @@ test("the bundled theme supports player-level control visibility variables", asy
   const defaults = await displayedControls();
   expect(defaults.play).toEqual(["flex", "flex"]);
   expect(defaults.mute).toEqual(["flex"]);
+  expect(defaults.captions).toEqual(["none"]);
   expect(defaults.pip).toEqual(["flex"]);
   expect(defaults.fullscreen).toEqual(["flex"]);
+  expect(defaults.airplay).toEqual(["none"]);
+  expect(defaults.cast).toEqual(["none"]);
 
   await player.evaluate((element) => {
     for (const name of ["play", "mute", "captions", "pip", "fullscreen", "airplay", "cast"] as const) {
