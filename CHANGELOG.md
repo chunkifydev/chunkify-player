@@ -13,7 +13,9 @@
   visible area.
 - Corrected Demuxed control-icon alignment with the current Media Chrome
   button layout.
-- Removed asset metadata, manual engine selection, thumbnail loading, custom
-  credential handling, and normalized playback errors from this branch.
+- Added credentialed native and HLS playback for signed-cookie media, including
+  sanitized `playback-error` events.
+- Removed asset metadata, manual engine selection, and custom thumbnail loading
+  from this branch.
 
 Telemetry development remains preserved on `codex/player-telemetry`.

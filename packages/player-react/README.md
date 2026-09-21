@@ -22,9 +22,11 @@ function Video({ src }: { src: string }) {
 
 ## Props and refs
 
-Playback props are `src`, `poster`, `preload`, `crossOrigin`, `autoPlay`, `muted`,
-`loop`, `playsInline`, and `controls`. Standard host props such as `className`,
-`style`, `id`, and ARIA attributes apply to the custom element.
+Playback props are `src`, `poster`, `preload`, `crossOrigin`, `credentials`,
+`autoPlay`, `muted`, `loop`, `playsInline`, and `controls`. Set `credentials` to
+`"include"` after the application backend has set a signed playback cookie.
+Standard host props such as `className`, `style`, `id`, and ARIA attributes apply
+to the custom element.
 
 Pass standard `<track>` children for captions, subtitles, chapters, and thumbnail
 metadata:
@@ -44,6 +46,21 @@ Media callbacks receive native events whose `currentTarget` is the player. The
 supported callbacks match the standard media events forwarded by the Web
 Component, including `onLoadedMetadata`, `onPlay`, `onPlaying`, `onPause`,
 `onTimeUpdate`, `onEnded`, and `onError`.
+
+Use `onPlaybackError` for the player's normalized authorization, network, format,
+and decoding failures:
+
+```tsx
+<ChunkifyPlayer
+  src="https://media.example.com/private/master.m3u8"
+  credentials="include"
+  onPlaybackError={(event) => console.log(event.detail.code)}
+/>
+```
+
+The error detail contains `code`, `message`, and `engine`, without the source URL
+or token. See the `@chunkify/player` private-playback documentation for the CORS
+and cookie requirements.
 
 ## Server rendering
 

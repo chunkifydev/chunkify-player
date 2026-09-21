@@ -1,13 +1,30 @@
-import "hls-video-element";
+import { Hls, type HlsVideoElement } from "hls-video-element";
 import { createPlayerTheme, syncPlayerTheme } from "./theme.js";
 
 export type ChunkifyMediaElement = HTMLVideoElement;
+export type PlayerCredentials = "include";
+export type PlaybackEngine = "native" | "hlsjs";
+
+const errorMessages = {
+  "invalid-credentials": "Use include for credentials, or omit the attribute.",
+  "network-error": "The video could not load. Check the source URL and access permissions.",
+  "decode-error": "The browser could not decode this video.",
+  "unsupported-source": "The browser could not play this video source.",
+  "playback-failed": "Video playback failed.",
+} as const;
+
+export type PlaybackErrorCode = keyof typeof errorMessages;
+export interface PlaybackErrorDetail {
+  code: PlaybackErrorCode;
+  message: string;
+  engine: PlaybackEngine | null;
+}
 
 const mediaAttributes = [
   "autoplay", "crossorigin", "loop", "muted", "playsinline", "poster", "preload", "src",
 ] as const;
 
-const playerAttributes = [...mediaAttributes, "controls"] as const;
+const playerAttributes = [...mediaAttributes, "controls", "credentials"] as const;
 
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -28,9 +45,24 @@ function isHlsSource(source: string): boolean {
 export class ChunkifyPlayer extends HTMLElement {
   static observedAttributes = [...playerAttributes];
 
+  declare addEventListener: ((
+    type: "playback-error",
+    listener: ((this: ChunkifyPlayer, event: CustomEvent<PlaybackErrorDetail>) => void) | null,
+    options?: boolean | AddEventListenerOptions,
+  ) => void) & HTMLElement["addEventListener"];
+
+  declare removeEventListener: ((
+    type: "playback-error",
+    listener: ((this: ChunkifyPlayer, event: CustomEvent<PlaybackErrorDetail>) => void) | null,
+    options?: boolean | EventListenerOptions,
+  ) => void) & HTMLElement["removeEventListener"];
+
   #media: ChunkifyMediaElement;
   #theme: ReturnType<typeof createPlayerTheme>;
   #pendingHlsSource: number | undefined;
+  #hlsErrorCleanup: (() => void) | null = null;
+  #failedMedia: ChunkifyMediaElement | null = null;
+  #playbackGeneration = 0;
   #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
   #trackObserver = new MutationObserver((records) => {
     let tracksChanged = false;
@@ -56,7 +88,21 @@ export class ChunkifyPlayer extends HTMLElement {
     if (tracksChanged) this.#syncTracks();
   });
   #forwardMediaEvent = (event: Event) => {
+    const media = event.currentTarget as ChunkifyMediaElement;
+    if (media !== this.#media) return;
+    const generation = this.#playbackGeneration;
+    const mediaError = event.type === "error" ? media.error : null;
     this.dispatchEvent(new Event(event.type));
+    if (!mediaError) return;
+    const errorCode = mediaError.code;
+    globalThis.setTimeout(() => {
+      if (!this.isConnected || this.#playbackGeneration !== generation
+        || this.#media !== media || this.#failedMedia === media) return;
+      this.#fail(errorCode === 2 ? "network-error"
+        : errorCode === 3 ? "decode-error"
+        : errorCode === 4 ? "unsupported-source"
+        : "playback-failed", this.#engineFor(media));
+    }, 0);
   };
 
   constructor() {
@@ -100,6 +146,13 @@ export class ChunkifyPlayer extends HTMLElement {
   get crossOrigin(): string | null { return this.getAttribute("crossorigin"); }
   set crossOrigin(value: string | null | undefined) { this.#setStringAttribute("crossorigin", value); }
 
+  get credentials(): PlayerCredentials | null {
+    return this.getAttribute("credentials") === "include" ? "include" : null;
+  }
+  set credentials(value: PlayerCredentials | null | undefined) {
+    this.#setStringAttribute("credentials", value);
+  }
+
   get autoplay(): boolean { return this.hasAttribute("autoplay"); }
   set autoplay(value: boolean) { this.toggleAttribute("autoplay", value); }
 
@@ -117,7 +170,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     for (const name of [
-      "src", "poster", "preload", "crossOrigin", "autoplay", "controls", "loop", "muted", "playsInline",
+      "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted", "playsInline",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -129,8 +182,10 @@ export class ChunkifyPlayer extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.#playbackGeneration++;
     this.#trackObserver.disconnect();
     this.#cancelPendingHlsSource();
+    this.#detachHlsErrors();
     this.#clearMirroredTracks();
     this.#clearMedia(this.#media);
   }
@@ -163,6 +218,61 @@ export class ChunkifyPlayer extends HTMLElement {
     if (this.#pendingHlsSource === undefined) return;
     clearTimeout(this.#pendingHlsSource);
     this.#pendingHlsSource = undefined;
+  }
+
+  #detachHlsErrors() {
+    this.#hlsErrorCleanup?.();
+    this.#hlsErrorCleanup = null;
+  }
+
+  #engineFor(media: ChunkifyMediaElement): PlaybackEngine {
+    const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "api">;
+    return media.localName === "hls-video" && hlsMedia.api ? "hlsjs" : "native";
+  }
+
+  #configureHlsCredentials(media: ChunkifyMediaElement) {
+    if (media.localName !== "hls-video") return;
+    const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "config">;
+    hlsMedia.config = this.credentials === "include"
+      ? { xhrSetup: (xhr) => { xhr.withCredentials = true; } }
+      : null;
+  }
+
+  #attachHlsErrors(media: ChunkifyMediaElement) {
+    const generation = this.#playbackGeneration;
+    queueMicrotask(() => {
+      if (!this.isConnected || this.#playbackGeneration !== generation
+        || this.#media !== media || media.localName !== "hls-video") return;
+      const hls = (media as ChunkifyMediaElement & Pick<HlsVideoElement, "api">).api;
+      if (!hls) return;
+      this.#detachHlsErrors();
+      const onError = (_event: string, data: { fatal: boolean; type: string; details: string }) => {
+        if (!data.fatal || this.#playbackGeneration !== generation
+          || this.#media !== media || this.#failedMedia === media) return;
+        const code: PlaybackErrorCode = data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR
+          ? "unsupported-source"
+          : data.type === Hls.ErrorTypes.NETWORK_ERROR
+            ? "network-error"
+            : data.type === Hls.ErrorTypes.MEDIA_ERROR ? "decode-error" : "playback-failed";
+        globalThis.setTimeout(() => {
+          if (this.isConnected && this.#playbackGeneration === generation
+            && this.#media === media && this.#failedMedia !== media) this.#fail(code, "hlsjs");
+        }, 0);
+      };
+      hls.on(Hls.Events.ERROR, onError);
+      this.#hlsErrorCleanup = () => hls.off(Hls.Events.ERROR, onError);
+    });
+  }
+
+  #fail(code: PlaybackErrorCode, engine: PlaybackEngine | null) {
+    const media = this.#media;
+    if (this.#failedMedia === media) return;
+    this.#failedMedia = media;
+    this.#cancelPendingHlsSource();
+    this.#detachHlsErrors();
+    this.#clearMedia(media);
+    const detail: PlaybackErrorDetail = { code, message: errorMessages[code], engine };
+    this.dispatchEvent(new CustomEvent<PlaybackErrorDetail>("playback-error", { detail }));
   }
 
   #clearMirroredTracks() {
@@ -234,7 +344,9 @@ export class ChunkifyPlayer extends HTMLElement {
   }
 
   #syncMediaAttribute(attribute: typeof mediaAttributes[number]) {
-    const value = this.getAttribute(attribute);
+    const value = attribute === "crossorigin" && this.credentials === "include"
+      ? "use-credentials"
+      : this.getAttribute(attribute);
     const currentValue = this.#media.getAttribute(attribute);
 
     if (attribute === "src" && this.#media.localName === "hls-video") {
@@ -246,6 +358,7 @@ export class ChunkifyPlayer extends HTMLElement {
         this.#pendingHlsSource = undefined;
         if (this.isConnected && this.#media === media && this.src === value) {
           media.setAttribute("src", value);
+          this.#attachHlsErrors(media);
         }
       });
       return;
@@ -265,10 +378,20 @@ export class ChunkifyPlayer extends HTMLElement {
   }
 
   #syncMedia(changedAttribute?: typeof playerAttributes[number]) {
+    if (changedAttribute === undefined || changedAttribute === "src" || changedAttribute === "credentials") {
+      this.#playbackGeneration++;
+      this.#failedMedia = null;
+    }
+    if (this.hasAttribute("credentials") && this.credentials === null) {
+      this.#fail("invalid-credentials", null);
+      return;
+    }
+
     const tagName = isHlsSource(this.src) ? "hls-video" : "video";
     let replaced = false;
-    if (this.#media.localName !== tagName) {
+    if (this.#media.localName !== tagName || changedAttribute === "credentials") {
       this.#cancelPendingHlsSource();
+      this.#detachHlsErrors();
       for (const event of mediaEvents) this.#media.removeEventListener(event, this.#forwardMediaEvent);
       const previous = this.#media;
       this.#clearMedia(previous);
@@ -277,10 +400,12 @@ export class ChunkifyPlayer extends HTMLElement {
       replaced = true;
     }
 
+    this.#configureHlsCredentials(this.#media);
+
     if (replaced || changedAttribute === undefined) {
       for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);
       this.#media.muted = this.muted;
-    } else if (changedAttribute !== "controls") {
+    } else if (changedAttribute !== "controls" && changedAttribute !== "credentials") {
       this.#syncMediaAttribute(changedAttribute);
     }
     if (!this.hasAttribute("preload")) this.#media.preload = "metadata";

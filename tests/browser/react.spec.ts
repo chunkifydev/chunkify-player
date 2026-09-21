@@ -110,3 +110,27 @@ test("React callback refs clean up in Strict Mode", async ({ page }) => {
   await page.evaluate(() => window.reactFixture.render(null));
   await expect(page.locator("body")).toHaveAttribute("data-ref-cleanups", "2");
 });
+
+test("React forwards private-playback options and errors", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({
+    credentials: "include",
+    onPlaybackError(event) {
+      document.body.dataset.playbackError = JSON.stringify(event.detail);
+    },
+  }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("credentials", "include");
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.dispatchEvent(new CustomEvent("playback-error", {
+      detail: {
+        code: "network-error",
+        message: "The video could not load. Check the source URL and access permissions.",
+        engine: "hlsjs",
+      },
+    }));
+  });
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-playback-error",
+    /"code":"network-error".*"engine":"hlsjs"/,
+  );
+});

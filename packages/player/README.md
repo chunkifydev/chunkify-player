@@ -44,6 +44,7 @@ of keeping an old reference.
 | `poster` | `poster` | Poster image URL. |
 | `preload` | `preload` | Standard media preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
+| `credentials` | `credentials` | Set to `include` to send cookies during playback. |
 | `autoplay` | `autoplay` | Standard boolean autoplay setting. |
 | `muted` | `muted` | Standard boolean muted setting. |
 | `loop` | `loop` | Standard boolean loop setting. |
@@ -56,6 +57,42 @@ Properties reflect to attributes. Setting a string property to `null` or
 
 The component forwards standard media events such as `loadedmetadata`, `play`,
 `pause`, `timeupdate`, `ended`, and `error` from the current media element.
+
+## Private playback
+
+For a path-token CDN, pass the complete authorized manifest URL through `src`.
+The player does not rewrite the URL, including its query string.
+
+For signed-cookie playback, the application backend must set the cookie before
+creating the player. Set `credentials="include"` so the native media element and
+hls.js send cookies with manifests and media requests:
+
+```html
+<chunkify-player
+  src="https://media.example.com/private/master.m3u8"
+  credentials="include"
+  controls
+></chunkify-player>
+```
+
+The media origin must return `Access-Control-Allow-Credentials: true` and an
+explicit `Access-Control-Allow-Origin` value matching the page origin. A wildcard
+origin cannot be used with credentialed requests. Browser cookie rules still
+apply, so cross-site cookies may be blocked.
+
+The player dispatches a `playback-error` event for authorization, network,
+format, and decoding failures. Its `detail` contains `code`, `message`, and
+`engine`. It never includes the source URL or token.
+
+```js
+player.addEventListener("playback-error", (event) => {
+  console.log(event.detail.code, event.detail.engine);
+});
+```
+
+The application remains responsible for creating, refreshing, and revoking
+tokens and cookies. The player does not provide DRM or bypass browser cookie
+restrictions.
 
 ## Tracks
 

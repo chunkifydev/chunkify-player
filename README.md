@@ -60,6 +60,11 @@ Asset readiness stays in the application. The player does not fetch asset state,
 construct playback URLs, or show processing and failure screens. Telemetry work
 continues separately on the `codex/player-telemetry` branch.
 
+Private playback accepts authorized path-token URLs and signed cookies through
+`credentials="include"`. The application owns authorization and token lifecycle.
+The player forwards credentials through native playback and hls.js and reports
+failures through a sanitized `playback-error` event.
+
 The repository uses TypeScript without Vite. Plain HTML examples use import maps,
 and esbuild only prepares the React test fixture and example.
 

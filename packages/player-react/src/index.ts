@@ -13,7 +13,11 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import type { ChunkifyPlayer as PlayerElement } from "@chunkify/player";
+import type {
+  ChunkifyPlayer as PlayerElement,
+  PlaybackErrorDetail,
+  PlayerCredentials,
+} from "@chunkify/player";
 
 const mediaEvents = {
   onAbort: "abort",
@@ -39,14 +43,20 @@ const mediaEvents = {
   onTimeUpdate: "timeupdate",
   onVolumeChange: "volumechange",
   onWaiting: "waiting",
+  onPlaybackError: "playback-error",
 } as const;
 
 const callbackNames = Object.keys(mediaEvents) as Array<keyof typeof mediaEvents>;
 
 export type ChunkifyPlayerRef = PlayerElement;
 export type PlayerMediaEvent = Event & { readonly currentTarget: PlayerElement };
+export type PlayerPlaybackErrorEvent = CustomEvent<PlaybackErrorDetail> & {
+  readonly currentTarget: PlayerElement;
+};
 type MediaCallbacks = {
-  [K in keyof typeof mediaEvents]?: ((event: PlayerMediaEvent) => void) | undefined;
+  [K in keyof typeof mediaEvents]?: ((event: K extends "onPlaybackError"
+    ? PlayerPlaybackErrorEvent
+    : PlayerMediaEvent) => void) | undefined;
 };
 type HostProps = Omit<HTMLAttributes<PlayerElement>, keyof DOMAttributes<PlayerElement>>;
 
@@ -57,6 +67,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   poster?: string | null | undefined;
   preload?: string | null | undefined;
   crossOrigin?: string | null | undefined;
+  credentials?: PlayerCredentials | null | undefined;
   autoPlay?: boolean | undefined;
   loop?: boolean | undefined;
   muted?: boolean | undefined;
@@ -97,7 +108,10 @@ export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null 
     for (const name of callbackNames) {
       const callback = props[name];
       if (!callback) continue;
-      const listener = (event: Event) => callback(event as PlayerMediaEvent);
+      const listener = (event: Event) => {
+        if (name === "onPlaybackError") props[name]?.(event as PlayerPlaybackErrorEvent);
+        else props[name]?.(event as PlayerMediaEvent);
+      };
       element.addEventListener(mediaEvents[name], listener);
       removeListeners.push(() => element.removeEventListener(mediaEvents[name], listener));
     }
