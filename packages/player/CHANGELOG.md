@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.0.0...player-v1.0.1) (2026-09-22)
+
+
+### Documentation
+
+* add npm package guides ([935ab75](https://github.com/chunkifydev/chunkify-player/commit/935ab75ffcee8f1dfe5230ca20203b060b439158))
+
 ## 1.0.0 (2026-09-22)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@chunkify/player-react",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Typed React wrapper for the Chunkify player Web Component",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@chunkify/player": "1.0.0"
+    "@chunkify/player": "1.0.1"
   },
   "peerDependencies": {
     "react": "^19.0.0"
