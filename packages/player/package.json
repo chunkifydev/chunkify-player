@@ -1,6 +1,6 @@
 {
   "name": "@chunkify/player",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Chunkify's portable video player Web Component",
   "license": "MIT",
   "repository": {
