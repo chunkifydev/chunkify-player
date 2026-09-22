@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.0.0...player-react-v1.0.1) (2026-09-22)
+
+
+### Documentation
+
+* add npm package guides ([935ab75](https://github.com/chunkifydev/chunkify-player/commit/935ab75ffcee8f1dfe5230ca20203b060b439158))
+* update react readme ([42ad683](https://github.com/chunkifydev/chunkify-player/commit/42ad683c5fcc6da4c6efa7b5d6325c689f26ead9))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.0.0 to 1.0.1
+
 ## 1.0.0 (2026-09-22)
 
 
