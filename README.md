@@ -1,9 +1,9 @@
 # Chunkify Player
 
-Chunkify Player provides a Web Component and a typed React 19 wrapper for HLS
-and ordinary video. It selects `<hls-video>` for `.m3u8` sources and native
-`<video>` for files such as MP4. Media Chrome supplies the controls through one
-bundled default theme.
+Chunkify Player provides a Web Component and a typed React 19 wrapper that can
+play HLS sources (`.m3u8`) and ordinary video sources such as MP4. It uses Mux's
+[`hls-video-element`](https://github.com/muxinc/media-elements) for HLS playback
+and [Media Chrome](https://github.com/muxinc/media-chrome) for the controls.
 
 | Package | Directory |
 | --- | --- |
