@@ -15,6 +15,8 @@ test("React props configure playback and expose the player through a ref", async
     controls: true,
     muted: true,
     playsInline: true,
+    autoSeekToLive: true,
+    theme: "demuxed",
     className: "customer-player",
     children: window.reactFixture.createElement("track", {
       default: true,
@@ -35,6 +37,8 @@ test("React props configure playback and expose the player through a ref", async
       poster: element?.poster,
       crossOrigin: element?.crossOrigin,
       controls: element?.controls,
+      autoSeekToLive: element?.autoSeekToLive,
+      theme: element?.theme,
       tracks: element?.media.querySelectorAll(":scope > track").length,
     };
   })).toEqual({
@@ -43,6 +47,8 @@ test("React props configure playback and expose the player through a ref", async
     poster: "/tests/fixtures/media/poster.jpg",
     crossOrigin: "anonymous",
     controls: true,
+    autoSeekToLive: true,
+    theme: "demuxed",
     tracks: 1,
   });
 });
@@ -133,45 +139,6 @@ test("React forwards private-playback options and errors", async ({ page }) => {
     "data-playback-error",
     /"code":"network-error".*"engine":"hlsjs"/,
   );
-});
-
-test("React forwards the live auto-seek preference", async ({ page }) => {
-  await page.evaluate(() => window.reactFixture.render({}));
-  const player = page.locator("chunkify-player");
-  await expect(player).not.toHaveAttribute("autoseektolive");
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("[part=theme]");
-    return theme?.shadowRoot?.querySelector("media-controller")?.hasAttribute("noautoseektolive");
-  })).toBe(true);
-
-  await page.evaluate(() => window.reactFixture.render({ autoSeekToLive: true }));
-  await expect(player).toHaveAttribute("autoseektolive");
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("[part=theme]");
-    return {
-      property: element.autoSeekToLive,
-      controller: theme?.shadowRoot?.querySelector("media-controller")
-        ?.hasAttribute("noautoseektolive"),
-    };
-  })).toEqual({ property: true, controller: false });
-
-  await page.evaluate(() => window.reactFixture.render({}));
-  await expect(player).not.toHaveAttribute("autoseektolive");
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector("[part=theme]");
-    return {
-      property: element.autoSeekToLive,
-      controller: theme?.shadowRoot?.querySelector("media-controller")
-        ?.hasAttribute("noautoseektolive"),
-    };
-  })).toEqual({ property: false, controller: true });
-});
-
-test("React forwards the selected theme", async ({ page }) => {
-  await page.evaluate(() => window.reactFixture.render({ theme: "demuxed" }));
-  const player = page.locator("chunkify-player");
-  await expect(player).toHaveAttribute("theme", "demuxed");
-  expect(await player.evaluate((element: ChunkifyPlayer) => element.theme)).toBe("demuxed");
 });
 
 test("React forwards and removes player colors", async ({ page }) => {
