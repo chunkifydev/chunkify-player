@@ -17,7 +17,8 @@
     "build:react-fixtures": "node scripts/build-react-fixtures.mjs",
     "test": "npm run build && node --test tests/server/*.test.mjs && npm run build:react-fixtures && playwright test",
     "check:package": "npm pack --workspaces --dry-run",
-    "check": "npm run typecheck && npm test && npm run check:package"
+    "check": "npm run typecheck && npm test && npm run check:package",
+    "release:publish": "bash ./bin/publish-npm"
   },
   "devDependencies": {
     "@playwright/test": "~1.63.0",

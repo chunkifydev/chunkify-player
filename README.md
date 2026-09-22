@@ -10,7 +10,17 @@ bundled default theme.
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
 
-The packages are currently unreleased at version `0.0.0`.
+Install the Web Component package:
+
+```sh
+npm install @chunkify/player
+```
+
+React applications can install the wrapper instead:
+
+```sh
+npm install @chunkify/player-react
+```
 
 ## Web component
 

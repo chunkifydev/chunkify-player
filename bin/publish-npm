@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly DIST_TAG="${NPM_DIST_TAG:-latest}"
+
+publish_workspace() {
+  local workspace="$1"
+  local package_name
+  local package_version
+  local npm_info
+
+  package_name="$(node -p "require('./${workspace}/package.json').name")"
+  package_version="$(node -p "require('./${workspace}/package.json').version")"
+
+  if [[ "$package_version" == "0.0.0" ]]; then
+    echo "Refusing to publish ${package_name}@${package_version}. Release Please must set a release version first."
+    return 1
+  fi
+
+  if npm_info="$(npm view "${package_name}@${package_version}" version --json 2>&1)"; then
+    echo "${package_name}@${package_version} is already published; skipping."
+    return 0
+  fi
+
+  if [[ "$npm_info" != *"E404"* ]]; then
+    echo "Unable to check ${package_name}@${package_version} on npm:"
+    echo "$npm_info"
+    return 1
+  fi
+
+  echo "Publishing ${package_name}@${package_version} with dist-tag ${DIST_TAG}."
+  npm publish --workspace "$package_name" --tag "$DIST_TAG"
+}
+
+publish_workspace "packages/player"
+publish_workspace "packages/player-react"

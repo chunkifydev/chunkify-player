@@ -3,6 +3,15 @@
   "version": "0.0.0",
   "description": "Chunkify's portable video player Web Component",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chunkifydev/chunkify-player.git",
+    "directory": "packages/player"
+  },
+  "homepage": "https://github.com/chunkifydev/chunkify-player#readme",
+  "bugs": {
+    "url": "https://github.com/chunkifydev/chunkify-player/issues"
+  },
   "type": "module",
   "files": [
     "dist",
