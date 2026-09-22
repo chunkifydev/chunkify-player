@@ -1,8 +1,9 @@
 # Third-party notices
 
-The local theme in `src/themes/demuxed.ts` is adapted from the Demuxed 2022
-theme in [Player.style](https://github.com/muxinc/player.style), copyright (c)
-2024 Mux, Inc. Player.style distributes that work under the MIT License:
+The local themes in `src/themes/demuxed.ts` and `src/themes/instaplay.ts` are
+adapted from the Demuxed 2022 and Instaplay themes in
+[Player.style](https://github.com/muxinc/player.style), copyright (c) 2024 Mux,
+Inc. Player.style distributes that work under the MIT License:
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal

@@ -48,6 +48,11 @@ The typed `style` prop supports `--play-button`, `--mute-button`,
 `--airplay-button`, and `--cast-button`. Set a variable to `"none"` to hide that
 control in the bundled Demuxed theme.
 
+The Web Component package also provides the optional compact Instaplay theme.
+Register it in browser setup before mounting the React player, then pass
+`theme="instaplay"`. See the `@chunkify/player` theme documentation for its
+controls and import order.
+
 Pass standard `<track>` children for captions, subtitles, chapters, and thumbnail
 metadata:
 

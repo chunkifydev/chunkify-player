@@ -1,4 +1,8 @@
 import { registerPlayerTheme } from "@chunkify/player";
+import { instaplayThemeMarkup } from "@chunkify/player/themes/instaplay";
+
+const optionalThemeMarkup: string = instaplayThemeMarkup;
+void optionalThemeMarkup;
 
 const player = document.createElement("chunkify-player");
 
