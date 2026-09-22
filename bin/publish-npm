@@ -3,6 +3,7 @@
 set -euo pipefail
 
 readonly DIST_TAG="${NPM_DIST_TAG:-latest}"
+readonly RELEASE_TAG="${RELEASE_TAG:-}"
 
 publish_workspace() {
   local workspace="$1"
@@ -33,5 +34,19 @@ publish_workspace() {
   npm publish --workspace "$package_name" --tag "$DIST_TAG"
 }
 
-publish_workspace "packages/player"
-publish_workspace "packages/player-react"
+case "$RELEASE_TAG" in
+  "")
+    publish_workspace "packages/player"
+    publish_workspace "packages/player-react"
+    ;;
+  player-v*)
+    publish_workspace "packages/player"
+    ;;
+  player-react-v*)
+    publish_workspace "packages/player-react"
+    ;;
+  *)
+    echo "Unsupported release tag: ${RELEASE_TAG}"
+    exit 1
+    ;;
+esac
