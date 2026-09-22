@@ -1,6 +1,6 @@
 # @chunkify/player-react
 
-The typed React 19 wrapper for Chunkify Player, with HLS and ordinary video
+The typed React wrapper for Chunkify Player, with HLS and ordinary video
 support.
 
 ## Installation
