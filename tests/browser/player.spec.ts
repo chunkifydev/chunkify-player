@@ -131,6 +131,37 @@ test("uses hls-video for HLS and video for ordinary media", async ({ page }) => 
   }))).toEqual({ tag: "video", source: "/tests/fixtures/media/video.mp4" });
 });
 
+test("contains HLS and MP4 media by default and supports fit overrides", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/master.m3u8"
+      style="display:block;width:320px;height:180px"
+    ></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  const mediaSizing = () => player.evaluate((element: ChunkifyPlayer) => ({
+    tag: element.media.localName,
+    fit: getComputedStyle(element.media).objectFit,
+    position: getComputedStyle(element.media).objectPosition,
+  }));
+
+  await expect.poll(mediaSizing).toEqual({ tag: "hls-video", fit: "contain", position: "50% 50%" });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.src = "/tests/fixtures/media/video.mp4";
+  });
+  await expect.poll(mediaSizing).toEqual({ tag: "video", fit: "contain", position: "50% 50%" });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.style.setProperty("--media-object-fit", "cover");
+    element.style.setProperty("--media-object-position", "25% 75%");
+  });
+  await expect.poll(mediaSizing).toEqual({ tag: "video", fit: "cover", position: "25% 75%" });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.src = "/tests/fixtures/media/master.m3u8";
+  });
+  await expect.poll(mediaSizing).toEqual({ tag: "hls-video", fit: "cover", position: "25% 75%" });
+});
+
 test("reflects standard video options and forwards media events", async ({ page }) => {
   await page.evaluate(() => {
     const player = document.createElement("chunkify-player");

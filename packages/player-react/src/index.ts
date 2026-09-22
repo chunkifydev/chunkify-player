@@ -61,6 +61,8 @@ type MediaCallbacks = {
 };
 
 export type ChunkifyPlayerStyle = CSSProperties & {
+  "--media-object-fit"?: CSSProperties["objectFit"] | undefined;
+  "--media-object-position"?: CSSProperties["objectPosition"] | undefined;
   "--play-button"?: CSSProperties["display"] | undefined;
   "--mute-button"?: CSSProperties["display"] | undefined;
   "--captions-button"?: CSSProperties["display"] | undefined;

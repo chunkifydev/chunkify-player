@@ -39,11 +39,18 @@ to the custom element.
   primaryColor="#700cd4"
   secondaryColor="#bb1111"
   accentColor="#cf2626"
-  style={{ "--pip-button": "none", "--captions-button": "none" }}
+  style={{
+    aspectRatio: "9 / 16",
+    "--media-object-fit": "cover",
+    "--pip-button": "none",
+    "--captions-button": "none",
+  }}
 />
 ```
 
-The typed `style` prop supports `--play-button`, `--mute-button`,
+Media defaults to `contain` for both MP4 and HLS. The typed `style` prop accepts
+`--media-object-fit` and `--media-object-position` for a shared sizing override.
+It also supports `--play-button`, `--mute-button`,
 `--captions-button`, `--pip-button`, `--fullscreen-button`,
 `--airplay-button`, and `--cast-button`. Set a variable to `"none"` to hide that
 control in the bundled Demuxed theme.

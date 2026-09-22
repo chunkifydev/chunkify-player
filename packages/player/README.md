@@ -220,16 +220,40 @@ Instaplay supports the three color attributes plus `--play-button` and
 `--mute-button`. Caption tracks still reach the media element, but Instaplay
 does not provide a control for viewers to select them.
 
+### Media sizing
+
+The player fills the size set by the application. Its media defaults to
+`object-fit: contain`, so MP4 and HLS video preserve their source ratio without
+stretching. Set the player ratio for the layout where it appears:
+
+```css
+chunkify-player {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+}
+```
+
+Use the shared sizing variables when the video should crop to fill that area or
+when its focal point should move:
+
+```css
+.cropped-player {
+  --media-object-fit: cover;
+  --media-object-position: 25% 50%;
+}
+```
+
+The player does not change its outer aspect ratio when a source changes. The
+application controls that layout; `contain` controls how the media fits inside
+it.
+
 For advanced styling, use ordinary CSS on the player and Media Chrome variables
 through the `theme` part:
 
 ```css
 .brand-player {
   border-radius: 18px;
-}
-
-.brand-player::part(media) {
-  object-fit: cover;
+  --media-object-fit: cover;
 }
 
 .brand-player::part(theme) {

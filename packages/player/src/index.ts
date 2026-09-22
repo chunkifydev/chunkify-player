@@ -145,6 +145,11 @@ export class ChunkifyPlayer extends HTMLElement {
           width: 100%;
           height: 100%;
         }
+        video,
+        hls-video {
+          object-fit: var(--media-object-fit, contain);
+          object-position: var(--media-object-position, 50% 50%);
+        }
       </style>
     `;
     this.#theme = createPlayerTheme(this.#themeName);
