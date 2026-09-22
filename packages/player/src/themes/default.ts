@@ -1,5 +1,5 @@
 // Adapted from the Player.style Demuxed 2022 theme. See THIRD_PARTY_NOTICES.md.
-export const demuxedThemeMarkup = String.raw`
+export const defaultThemeMarkup = String.raw`
 <style>
   :host {
     --media-primary-color: black;
@@ -137,7 +137,7 @@ export const demuxedThemeMarkup = String.raw`
     font-family: sofia-pro, sans-serif;
   }
 
-  .demuxed-gradient-bottom {
+  .player-gradient-bottom {
     padding-top: 37px;
     position: absolute;
     width: 100%;
@@ -276,7 +276,7 @@ export const demuxedThemeMarkup = String.raw`
 
   :host(:not([controls])) media-control-bar,
   :host(:not([controls])) [slot="centered-chrome"],
-  :host(:not([controls])) .demuxed-gradient-bottom {
+  :host(:not([controls])) .player-gradient-bottom {
     display: none;
   }
 
@@ -297,7 +297,7 @@ export const demuxedThemeMarkup = String.raw`
   <slot name="media" slot="media"></slot>
   <slot name="poster" slot="poster"></slot>
   <media-error-dialog slot="dialog"></media-error-dialog>
-  <div class="demuxed-gradient-bottom"></div>
+  <div class="player-gradient-bottom"></div>
   <div slot="top-chrome">
     <media-cast-button class="small-button">
       <svg slot="enter" viewBox="0 0 26 26"><path d="M2.5 18.5v3h3c0-1.7-1.34-3-3-3ZM2.5 14.5v2c2.76 0 5 2.2 5 5h2c0-3.87-3.13-7-7-7Z"/><path d="M2.5 10.5v2c4.97 0 9 4 9 9h2c0-6.08-4.93-11-11-11Z"/><path d="M22.5 3.5h-18c-1.1 0-2 .9-2 2v3h2v-3h18v14h-7v2h7c1.1 0 2-.9 2-2v-14c0-1.1-.9-2-2-2Z"/></svg>

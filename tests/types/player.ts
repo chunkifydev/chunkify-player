@@ -1,8 +1,4 @@
 import { registerPlayerTheme } from "@chunkify/player";
-import { instaplayThemeMarkup } from "@chunkify/player/themes/instaplay";
-
-const optionalThemeMarkup: string = instaplayThemeMarkup;
-void optionalThemeMarkup;
 
 const player = document.createElement("chunkify-player");
 
@@ -22,7 +18,7 @@ player.loop = true;
 player.muted = true;
 player.playsInline = true;
 player.autoSeekToLive = true;
-player.theme = "demuxed";
+player.theme = "default";
 player.primaryColor = "#700cd4";
 player.primaryColor = null;
 player.secondaryColor = "#bb1111";

@@ -3,9 +3,8 @@
 This repository contains a small video player Web Component and its React 19
 wrapper. The player uses the browser's `<video>` element for ordinary media and
 `hls-video-element` for HLS manifests. Media Chrome renders a locally maintained
-Demuxed 2022 theme by default, with Instaplay available as an optional compact
-theme. Standard `<track>` children provide captions, subtitles, chapters, and
-thumbnail metadata.
+default theme adapted from Demuxed 2022. Standard `<track>` children provide
+captions, subtitles, chapters, and thumbnail metadata.
 
 ## Packages
 
@@ -70,6 +69,6 @@ The repository uses TypeScript without Vite. Plain HTML examples use import maps
 and esbuild only prepares the React test fixture and example.
 
 Chunkify-authored code is licensed under [MIT](LICENSE). The adapted Player.style
-themes retain their MIT notice in
+theme retains its MIT notice in
 [`packages/player/THIRD_PARTY_NOTICES.md`](packages/player/THIRD_PARTY_NOTICES.md).
 Runtime dependencies retain their own licenses.

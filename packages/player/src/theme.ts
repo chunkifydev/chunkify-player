@@ -1,8 +1,8 @@
 import "media-chrome";
 import { MediaTheme } from "media-chrome/dist/media-theme.js";
-import { demuxedThemeMarkup } from "./themes/demuxed.js";
+import { defaultThemeMarkup } from "./themes/default.js";
 
-export const defaultPlayerTheme = "demuxed";
+export const defaultPlayerTheme = "default";
 
 const themeTemplates = new Map<string, HTMLTemplateElement>();
 
@@ -12,7 +12,7 @@ function createTemplate(markup: string): HTMLTemplateElement {
   return template;
 }
 
-themeTemplates.set(defaultPlayerTheme, createTemplate(demuxedThemeMarkup));
+themeTemplates.set(defaultPlayerTheme, createTemplate(defaultThemeMarkup));
 
 export function registerPlayerTheme(name: string, template: HTMLTemplateElement): void {
   const normalizedName = name.trim();

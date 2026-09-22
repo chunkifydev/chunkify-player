@@ -22,7 +22,7 @@ test("selects a registered theme by name without replacing the media element", a
     property: element.theme,
     hasControls: Boolean(element.shadowRoot?.querySelector("[part=theme]")
       ?.shadowRoot?.querySelector("media-control-bar")),
-  }))).toEqual({ property: "demuxed", hasControls: true });
+  }))).toEqual({ property: "default", hasControls: true });
 
   expect(await player.evaluate((element: ChunkifyPlayer) => {
     const media = element.media;
@@ -35,74 +35,6 @@ test("selects a registered theme by name without replacing the media element", a
     };
   })).toEqual({ preservedMedia: true, property: "fixture", rendered: "fixture" });
   await expect(player).toHaveAttribute("theme", "fixture");
-});
-
-test("loads the optional Instaplay theme with its compact controls", async ({ page }) => {
-  await page.evaluate(async () => {
-    await import("@chunkify/player/themes/instaplay");
-    document.body.innerHTML = `<chunkify-player
-      theme="instaplay"
-      primary-color="#700cd4"
-      secondary-color="#bb1111"
-      accent-color="#cf2626"
-      style="--mute-button: none"
-      controls
-    ></chunkify-player>`;
-  });
-
-  const player = page.locator("chunkify-player");
-  expect(await player.evaluate((element: ChunkifyPlayer) => {
-    const theme = element.shadowRoot?.querySelector<HTMLElement>("[part=theme]");
-    const root = theme?.shadowRoot;
-    const controller = root?.querySelector("media-controller");
-    const mute = root?.querySelector<HTMLElement>("media-mute-button");
-    return {
-      theme: element.theme,
-      media: element.media.localName,
-      primary: theme?.style.getPropertyValue("--media-primary-color"),
-      secondary: theme?.style.getPropertyValue("--media-secondary-color"),
-      accent: theme?.style.getPropertyValue("--media-accent-color"),
-      noAutoSeekToLive: controller?.hasAttribute("noautoseektolive"),
-      hasPlay: Boolean(root?.querySelector("media-play-button")),
-      hasMute: Boolean(mute),
-      muteDisplay: mute ? getComputedStyle(mute).display : null,
-      hasTimeline: Boolean(root?.querySelector("media-time-range")),
-      hasCaptions: Boolean(root?.querySelector("media-captions-button")),
-      hasFullscreen: Boolean(root?.querySelector("media-fullscreen-button")),
-    };
-  })).toEqual({
-    theme: "instaplay",
-    media: "video",
-    primary: "#700cd4",
-    secondary: "#bb1111",
-    accent: "#cf2626",
-    noAutoSeekToLive: true,
-    hasPlay: true,
-    hasMute: true,
-    muteDisplay: "none",
-    hasTimeline: true,
-    hasCaptions: false,
-    hasFullscreen: false,
-  });
-
-  await player.evaluate((element: ChunkifyPlayer) => {
-    element.controls = false;
-    element.autoSeekToLive = true;
-  });
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
-    const root = element.shadowRoot?.querySelector("[part=theme]")?.shadowRoot;
-    const display = (selector: string) => {
-      const control = root?.querySelector<HTMLElement>(selector);
-      return control ? getComputedStyle(control).display : null;
-    };
-    return {
-      play: display("media-play-button"),
-      mute: display("media-mute-button"),
-      timeline: display("media-time-range"),
-      noAutoSeekToLive: root?.querySelector("media-controller")
-        ?.hasAttribute("noautoseektolive"),
-    };
-  })).toEqual({ play: "none", mute: "none", timeline: "none", noAutoSeekToLive: false });
 });
 
 test("uses hls-video for HLS and video for ordinary media", async ({ page }) => {

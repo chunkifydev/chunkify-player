@@ -4,14 +4,14 @@
 
 - Replaced the custom playback-engine layer with automatic `<video>` and
   `<hls-video>` selection.
-- Kept the Demuxed 2022 Media Chrome controls and added Mux-compatible primary,
-  secondary, and accent color options.
+- Added a default Media Chrome theme adapted from Demuxed 2022, with
+  Mux-compatible primary, secondary, and accent color options.
 - Reduced the Web Component and React APIs to standard media options.
 - Added standard `<track>` mirroring for captions, subtitles, chapters, and
   thumbnail metadata.
 - Fixed vertical media overflowing the player and pushing controls outside the
   visible area.
-- Corrected Demuxed control-icon alignment with the current Media Chrome
+- Corrected default-theme control-icon alignment with the current Media Chrome
   button layout.
 - Added credentialed native and HLS playback for signed-cookie media, including
   sanitized `playback-error` events.

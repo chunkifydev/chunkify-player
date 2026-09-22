@@ -22,7 +22,6 @@
       {
         "imports": {
           "@chunkify/player": "../../packages/player/dist/index.js",
-          "@chunkify/player/themes/instaplay": "../../packages/player/dist/instaplay.js",
           "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
           "custom-media-element": "../../node_modules/custom-media-element/dist/custom-media-element.js",
           "media-tracks": "../../node_modules/media-tracks/dist/index.js",
@@ -35,7 +34,7 @@
   </head>
   <body>
     <h1>Player theming</h1>
-    <p>The first two players use Demuxed. The third imports the smaller Instaplay theme.</p>
+    <p>Both players use the bundled default theme.</p>
     <div class="players">
       <article>
         <h2>Default</h2>
@@ -56,20 +55,9 @@
             src="../../tests/fixtures/media/thumbnails.vtt" />
         </chunkify-player>
       </article>
-      <article>
-        <h2>Instaplay</h2>
-        <chunkify-player theme="instaplay"
-          primary-color="#700cd4" secondary-color="#bb1111" accent-color="#cf2626"
-          src="../../tests/fixtures/media/master.m3u8"
-          poster="../../tests/fixtures/media/poster.jpg" controls muted playsinline>
-          <track default kind="metadata" label="thumbnails"
-            src="../../tests/fixtures/media/thumbnails.vtt" />
-        </chunkify-player>
-      </article>
     </div>
     <script type="module">
-      import "@chunkify/player/themes/instaplay";
-      await import("@chunkify/player");
+      import "@chunkify/player";
     </script>
   </body>
 </html>

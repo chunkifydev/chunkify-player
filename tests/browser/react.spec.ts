@@ -16,7 +16,7 @@ test("React props configure playback and expose the player through a ref", async
     muted: true,
     playsInline: true,
     autoSeekToLive: true,
-    theme: "demuxed",
+    theme: "default",
     aspectRatio: "portrait",
     className: "customer-player",
     children: window.reactFixture.createElement("track", {
@@ -51,7 +51,7 @@ test("React props configure playback and expose the player through a ref", async
     crossOrigin: "anonymous",
     controls: true,
     autoSeekToLive: true,
-    theme: "demuxed",
+    theme: "default",
     aspectRatio: "portrait",
     computedAspectRatio: "9 / 16",
     tracks: 1,

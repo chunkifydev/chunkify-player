@@ -5,7 +5,6 @@
     "jsx": "react-jsx",
     "paths": {
       "@chunkify/player": ["./packages/player/src/index.ts"],
-      "@chunkify/player/themes/instaplay": ["./packages/player/src/instaplay.ts"],
       "@chunkify/player-react": ["./packages/player-react/src/index.ts"]
     },
     "types": ["node"]

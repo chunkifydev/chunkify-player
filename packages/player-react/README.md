@@ -36,7 +36,7 @@ to the custom element.
 ```tsx
 <ChunkifyPlayer
   src="/master.m3u8"
-  theme="demuxed"
+  theme="default"
   aspectRatio="portrait"
   controls
   primaryColor="#700cd4"
@@ -55,12 +55,7 @@ Media defaults to `contain` for both MP4 and HLS. The typed `style` prop accepts
 It also supports `--play-button`, `--mute-button`,
 `--captions-button`, `--pip-button`, `--fullscreen-button`,
 `--airplay-button`, and `--cast-button`. Set a variable to `"none"` to hide that
-control in the bundled Demuxed theme.
-
-The Web Component package also provides the optional compact Instaplay theme.
-Register it in browser setup before mounting the React player, then pass
-`theme="instaplay"`. See the `@chunkify/player` theme documentation for its
-controls and import order.
+control in the bundled default theme.
 
 Pass standard `<track>` children for captions, subtitles, chapters, and thumbnail
 metadata:

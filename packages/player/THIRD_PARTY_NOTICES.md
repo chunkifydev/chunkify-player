@@ -1,7 +1,6 @@
 # Third-party notices
 
-The local themes in `src/themes/demuxed.ts` and `src/themes/instaplay.ts` are
-adapted from the Demuxed 2022 and Instaplay themes in
+The local theme in `src/themes/default.ts` is adapted from the Demuxed 2022 theme in
 [Player.style](https://github.com/muxinc/player.style), copyright (c) 2024 Mux,
 Inc. Player.style distributes that work under the MIT License:
 

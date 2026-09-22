@@ -14,10 +14,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./themes/instaplay": {
-      "types": "./dist/instaplay.d.ts",
-      "import": "./dist/instaplay.js"
     }
   },
   "publishConfig": {

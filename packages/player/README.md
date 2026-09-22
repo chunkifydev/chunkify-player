@@ -45,7 +45,7 @@ of keeping an old reference.
 | `preload` | `preload` | Standard media preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Set to `include` to send cookies during playback. |
-| `theme` | `theme` | Registered control theme. Defaults to `demuxed`. |
+| `theme` | `theme` | Registered control theme. Defaults to `default`. |
 | `aspect-ratio` | `aspectRatio` | `portrait` maps to `9 / 16`; `landscape` maps to `16 / 9`. |
 | `primary-color` | `primaryColor` | Primary Media Chrome color for control foregrounds. |
 | `secondary-color` | `secondaryColor` | Secondary Media Chrome color for control backgrounds. |
@@ -149,9 +149,9 @@ tracks through `player.media.textTracks`.
 
 ## Controls and customization
 
-Media Chrome renders Chunkify's local adaptation of the Demuxed 2022 theme by
-default. The internal media element keeps its native controls disabled so the
-page never shows two control interfaces. `theme="demuxed"` is optional.
+Media Chrome renders Chunkify's local default theme, adapted from Demuxed 2022.
+The internal media element keeps its native controls disabled so the page never
+shows two control interfaces. `theme="default"` is optional.
 
 Set the same three colors exposed by Mux Player:
 
@@ -169,7 +169,7 @@ The attributes set `--media-primary-color`, `--media-secondary-color`, and
 `--media-accent-color` on the selected theme. Remove an attribute to restore
 that theme's default for the color.
 
-The bundled Demuxed theme exposes Mux-style player variables for selectively
+The bundled default theme exposes Mux-style player variables for selectively
 hiding its buttons. Set a variable to `none` on the player:
 
 ```html
@@ -192,34 +192,6 @@ hiding its buttons. Set a variable to `none` on the player:
 
 These variables are part of Chunkify's bundled-theme contract. A custom theme
 must map them to its own controls if it wants to support the same interface.
-
-### Optional Instaplay theme
-
-Instaplay is a compact theme with a centered play button, mute button, timeline,
-and thumbnail preview. It intentionally has no captions, fullscreen, Picture in
-Picture, AirPlay, or Cast buttons.
-
-Import the optional theme before the player, then select it by name:
-
-```js
-import "@chunkify/player/themes/instaplay";
-import "@chunkify/player";
-```
-
-```html
-<chunkify-player
-  theme="instaplay"
-  src="/master.m3u8"
-  poster="/poster.jpg"
-  controls
-></chunkify-player>
-```
-
-The optional import registers the theme once. It is excluded from the main
-entry point, so applications that only use Demuxed do not load its markup.
-Instaplay supports the three color attributes plus `--play-button` and
-`--mute-button`. Caption tracks still reach the media element, but Instaplay
-does not provide a control for viewers to select them.
 
 ### Media sizing
 
@@ -315,19 +287,15 @@ registerPlayerTheme("customer", template);
 
 Registration belongs in the theme module or application setup, not on each
 player. The template must provide a `media` slot so the selected video element
-can connect to its `media-controller`. An unknown theme name uses `demuxed`.
+can connect to its `media-controller`. An unknown theme name uses `default`.
 
-The Demuxed and Instaplay adaptations and their license notice are included in
-this package. They do not depend on Player.style packages at runtime.
+The default theme adaptation and its license notice are included in this
+package. It does not depend on Player.style packages at runtime.
 
 ## Plain HTML without a bundler
 
 A bundler resolves package dependencies after `import "@chunkify/player"`. Plain
 HTML needs an import map for the package and its browser dependencies. See
 `examples/basic/index.html` for a complete local map.
-
-When using Instaplay without a bundler, also map
-`@chunkify/player/themes/instaplay` to the built `dist/instaplay.js` entry. The
-theming example contains a complete configuration.
 
 Version `0.0.0` is an unreleased development version.
