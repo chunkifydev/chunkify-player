@@ -162,6 +162,46 @@ test("contains HLS and MP4 media by default and supports fit overrides", async (
   await expect.poll(mediaSizing).toEqual({ tag: "hls-video", fit: "cover", position: "25% 75%" });
 });
 
+test("provides portrait and landscape aspect-ratio presets", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player aspect-ratio="portrait"></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  const sizing = () => player.evaluate((element: ChunkifyPlayer) => ({
+    attribute: element.getAttribute("aspect-ratio"),
+    property: element.aspectRatio,
+    computed: getComputedStyle(element).aspectRatio,
+  }));
+
+  await expect.poll(sizing).toEqual({
+    attribute: "portrait",
+    property: "portrait",
+    computed: "9 / 16",
+  });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.aspectRatio = "landscape";
+  });
+  await expect.poll(sizing).toEqual({
+    attribute: "landscape",
+    property: "landscape",
+    computed: "16 / 9",
+  });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.setAttribute("aspect-ratio", "square");
+  });
+  await expect.poll(sizing).toEqual({ attribute: "square", property: null, computed: "auto" });
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.removeAttribute("aspect-ratio");
+    element.style.aspectRatio = "4 / 5";
+    element.setAttribute("aspect-ratio", "portrait");
+  });
+  await expect.poll(sizing).toEqual({
+    attribute: "portrait",
+    property: "portrait",
+    computed: "4 / 5",
+  });
+});
+
 test("reflects standard video options and forwards media events", async ({ page }) => {
   await page.evaluate(() => {
     const player = document.createElement("chunkify-player");

@@ -17,6 +17,7 @@ test("React props configure playback and expose the player through a ref", async
     playsInline: true,
     autoSeekToLive: true,
     theme: "demuxed",
+    aspectRatio: "portrait",
     className: "customer-player",
     children: window.reactFixture.createElement("track", {
       default: true,
@@ -39,6 +40,8 @@ test("React props configure playback and expose the player through a ref", async
       controls: element?.controls,
       autoSeekToLive: element?.autoSeekToLive,
       theme: element?.theme,
+      aspectRatio: element?.aspectRatio,
+      computedAspectRatio: element ? getComputedStyle(element).aspectRatio : null,
       tracks: element?.media.querySelectorAll(":scope > track").length,
     };
   })).toEqual({
@@ -49,6 +52,8 @@ test("React props configure playback and expose the player through a ref", async
     controls: true,
     autoSeekToLive: true,
     theme: "demuxed",
+    aspectRatio: "portrait",
+    computedAspectRatio: "9 / 16",
     tracks: 1,
   });
 });

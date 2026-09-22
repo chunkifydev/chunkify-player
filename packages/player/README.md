@@ -46,6 +46,7 @@ of keeping an old reference.
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Set to `include` to send cookies during playback. |
 | `theme` | `theme` | Registered control theme. Defaults to `demuxed`. |
+| `aspect-ratio` | `aspectRatio` | `portrait` maps to `9 / 16`; `landscape` maps to `16 / 9`. |
 | `primary-color` | `primaryColor` | Primary Media Chrome color for control foregrounds. |
 | `secondary-color` | `secondaryColor` | Secondary Media Chrome color for control backgrounds. |
 | `accent-color` | `accentColor` | Media Chrome accent color for active and highlighted controls. |
@@ -224,14 +225,28 @@ does not provide a control for viewers to select them.
 
 The player fills the size set by the application. Its media defaults to
 `object-fit: contain`, so MP4 and HLS video preserve their source ratio without
-stretching. Set the player ratio for the layout where it appears:
+stretching. Use a preset to set a common player ratio:
+
+```html
+<chunkify-player aspect-ratio="portrait" src="/portrait.mp4" controls>
+</chunkify-player>
+
+<chunkify-player aspect-ratio="landscape" src="/master.m3u8" controls>
+</chunkify-player>
+```
+
+`portrait` maps to `9 / 16` and `landscape` maps to `16 / 9`. When the attribute
+is omitted or invalid, the component does not impose a ratio. Set an exact or
+uncommon ratio with ordinary CSS:
 
 ```css
 chunkify-player {
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 4 / 5;
 }
 ```
+
+Explicit CSS overrides the attribute preset.
 
 Use the shared sizing variables when the video should crop to fill that area or
 when its focal point should move:

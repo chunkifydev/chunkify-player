@@ -17,6 +17,7 @@ import {
 import type {
   ChunkifyPlayer as PlayerElement,
   PlaybackErrorDetail,
+  PlayerAspectRatio,
   PlayerCredentials,
 } from "@chunkify/player";
 
@@ -85,6 +86,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   crossOrigin?: string | null | undefined;
   credentials?: PlayerCredentials | null | undefined;
   theme?: string | null | undefined;
+  aspectRatio?: PlayerAspectRatio | null | undefined;
   primaryColor?: string | null | undefined;
   secondaryColor?: string | null | undefined;
   accentColor?: string | null | undefined;

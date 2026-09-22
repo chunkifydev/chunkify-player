@@ -23,11 +23,13 @@ function Video({ src }: { src: string }) {
 ## Props and refs
 
 Playback props are `src`, `poster`, `preload`, `crossOrigin`, `credentials`,
-`theme`, `primaryColor`, `secondaryColor`, `accentColor`, `autoPlay`, `muted`,
-`loop`, `playsInline`, `controls`, and `autoSeekToLive`. The player preserves the
-current position when live playback starts by default. Set `autoSeekToLive` to
-opt into an automatic seek to the live edge. Set `credentials` to `"include"`
-after the application backend has set a signed playback cookie.
+`theme`, `aspectRatio`, `primaryColor`, `secondaryColor`, `accentColor`,
+`autoPlay`, `muted`, `loop`, `playsInline`, `controls`, and `autoSeekToLive`.
+Set `aspectRatio` to `"portrait"` for `9 / 16` or `"landscape"` for `16 / 9`.
+The player preserves the current position when live playback starts by default.
+Set `autoSeekToLive` to opt into an automatic seek to the live edge. Set
+`credentials` to `"include"` after the application backend has set a signed
+playback cookie.
 Standard host props such as `className`, `style`, `id`, and ARIA attributes apply
 to the custom element.
 
@@ -35,12 +37,12 @@ to the custom element.
 <ChunkifyPlayer
   src="/master.m3u8"
   theme="demuxed"
+  aspectRatio="portrait"
   controls
   primaryColor="#700cd4"
   secondaryColor="#bb1111"
   accentColor="#cf2626"
   style={{
-    aspectRatio: "9 / 16",
     "--media-object-fit": "cover",
     "--pip-button": "none",
     "--captions-button": "none",

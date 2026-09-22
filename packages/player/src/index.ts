@@ -9,6 +9,7 @@ import {
 export { registerPlayerTheme } from "./theme.js";
 
 export type ChunkifyMediaElement = HTMLVideoElement;
+export type PlayerAspectRatio = "portrait" | "landscape";
 export type PlayerCredentials = "include";
 export type PlaybackEngine = "native" | "hlsjs";
 
@@ -138,6 +139,12 @@ export class ChunkifyPlayer extends HTMLElement {
           display: block;
           overflow: hidden;
         }
+        :host([aspect-ratio="portrait"]) {
+          aspect-ratio: 9 / 16;
+        }
+        :host([aspect-ratio="landscape"]) {
+          aspect-ratio: 16 / 9;
+        }
         media-theme,
         video,
         hls-video {
@@ -184,6 +191,14 @@ export class ChunkifyPlayer extends HTMLElement {
   get theme(): string { return resolvePlayerTheme(this.getAttribute("theme")); }
   set theme(value: string | null | undefined) { this.#setStringAttribute("theme", value); }
 
+  get aspectRatio(): PlayerAspectRatio | null {
+    const value = this.getAttribute("aspect-ratio");
+    return value === "portrait" || value === "landscape" ? value : null;
+  }
+  set aspectRatio(value: PlayerAspectRatio | null | undefined) {
+    this.#setStringAttribute("aspect-ratio", value);
+  }
+
   get primaryColor(): string { return this.getAttribute("primary-color") ?? ""; }
   set primaryColor(value: string | null | undefined) { this.#setStringAttribute("primary-color", value); }
 
@@ -214,7 +229,7 @@ export class ChunkifyPlayer extends HTMLElement {
   connectedCallback() {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
-      "autoSeekToLive", "playsInline", "theme", "primaryColor", "secondaryColor", "accentColor",
+      "autoSeekToLive", "playsInline", "theme", "aspectRatio", "primaryColor", "secondaryColor", "accentColor",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);

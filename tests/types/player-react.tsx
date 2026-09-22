@@ -4,7 +4,7 @@ import { ChunkifyPlayer, type ChunkifyPlayerRef } from "@chunkify/player-react";
 const ref = createRef<ChunkifyPlayerRef>();
 <ChunkifyPlayer ref={ref} src="/master.m3u8" poster={null} preload="metadata"
   crossOrigin="anonymous" credentials="include" autoPlay muted loop playsInline controls
-  autoSeekToLive theme="demuxed"
+  autoSeekToLive theme="demuxed" aspectRatio="portrait"
   primaryColor="#700cd4" secondaryColor="#bb1111" accentColor="#cf2626"
   className="video" style={{
     width: "100%",
