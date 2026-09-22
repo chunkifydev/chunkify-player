@@ -228,7 +228,6 @@ npm run serve
 
 - `http://127.0.0.1:4173/examples/basic/`
 - `http://127.0.0.1:4173/examples/theming/`
-- `http://127.0.0.1:4173/examples/vertical/`
 - `http://127.0.0.1:4173/examples/react/`
 
 The repository uses TypeScript without Vite. Plain HTML examples use import
