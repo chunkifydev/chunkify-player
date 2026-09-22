@@ -82,6 +82,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   ref?: Ref<ChunkifyPlayerRef> | undefined;
   src?: string | null | undefined;
   poster?: string | null | undefined;
+  thumbnails?: string | null | undefined;
   preload?: string | null | undefined;
   crossOrigin?: string | null | undefined;
   credentials?: PlayerCredentials | null | undefined;

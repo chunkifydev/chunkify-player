@@ -33,13 +33,12 @@ import "@chunkify/player";
 <chunkify-player
   src="https://media.example.com/master.m3u8"
   poster="https://media.example.com/poster.jpg"
+  thumbnails="https://media.example.com/thumbnails/images.vtt"
   controls
   playsinline
 >
   <track default kind="captions" srclang="en" label="English"
     src="https://media.example.com/captions/en.vtt" />
-  <track default kind="metadata" label="thumbnails"
-    src="https://media.example.com/thumbnails/images.vtt" />
 </chunkify-player>
 ```
 
@@ -50,6 +49,7 @@ JavaScript properties are:
 | --- | --- | --- |
 | `src` | `src` | HLS manifest or ordinary video URL. |
 | `poster` | `poster` | Poster image URL. |
+| `thumbnails` | `thumbnails` | WebVTT thumbnail preview URL. |
 | `preload` | `preload` | Standard preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Use `include` for signed-cookie playback. |
@@ -107,9 +107,21 @@ tokens and cookies. The player does not provide DRM.
 
 ## Tracks and thumbnails
 
-Direct-child `<track>` elements are mirrored into the active media element.
-This supports captions, subtitles, chapters, and Media Chrome thumbnail
-previews. Thumbnail previews use `kind="metadata"` and `label="thumbnails"`.
+Set `thumbnails` to the WebVTT URL generated for thumbnail previews. The player
+adds the metadata track required by Media Chrome:
+
+```html
+<chunkify-player
+  src="/master.m3u8"
+  thumbnails="/thumbnails/images.vtt"
+  controls
+></chunkify-player>
+```
+
+Direct-child `<track>` elements are still mirrored into the active media
+element for captions, subtitles, chapters, and custom metadata. An explicit
+`<track kind="metadata" label="thumbnails">` takes precedence over the
+`thumbnails` attribute.
 
 Same-origin tracks need no CORS attribute. Public cross-origin tracks require
 `crossorigin="anonymous"` and an `Access-Control-Allow-Origin` response header.

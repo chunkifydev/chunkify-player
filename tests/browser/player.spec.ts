@@ -459,3 +459,67 @@ test("mirrors standard tracks into HLS and MP4 media", async ({ page }) => {
     Array.from(element.media.querySelectorAll<HTMLTrackElement>(":scope > track"), (track) => track.label),
   )).toEqual(["English captions", "French"]);
 });
+
+test("creates thumbnail previews from the thumbnails attribute", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/master.m3u8"
+      thumbnails="/tests/fixtures/media/thumbnails.vtt"
+      controls muted
+    ></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  const thumbnailTracks = () => player.evaluate((element: ChunkifyPlayer) => ({
+    property: element.thumbnails,
+    tracks: Array.from(element.media.querySelectorAll<HTMLTrackElement>(":scope > track"), (track) => ({
+      default: track.default,
+      kind: track.kind,
+      label: track.label,
+      source: track.getAttribute("src"),
+    })),
+  }));
+
+  await expect.poll(thumbnailTracks).toEqual({
+    property: "/tests/fixtures/media/thumbnails.vtt",
+    tracks: [{
+      default: true,
+      kind: "metadata",
+      label: "thumbnails",
+      source: "/tests/fixtures/media/thumbnails.vtt",
+    }],
+  });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.thumbnails = "/thumbnails-updated.vtt";
+    const track = document.createElement("track");
+    track.kind = "metadata";
+    track.label = "thumbnails";
+    track.src = "/thumbnails-explicit.vtt";
+    element.append(track);
+  });
+  await expect.poll(thumbnailTracks).toEqual({
+    property: "/thumbnails-updated.vtt",
+    tracks: [{
+      default: false,
+      kind: "metadata",
+      label: "thumbnails",
+      source: "/thumbnails-explicit.vtt",
+    }],
+  });
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.querySelector("track")?.remove();
+  });
+  await expect.poll(thumbnailTracks).toEqual({
+    property: "/thumbnails-updated.vtt",
+    tracks: [{
+      default: true,
+      kind: "metadata",
+      label: "thumbnails",
+      source: "/thumbnails-updated.vtt",
+    }],
+  });
+
+  await player.evaluate((element: ChunkifyPlayer) => { element.thumbnails = null; });
+  await expect.poll(thumbnailTracks).toEqual({ property: "", tracks: [] });
+});

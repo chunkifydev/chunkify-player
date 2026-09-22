@@ -10,6 +10,7 @@ test("React props configure playback and expose the player through a ref", async
   await page.evaluate(() => window.reactFixture.render({
     src: "/tests/fixtures/media/master.m3u8",
     poster: "/tests/fixtures/media/poster.jpg",
+    thumbnails: "/tests/fixtures/media/thumbnails.vtt",
     preload: "auto",
     crossOrigin: "anonymous",
     controls: true,
@@ -19,12 +20,6 @@ test("React props configure playback and expose the player through a ref", async
     theme: "default",
     aspectRatio: "portrait",
     className: "customer-player",
-    children: window.reactFixture.createElement("track", {
-      default: true,
-      kind: "metadata",
-      label: "thumbnails",
-      src: "/tests/fixtures/media/thumbnails.vtt",
-    }),
   }));
 
   const player = page.locator("chunkify-player");
@@ -36,6 +31,7 @@ test("React props configure playback and expose the player through a ref", async
       sameElement: element === document.querySelector("chunkify-player"),
       mediaTag: element?.media.localName,
       poster: element?.poster,
+      thumbnails: element?.thumbnails,
       crossOrigin: element?.crossOrigin,
       controls: element?.controls,
       autoSeekToLive: element?.autoSeekToLive,
@@ -48,6 +44,7 @@ test("React props configure playback and expose the player through a ref", async
     sameElement: true,
     mediaTag: "hls-video",
     poster: "/tests/fixtures/media/poster.jpg",
+    thumbnails: "/tests/fixtures/media/thumbnails.vtt",
     crossOrigin: "anonymous",
     controls: true,
     autoSeekToLive: true,

@@ -2,7 +2,7 @@ import { createRef } from "react";
 import { ChunkifyPlayer, type ChunkifyPlayerRef } from "@chunkify/player-react";
 
 const ref = createRef<ChunkifyPlayerRef>();
-<ChunkifyPlayer ref={ref} src="/master.m3u8" poster={null} preload="metadata"
+<ChunkifyPlayer ref={ref} src="/master.m3u8" poster={null} thumbnails="/thumbnails.vtt" preload="metadata"
   crossOrigin="anonymous" credentials="include" autoPlay muted loop playsInline controls
   autoSeekToLive theme="default" aspectRatio="portrait"
   primaryColor="#700cd4" secondaryColor="#bb1111" accentColor="#cf2626"

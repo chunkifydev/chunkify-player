@@ -36,7 +36,9 @@ const themeAttributes = [
   "controls", "autoseektolive", "primary-color", "secondary-color", "accent-color",
 ] as const;
 
-const playerAttributes = [...mediaAttributes, ...themeAttributes, "credentials", "theme"] as const;
+const playerAttributes = [
+  ...mediaAttributes, ...themeAttributes, "credentials", "theme", "thumbnails",
+] as const;
 
 const mediaEvents = [
   "abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended",
@@ -89,6 +91,7 @@ export class ChunkifyPlayer extends HTMLElement {
   #failedMedia: ChunkifyMediaElement | null = null;
   #playbackGeneration = 0;
   #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
+  #thumbnailTrack = document.createElement("track");
   #trackObserver = new MutationObserver((records) => {
     let tracksChanged = false;
     for (const record of records) {
@@ -103,6 +106,9 @@ export class ChunkifyPlayer extends HTMLElement {
           this.#removeHlsNativeTrackAttribute(record.target, record.attributeName);
         } else {
           this.#syncTrackAttributes(record.target, mirroredTrack);
+        }
+        if (record.attributeName === "kind" || record.attributeName === "label") {
+          tracksChanged = true;
         }
       }
       if (record.type === "childList" && record.target === this
@@ -175,6 +181,9 @@ export class ChunkifyPlayer extends HTMLElement {
   get poster(): string { return this.getAttribute("poster") ?? ""; }
   set poster(value: string | null | undefined) { this.#setStringAttribute("poster", value); }
 
+  get thumbnails(): string { return this.getAttribute("thumbnails") ?? ""; }
+  set thumbnails(value: string | null | undefined) { this.#setStringAttribute("thumbnails", value); }
+
   get preload(): string { return this.getAttribute("preload") ?? "metadata"; }
   set preload(value: string | null | undefined) { this.#setStringAttribute("preload", value); }
 
@@ -229,7 +238,8 @@ export class ChunkifyPlayer extends HTMLElement {
   connectedCallback() {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
-      "autoSeekToLive", "playsInline", "theme", "aspectRatio", "primaryColor", "secondaryColor", "accentColor",
+      "autoSeekToLive", "playsInline", "theme", "aspectRatio", "thumbnails", "primaryColor",
+      "secondaryColor", "accentColor",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -337,6 +347,7 @@ export class ChunkifyPlayer extends HTMLElement {
   #clearMirroredTracks() {
     for (const track of this.#mirroredTracks.values()) track.remove();
     this.#mirroredTracks.clear();
+    this.#thumbnailTrack.remove();
   }
 
   #removeHlsNativeTrackAttribute(track: HTMLTrackElement, attribute: string) {
@@ -394,6 +405,17 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#syncTrackAttributes(track, mirroredTrack);
       return mirroredTrack;
     });
+    const hasExplicitThumbnails = tracks.some((track) =>
+      track.kind === "metadata" && track.label === "thumbnails");
+    if (this.thumbnails && !hasExplicitThumbnails) {
+      this.#thumbnailTrack.default = true;
+      this.#thumbnailTrack.kind = "metadata";
+      this.#thumbnailTrack.label = "thumbnails";
+      this.#thumbnailTrack.setAttribute("src", this.thumbnails);
+      mirroredTracks.push(this.#thumbnailTrack);
+    } else {
+      this.#thumbnailTrack.remove();
+    }
     const activeTracks = Array.from(this.#media.children)
       .filter((child): child is HTMLTrackElement => child instanceof HTMLTrackElement);
     if (activeTracks.some((track, index) => track !== mirroredTracks[index])
@@ -490,7 +512,8 @@ export class ChunkifyPlayer extends HTMLElement {
         accent: this.getAttribute("accent-color"),
       });
     }
-    if (replaced || changedAttribute === undefined || changedAttribute === "src") this.#syncTracks();
+    if (replaced || changedAttribute === undefined || changedAttribute === "src"
+      || changedAttribute === "thumbnails") this.#syncTracks();
   }
 }
 
