@@ -8,6 +8,7 @@ bundled default control theme.
 | --- | --- |
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
+| `@chunkify/player-telemetry` | `packages/player-telemetry` (unpublished) |
 
 Install the Web Component package:
 
@@ -72,7 +73,8 @@ attribute.
 The read-only `media` property returns the active media element. Read it again
 after switching between HLS and MP4 because that change replaces the element.
 The player forwards standard media events such as `play`, `pause`, `timeupdate`,
-`ended`, and `error`.
+`ended`, and `error`. It also emits `mediachange` when it replaces the active
+media element.
 
 ## Playback access
 
@@ -228,6 +230,14 @@ also typed. The ref exposes the Web Component and its current `media` element.
 
 The React entry is safe to import during server rendering. It renders nothing
 on the server and loads the Web Component after mounting in the browser.
+
+## Telemetry development
+
+The separate, unpublished `@chunkify/player-telemetry` workspace can attach to
+a plain `<video>` or to `<chunkify-player>`. It emits playback records to an
+application callback; it does not send data to Chunkify or a destination service.
+See [the telemetry package README](packages/player-telemetry/README.md) for the
+current API and limits.
 
 ## Development
 

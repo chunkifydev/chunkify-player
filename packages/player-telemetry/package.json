@@ -1,0 +1,19 @@
+{
+  "name": "@chunkify/player-telemetry",
+  "version": "0.0.0",
+  "description": "Standalone playback telemetry for HTML media and Chunkify Player",
+  "license": "MIT",
+  "type": "module",
+  "files": ["dist", "src"],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" }
+  },
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  }
+}
