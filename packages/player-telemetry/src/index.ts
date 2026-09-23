@@ -135,34 +135,27 @@ function finiteNonNegative(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+const emptyConnectorMetrics = {
+  selected_rendition_width: null,
+  selected_rendition_height: null,
+  selected_rendition_codec: null,
+  selected_rendition_bitrate_bps: null,
+  rendition_switch_count: null,
+  delivery_request_count: null,
+  delivery_transferred_bytes: null,
+  delivery_throughput_bps: null,
+};
+
 function connectorMetrics(connector: TelemetryConnector | null, baseline: TelemetryConnectorSnapshot | null): Pick<ViewMetrics,
   "selected_rendition_width" | "selected_rendition_height" | "selected_rendition_codec" |
   "selected_rendition_bitrate_bps" | "rendition_switch_count" | "delivery_request_count" |
   "delivery_transferred_bytes" | "delivery_throughput_bps"> {
-  if (!connector || !baseline) return {
-    selected_rendition_width: null,
-    selected_rendition_height: null,
-    selected_rendition_codec: null,
-    selected_rendition_bitrate_bps: null,
-    rendition_switch_count: null,
-    delivery_request_count: null,
-    delivery_transferred_bytes: null,
-    delivery_throughput_bps: null,
-  };
+  if (!connector || !baseline) return { ...emptyConnectorMetrics };
   let current: TelemetryConnectorSnapshot;
   try {
     current = connector.snapshot();
   } catch {
-    return {
-      selected_rendition_width: null,
-      selected_rendition_height: null,
-      selected_rendition_codec: null,
-      selected_rendition_bitrate_bps: null,
-      rendition_switch_count: null,
-      delivery_request_count: null,
-      delivery_transferred_bytes: null,
-      delivery_throughput_bps: null,
-    };
+    return { ...emptyConnectorMetrics };
   }
   const switches = finiteNonNegative(current.renditionSwitchCount - baseline.renditionSwitchCount);
   const requests = finiteNonNegative(current.deliveryRequestCount - baseline.deliveryRequestCount);

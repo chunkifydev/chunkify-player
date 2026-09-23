@@ -6,7 +6,10 @@ export interface MediaPlayerHost extends HTMLElement {
 }
 
 /** Attach the standalone media collector to a Chunkify Player. */
-export function attachPlayerTelemetry(player: MediaPlayerHost, options: TelemetryOptions): TelemetrySession {
+export function attachPlayerTelemetry(
+  player: MediaPlayerHost,
+  options: TelemetryOptions,
+): Pick<TelemetrySession, "startAttempt" | "sourceChanged" | "destroy"> {
   let media = player.media;
   let session = attachTelemetry(media, options);
   let destroyed = false;
@@ -24,7 +27,6 @@ export function attachPlayerTelemetry(player: MediaPlayerHost, options: Telemetr
   return {
     startAttempt() { if (!destroyed) session.startAttempt(); },
     sourceChanged() { if (!destroyed) session.sourceChanged(); },
-    setConnector(connector) { if (!destroyed) session.setConnector(connector); },
     destroy() {
       if (destroyed) return;
       destroyed = true;
