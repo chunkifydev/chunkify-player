@@ -260,6 +260,7 @@ npm run serve
 - `http://127.0.0.1:4173/examples/basic/`
 - `http://127.0.0.1:4173/examples/theming/`
 - `http://127.0.0.1:4173/examples/react/`
+- `http://127.0.0.1:4173/examples/telemetry/`
 
 The repository uses TypeScript without Vite. Plain HTML examples use import
 maps, and esbuild only prepares the React example and test fixture.

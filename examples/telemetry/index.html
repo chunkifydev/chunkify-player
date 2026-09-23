@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chunkify telemetry example</title>
+    <style>
+      body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
+      form { display: grid; gap: 0.75rem; }
+      label { display: grid; gap: 0.25rem; }
+      input, select, button { font: inherit; padding: 0.5rem; }
+      .actions { display: flex; gap: 0.5rem; }
+      #player-container { margin: 1rem 0; }
+      #player-container > * { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+      #events { display: grid; gap: 0.5rem; }
+      #events details { border: 1px solid #ccc; border-radius: 0.25rem; padding: 0.5rem; }
+      #events summary { cursor: pointer; }
+      #events pre { overflow: auto; font-size: 0.8rem; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@chunkify/player": "../../packages/player/dist/index.js",
+          "@chunkify/telemetry": "../../packages/telemetry/dist/index.js",
+          "@chunkify/telemetry/hlsjs": "../../packages/telemetry/dist/hlsjs.js",
+          "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
+          "hls.js/": "../../node_modules/hls.js/",
+          "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
+          "custom-media-element": "../../node_modules/custom-media-element/dist/custom-media-element.js",
+          "media-tracks": "../../node_modules/media-tracks/dist/index.js",
+          "media-chrome": "../../node_modules/media-chrome/dist/index.js",
+          "media-chrome/": "../../node_modules/media-chrome/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Playback telemetry</h1>
+    <p>Enter a video ID and URL, load the player, then press play. Events appear below as the callback receives them. This page does not send or store events.</p>
+    <form id="setup">
+      <label>Video ID <input name="videoId" value="video-demo" required /></label>
+      <label>Video URL <input name="source" value="../../tests/fixtures/media/master.m3u8" required /></label>
+      <label>Playback setup
+        <select name="mode">
+          <option value="player">Chunkify Player</option>
+          <option value="video">Plain video element</option>
+          <option value="hlsjs">External hls.js instance</option>
+        </select>
+      </label>
+      <div class="actions">
+        <button type="submit">Load and monitor</button>
+        <button id="play" type="button" disabled>Play</button>
+        <button id="stop" type="button" disabled>Stop monitoring</button>
+      </div>
+    </form>
+    <p id="status" role="status">Loading packages...</p>
+    <div id="player-container"></div>
+    <h2>Events (<span id="event-count">0</span>)</h2>
+    <div id="events" aria-live="polite"></div>
+    <script type="module">
+      import "@chunkify/player";
+      import Hls from "hls.js";
+      import { monitor } from "@chunkify/telemetry";
+      import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
+
+      const form = document.querySelector("#setup");
+      const container = document.querySelector("#player-container");
+      const eventList = document.querySelector("#events");
+      const eventCount = document.querySelector("#event-count");
+      const status = document.querySelector("#status");
+      const playButton = document.querySelector("#play");
+      const stopButton = document.querySelector("#stop");
+      let session = null;
+      let hls = null;
+      let playbackTarget = null;
+      let count = 0;
+
+      function stop() {
+        session?.destroy();
+        hls?.destroy();
+        session = null;
+        hls = null;
+        playbackTarget = null;
+        container.replaceChildren();
+        playButton.disabled = true;
+        stopButton.disabled = true;
+      }
+
+      function record(event) {
+        count++;
+        eventCount.textContent = String(count);
+        const item = document.createElement("details");
+        const title = document.createElement("summary");
+        title.textContent = `${count}. ${event.event_name} (${event.video_id})`;
+        const payload = document.createElement("pre");
+        payload.textContent = JSON.stringify(event, null, 2);
+        item.append(title, payload);
+        eventList.prepend(item);
+      }
+
+      form.addEventListener("submit", (submitEvent) => {
+        submitEvent.preventDefault();
+        stop();
+        eventList.replaceChildren();
+        count = 0;
+        eventCount.textContent = "0";
+
+        const { videoId, source, mode } = Object.fromEntries(new FormData(form));
+        const options = { videoId: videoId.trim(), provider: "callback", send: record };
+        try {
+          if (mode === "player") {
+            const player = document.createElement("chunkify-player");
+            player.setAttribute("controls", "");
+            player.setAttribute("playsinline", "");
+            container.append(player);
+            playbackTarget = player;
+            session = monitor(player, options);
+            player.src = source.trim();
+          } else {
+            const video = document.createElement("video");
+            video.controls = true;
+            video.playsInline = true;
+            container.append(video);
+            playbackTarget = video;
+            if (mode === "hlsjs") {
+              if (!Hls.isSupported()) throw new Error("hls.js is not supported in this browser.");
+              hls = new Hls();
+              session = monitorHlsJs(hls, options);
+              hls.attachMedia(video);
+              hls.loadSource(source.trim());
+            } else {
+              session = monitor(video, options);
+              video.src = source.trim();
+            }
+          }
+          playButton.disabled = false;
+          stopButton.disabled = false;
+          status.textContent = mode === "video" && new URL(source.trim(), location.href).pathname.endsWith(".m3u8")
+            ? "A plain video element needs native HLS support for this URL. Select Chunkify Player or external hls.js here, or enter an MP4 URL."
+            : "Ready. Press Play to start a telemetry view. Stop monitoring to emit its final event.";
+        } catch (error) {
+          stop();
+          status.textContent = `Could not start: ${error.message}`;
+        }
+      });
+
+      playButton.addEventListener("click", async () => {
+        if (!session || !playbackTarget) return;
+        const media = playbackTarget.localName === "chunkify-player" ? playbackTarget.media : playbackTarget;
+        session.startAttempt();
+        try {
+          await media.play();
+        } catch (error) {
+          status.textContent = `Playback failed: ${error.message}`;
+        }
+      });
+
+      stopButton.addEventListener("click", () => {
+        stop();
+        status.textContent = "Monitoring stopped.";
+      });
+      status.textContent = "Ready. The default URL is a local HLS test fixture.";
+    </script>
+  </body>
+</html>
