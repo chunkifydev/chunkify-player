@@ -233,8 +233,8 @@ on the server and loads the Web Component after mounting in the browser.
 
 ## Telemetry development
 
-The separate, unpublished `@chunkify/telemetry` workspace can attach to
-a plain `<video>` or to `<chunkify-player>`. It emits playback records to an
+The separate, unpublished `@chunkify/telemetry` workspace can monitor
+a plain `<video>` or `<chunkify-player>`. It emits playback records to an
 application callback; it does not send data to Chunkify or a destination service.
 See [the telemetry package README](packages/telemetry/README.md) for the
 current API and limits.

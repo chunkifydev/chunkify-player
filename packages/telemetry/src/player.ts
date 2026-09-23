@@ -1,4 +1,4 @@
-import { attachTelemetry, type TelemetryOptions, type TelemetrySession } from "./index.js";
+import { attachTelemetry, type TelemetryOptions, type TelemetrySession } from "./core.js";
 
 /** The public surface needed from a player that can replace its media element. */
 export interface MediaPlayerHost extends HTMLElement {

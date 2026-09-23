@@ -2,6 +2,52 @@ import { expect, test } from "@playwright/test";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
 import type { ChunkifyPlayerTelemetryEvent } from "../../packages/telemetry/src/index.js";
 
+test("monitor selects the video collector or Chunkify adapter from its target", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+
+  const result = await page.evaluate(async () => {
+    const { monitor } = await import("@chunkify/telemetry");
+    const videoEvents: ChunkifyPlayerTelemetryEvent[] = [];
+    const playerEvents: ChunkifyPlayerTelemetryEvent[] = [];
+    const video = document.createElement("video");
+    const player: ChunkifyPlayer = document.createElement("chunkify-player");
+    player.preload = "none";
+    document.body.append(video, player);
+
+    const videoSession = monitor(video, {
+      assetId: "asset-video", provider: "callback", send(event) { videoEvents.push(event); },
+    });
+    const playerSession = monitor(player, {
+      assetId: "asset-player", provider: "callback", send(event) { playerEvents.push(event); },
+    });
+    video.dispatchEvent(new Event("play"));
+    player.media.dispatchEvent(new Event("play"));
+    player.src = "/video.m3u8";
+    player.media.dispatchEvent(new Event("play"));
+    videoSession.destroy();
+    playerSession.destroy();
+    player.remove();
+    video.remove();
+
+    return {
+      video: videoEvents.map((event) => [event.event_name, event.reason, event.asset_id]),
+      player: playerEvents.map((event) => [event.event_name, event.reason, event.asset_id]),
+    };
+  });
+
+  expect(result.video).toEqual([
+    ["chunkify.video.view_started", null, "asset-video"],
+    ["chunkify.video.view_ended", "destroyed", "asset-video"],
+  ]);
+  expect(result.player).toEqual([
+    ["chunkify.video.view_started", null, "asset-player"],
+    ["chunkify.video.view_ended", "source_changed", "asset-player"],
+    ["chunkify.video.view_started", null, "asset-player"],
+    ["chunkify.video.view_ended", "destroyed", "asset-player"],
+  ]);
+});
+
 test("the standalone adapter follows Chunkify Player media replacements", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
