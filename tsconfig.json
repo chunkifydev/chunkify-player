@@ -7,6 +7,7 @@
       "@chunkify/player": ["./packages/player/src/index.ts"],
       "@chunkify/telemetry": ["./packages/telemetry/src/index.ts"],
       "@chunkify/telemetry/player": ["./packages/telemetry/src/player.ts"],
+      "@chunkify/telemetry/hlsjs": ["./packages/telemetry/src/hlsjs.ts"],
       "@chunkify/player-react": ["./packages/player-react/src/index.ts"]
     },
     "types": ["node"]

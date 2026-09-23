@@ -116,6 +116,8 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
 
   const player = page.locator("chunkify-player");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  const hlsJsActive = await player.evaluate((element: ChunkifyPlayer) =>
+    Boolean((element.media as ChunkifyPlayer["media"] & { api?: unknown }).api));
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { telemetryEvents: ChunkifyPlayerTelemetryEvent[] }
@@ -142,4 +144,70 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "destroyed"],
   ]);
+  if (hlsJsActive) {
+    expect(events[1]).toMatchObject({
+      connector_name: "hls.js",
+      metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
+    });
+    expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
+    expect(events[1]!.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
+    expect(events[3]!.connector_name).toBe("html-media");
+  }
+});
+
+test("an external hls.js instance enriches an ordinary video", async ({ page, browserName }) => {
+  await page.goto("/tests/fixtures/player.html");
+  const supported = await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    return Hls.isSupported();
+  });
+  test.skip(!supported, `hls.js MediaSource playback is unavailable in ${browserName}`);
+
+  await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    const { attachHlsJsTelemetry } = await import("@chunkify/telemetry/hlsjs");
+    const state = window as typeof window & {
+      externalVideo: HTMLVideoElement;
+      externalHls: InstanceType<typeof Hls>;
+      externalEvents: ChunkifyPlayerTelemetryEvent[];
+      externalSession: ReturnType<typeof attachHlsJsTelemetry>;
+    };
+    state.externalVideo = document.createElement("video");
+    state.externalVideo.muted = true;
+    document.body.append(state.externalVideo);
+    state.externalHls = new Hls();
+    state.externalEvents = [];
+    state.externalSession = attachHlsJsTelemetry(state.externalVideo, state.externalHls, {
+      assetId: "asset-external", provider: "callback",
+      send(event) { state.externalEvents.push(event); },
+    });
+    state.externalSession.startAttempt();
+    state.externalHls.attachMedia(state.externalVideo);
+    state.externalHls.loadSource("/tests/fixtures/media/master.m3u8");
+  });
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { externalVideo: HTMLVideoElement }
+  ).externalVideo.readyState)).toBeGreaterThanOrEqual(2);
+  await page.evaluate(() => (
+    window as typeof window & { externalVideo: HTMLVideoElement }
+  ).externalVideo.play());
+  const events = await page.evaluate(() => {
+    const state = window as typeof window & {
+      externalEvents: ChunkifyPlayerTelemetryEvent[];
+      externalSession: { destroy(): void };
+      externalHls: { destroy(): void };
+    };
+    state.externalSession.destroy();
+    state.externalHls.destroy();
+    return state.externalEvents;
+  });
+  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "destroyed"],
+  ]);
+  expect(events[1]).toMatchObject({
+    connector_name: "hls.js",
+    metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
+  });
+  expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
 });

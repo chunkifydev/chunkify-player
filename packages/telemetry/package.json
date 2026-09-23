@@ -8,8 +8,11 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" }
+    "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" },
+    "./hlsjs": { "types": "./dist/hlsjs.d.ts", "import": "./dist/hlsjs.js" }
   },
+  "peerDependencies": { "hls.js": "^1.6.5" },
+  "peerDependenciesMeta": { "hls.js": { "optional": true } },
   "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
