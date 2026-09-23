@@ -33,7 +33,7 @@ export interface ChunkifyPlayerTelemetryEvent {
   sequence: number;
   occurred_at: string;
   view_id: string;
-  asset_id: string;
+  video_id: string;
   sdk_name: "@chunkify/telemetry";
   sdk_version: string;
   connector_name: string;
@@ -248,7 +248,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
     const event: ChunkifyPlayerTelemetryEvent = {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
-      occurred_at: new Date().toISOString(), view_id: current.id, asset_id: videoId,
+      occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/telemetry", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,

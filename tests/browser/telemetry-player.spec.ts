@@ -31,8 +31,8 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     video.remove();
 
     return {
-      video: videoEvents.map((event) => [event.event_name, event.reason, event.asset_id]),
-      player: playerEvents.map((event) => [event.event_name, event.reason, event.asset_id]),
+      video: videoEvents.map((event) => [event.event_name, event.reason, event.video_id]),
+      player: playerEvents.map((event) => [event.event_name, event.reason, event.video_id]),
     };
   });
 
@@ -78,18 +78,18 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
 
     return {
       mediaKinds: [first.localName, second.localName, third.localName],
-      events: events.map((event) => ({ name: event.event_name, reason: event.reason, asset: event.asset_id })),
+      events: events.map((event) => ({ name: event.event_name, reason: event.reason, video: event.video_id })),
     };
   });
 
   expect(result.mediaKinds).toEqual(["video", "hls-video", "video"]);
   expect(result.events).toEqual([
-    { name: "chunkify.video.view_started", reason: null, asset: "asset-adapter" },
-    { name: "chunkify.video.view_ended", reason: "source_changed", asset: "asset-adapter" },
-    { name: "chunkify.video.view_started", reason: null, asset: "asset-adapter" },
-    { name: "chunkify.video.view_ended", reason: "source_changed", asset: "asset-adapter" },
-    { name: "chunkify.video.view_started", reason: null, asset: "asset-adapter" },
-    { name: "chunkify.video.view_ended", reason: "destroyed", asset: "asset-adapter" },
+    { name: "chunkify.video.view_started", reason: null, video: "asset-adapter" },
+    { name: "chunkify.video.view_ended", reason: "source_changed", video: "asset-adapter" },
+    { name: "chunkify.video.view_started", reason: null, video: "asset-adapter" },
+    { name: "chunkify.video.view_ended", reason: "source_changed", video: "asset-adapter" },
+    { name: "chunkify.video.view_started", reason: null, video: "asset-adapter" },
+    { name: "chunkify.video.view_ended", reason: "destroyed", video: "asset-adapter" },
   ]);
 });
 
