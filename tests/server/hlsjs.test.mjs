@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { attachHlsJsTelemetry, createHlsJsConnector } from "@chunkify/telemetry/hlsjs";
+import { monitorHlsJs, createHlsJsConnector } from "@chunkify/telemetry/hlsjs";
 
 class FakeHls {
   static version = "1.7.3";
@@ -66,7 +66,7 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
 
 test("hls.js telemetry validates options before an engine attaches media", () => {
   const hls = new FakeHls();
-  assert.throws(() => attachHlsJsTelemetry(hls, {
+  assert.throws(() => monitorHlsJs(hls, {
     videoId: "", provider: "callback", send() {},
   }), /non-empty videoId/);
   assert.equal(hls.listeners.size, 0);

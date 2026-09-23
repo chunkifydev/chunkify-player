@@ -165,19 +165,19 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
 
   await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { attachHlsJsTelemetry } = await import("@chunkify/telemetry/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/telemetry/hlsjs");
     const state = window as typeof window & {
       externalVideo: HTMLVideoElement;
       externalHls: InstanceType<typeof Hls>;
       externalEvents: ChunkifyPlayerTelemetryEvent[];
-      externalSession: ReturnType<typeof attachHlsJsTelemetry>;
+      externalSession: ReturnType<typeof monitorHlsJs>;
     };
     state.externalVideo = document.createElement("video");
     state.externalVideo.muted = true;
     document.body.append(state.externalVideo);
     state.externalHls = new Hls();
     state.externalEvents = [];
-    state.externalSession = attachHlsJsTelemetry(state.externalHls, {
+    state.externalSession = monitorHlsJs(state.externalHls, {
       videoId: "asset-external", provider: "callback",
       send(event) { state.externalEvents.push(event); },
     });
@@ -222,14 +222,14 @@ test("the hls.js adapter follows media that was attached earlier or changes late
 
   const events = await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { attachHlsJsTelemetry } = await import("@chunkify/telemetry/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/telemetry/hlsjs");
     const first = document.createElement("video");
     const second = document.createElement("video");
     document.body.append(first, second);
     const hls = new Hls();
     hls.attachMedia(first);
     const records: ChunkifyPlayerTelemetryEvent[] = [];
-    const session = attachHlsJsTelemetry(hls, {
+    const session = monitorHlsJs(hls, {
       videoId: "asset-reattach", provider: "callback", send(event) { records.push(event); },
     });
     first.dispatchEvent(new Event("play"));

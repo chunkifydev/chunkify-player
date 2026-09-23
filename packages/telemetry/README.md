@@ -45,11 +45,11 @@ For a separate player that gives you its `Hls` instance, use the optional hls.js
 
 ```ts
 import Hls from "hls.js";
-import { attachHlsJsTelemetry } from "@chunkify/telemetry/hlsjs";
+import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
 
 const video = document.querySelector("video")!;
 const hls = new Hls();
-const session = attachHlsJsTelemetry(hls, {
+const session = monitorHlsJs(hls, {
   videoId: "video_123", provider: "callback", send: (event) => console.log(event),
 });
 session.startAttempt(); // Call before starting HLS loading to include startup requests.

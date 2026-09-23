@@ -91,7 +91,7 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
 }
 
 /** Follow an hls.js instance as it attaches to or detaches from media. */
-export function attachHlsJsTelemetry(hls: Hls, options: TelemetryOptions):
+export function monitorHlsJs(hls: Hls, options: TelemetryOptions):
   Pick<TelemetrySession, "startAttempt" | "sourceChanged" | "destroy"> {
   assertTelemetryOptions(options);
   const HlsClass = hls.constructor as typeof Hls;
