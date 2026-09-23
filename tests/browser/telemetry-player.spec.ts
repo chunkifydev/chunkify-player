@@ -177,7 +177,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     document.body.append(state.externalVideo);
     state.externalHls = new Hls();
     state.externalEvents = [];
-    state.externalSession = attachHlsJsTelemetry(state.externalVideo, state.externalHls, {
+    state.externalSession = attachHlsJsTelemetry(state.externalHls, {
       assetId: "asset-external", provider: "callback",
       send(event) { state.externalEvents.push(event); },
     });
@@ -210,4 +210,41 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
   });
   expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
+});
+
+test("the hls.js adapter follows media that was attached earlier or changes later", async ({ page, browserName }) => {
+  await page.goto("/tests/fixtures/player.html");
+  const supported = await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    return Hls.isSupported();
+  });
+  test.skip(!supported, `hls.js MediaSource playback is unavailable in ${browserName}`);
+
+  const events = await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    const { attachHlsJsTelemetry } = await import("@chunkify/telemetry/hlsjs");
+    const first = document.createElement("video");
+    const second = document.createElement("video");
+    document.body.append(first, second);
+    const hls = new Hls();
+    hls.attachMedia(first);
+    const records: ChunkifyPlayerTelemetryEvent[] = [];
+    const session = attachHlsJsTelemetry(hls, {
+      assetId: "asset-reattach", provider: "callback", send(event) { records.push(event); },
+    });
+    first.dispatchEvent(new Event("play"));
+    hls.detachMedia();
+    hls.attachMedia(second);
+    second.dispatchEvent(new Event("play"));
+    hls.destroy();
+    session.destroy();
+    second.dispatchEvent(new Event("play"));
+    return records;
+  });
+  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "source_changed"],
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "destroyed"],
+  ]);
 });

@@ -1,3 +1,5 @@
+import { assertTelemetryOptions } from "./options.js";
+
 const sdkVersion = "0.0.0";
 
 export type TelemetryEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
@@ -212,20 +214,7 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
 }
 
 export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptions): TelemetrySession {
-  if (typeof options.assetId !== "string" || !options.assetId.trim()) {
-    throw new TypeError("Telemetry requires a non-empty assetId.");
-  }
-  if (options.provider !== "callback" || typeof options.send !== "function") {
-    throw new TypeError("Telemetry requires a callback destination with a send function.");
-  }
-  if ((options.environment !== undefined && typeof options.environment !== "string") ||
-      (options.viewerId !== undefined && typeof options.viewerId !== "string")) {
-    throw new TypeError("Telemetry environment and viewerId must be strings when provided.");
-  }
-  if (options.sampleRate !== undefined &&
-      (!Number.isFinite(options.sampleRate) || options.sampleRate < 0 || options.sampleRate > 1)) {
-    throw new TypeError("Telemetry sampleRate must be a finite number from 0 to 1.");
-  }
+  assertTelemetryOptions(options);
   const { assetId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
   let view: View | null = null;
   let destroyed = false;

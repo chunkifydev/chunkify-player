@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHlsJsConnector } from "@chunkify/telemetry/hlsjs";
+import { attachHlsJsTelemetry, createHlsJsConnector } from "@chunkify/telemetry/hlsjs";
 
 class FakeHls {
   static version = "1.7.3";
@@ -62,4 +62,12 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
   hls.emit(FakeHls.Events.LEVEL_SWITCHED, { level: 0 });
   assert.equal(connector.snapshot().renditionSwitchCount, 1);
   assert.equal([...hls.listeners.values()].every((listeners) => listeners.size === 0), true);
+});
+
+test("hls.js telemetry validates options before an engine attaches media", () => {
+  const hls = new FakeHls();
+  assert.throws(() => attachHlsJsTelemetry(hls, {
+    assetId: "", provider: "callback", send() {},
+  }), /non-empty assetId/);
+  assert.equal(hls.listeners.size, 0);
 });

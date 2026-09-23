@@ -5,6 +5,7 @@ import type {
 } from "hls.js";
 import { attachTelemetry, type TelemetryConnector, type TelemetryConnectorError,
   type TelemetryConnectorSnapshot, type TelemetryOptions, type TelemetrySession } from "./core.js";
+import { assertTelemetryOptions } from "./options.js";
 
 export interface HlsJsTelemetryConnector extends TelemetryConnector {
   destroy(): void;
@@ -89,27 +90,73 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
   };
 }
 
-/** Attach media telemetry and hls.js measurements to an externally managed player. */
-export function attachHlsJsTelemetry(video: HTMLVideoElement, hls: Hls, options: TelemetryOptions):
+/** Follow an hls.js instance as it attaches to or detaches from media. */
+export function attachHlsJsTelemetry(hls: Hls, options: TelemetryOptions):
   Pick<TelemetrySession, "startAttempt" | "sourceChanged" | "destroy"> {
-  const session = attachTelemetry(video, options);
-  let connector: HlsJsTelemetryConnector;
-  try {
-    connector = createHlsJsConnector(hls);
-    session.setConnector(connector);
-  } catch (error) {
-    session.destroy();
-    throw error;
-  }
+  assertTelemetryOptions(options);
+  const HlsClass = hls.constructor as typeof Hls;
+  let media: HTMLMediaElement | null = null;
+  let session: TelemetrySession | null = null;
+  let connector: HlsJsTelemetryConnector | null = null;
+  let pendingAttempt = false;
   let destroyed = false;
+
+  const releaseMedia = (sourceChanged: boolean) => {
+    const previousSession = session;
+    const previousConnector = connector;
+    media = null;
+    session = null;
+    connector = null;
+    if (sourceChanged) previousSession?.sourceChanged();
+    previousSession?.destroy();
+    previousConnector?.destroy();
+  };
+  const attachMedia = () => {
+    const nextMedia = hls.media;
+    if (destroyed || !nextMedia || nextMedia === media) return;
+    if (media) releaseMedia(true);
+    const nextSession = attachTelemetry(nextMedia, options);
+    media = nextMedia;
+    session = nextSession;
+    try {
+      connector = createHlsJsConnector(hls);
+      nextSession.setConnector(connector);
+    } catch {
+      // An engine measurement failure must not prevent media playback telemetry.
+    }
+    if (pendingAttempt) {
+      pendingAttempt = false;
+      nextSession.startAttempt();
+    }
+  };
+  const onMediaAttaching = () => attachMedia();
+  const onMediaDetaching = () => releaseMedia(true);
+  const onDestroying = () => destroy();
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    hls.off(HlsClass.Events.MEDIA_ATTACHING, onMediaAttaching);
+    hls.off(HlsClass.Events.MEDIA_DETACHING, onMediaDetaching);
+    hls.off(HlsClass.Events.DESTROYING, onDestroying);
+    releaseMedia(false);
+    pendingAttempt = false;
+  }
+
+  hls.on(HlsClass.Events.MEDIA_ATTACHING, onMediaAttaching);
+  hls.on(HlsClass.Events.MEDIA_DETACHING, onMediaDetaching);
+  hls.on(HlsClass.Events.DESTROYING, onDestroying);
+  attachMedia();
   return {
-    startAttempt: () => session.startAttempt(),
-    sourceChanged: () => session.sourceChanged(),
-    destroy() {
+    startAttempt() {
       if (destroyed) return;
-      destroyed = true;
-      session.destroy();
-      connector.destroy();
+      if (session) session.startAttempt();
+      else pendingAttempt = true;
     },
+    sourceChanged() {
+      if (destroyed) return;
+      pendingAttempt = false;
+      session?.sourceChanged();
+    },
+    destroy,
   };
 }
