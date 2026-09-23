@@ -16,10 +16,10 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     document.body.append(video, player);
 
     const videoSession = monitor(video, {
-      assetId: "asset-video", provider: "callback", send(event) { videoEvents.push(event); },
+      videoId: "asset-video", provider: "callback", send(event) { videoEvents.push(event); },
     });
     const playerSession = monitor(player, {
-      assetId: "asset-player", provider: "callback", send(event) { playerEvents.push(event); },
+      videoId: "asset-player", provider: "callback", send(event) { playerEvents.push(event); },
     });
     video.dispatchEvent(new Event("play"));
     player.media.dispatchEvent(new Event("play"));
@@ -59,7 +59,7 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     player.preload = "none";
     document.body.append(player);
     const session = attachPlayerTelemetry(player, {
-      assetId: "asset-adapter",
+      videoId: "asset-adapter",
       provider: "callback",
       send(event) { events.push(event); },
     });
@@ -108,7 +108,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     player.src = "/tests/fixtures/media/master.m3u8";
     document.body.append(player);
     state.telemetrySession = attachPlayerTelemetry(player, {
-      assetId: "asset-real-playback",
+      videoId: "asset-real-playback",
       provider: "callback",
       send(event) { state.telemetryEvents.push(event); },
     });
@@ -178,7 +178,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     state.externalHls = new Hls();
     state.externalEvents = [];
     state.externalSession = attachHlsJsTelemetry(state.externalHls, {
-      assetId: "asset-external", provider: "callback",
+      videoId: "asset-external", provider: "callback",
       send(event) { state.externalEvents.push(event); },
     });
     state.externalSession.startAttempt();
@@ -230,7 +230,7 @@ test("the hls.js adapter follows media that was attached earlier or changes late
     hls.attachMedia(first);
     const records: ChunkifyPlayerTelemetryEvent[] = [];
     const session = attachHlsJsTelemetry(hls, {
-      assetId: "asset-reattach", provider: "callback", send(event) { records.push(event); },
+      videoId: "asset-reattach", provider: "callback", send(event) { records.push(event); },
     });
     first.dispatchEvent(new Event("play"));
     hls.detachMedia();

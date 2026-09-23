@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 test("attachment stays idle and one playback attempt emits ordered start and end records", async ({ page }) => {
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-test", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-test", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.dispatchEvent(new Event("loadedmetadata"));
   });
   expect(await page.evaluate(() => window.telemetryFixture.events)).toEqual([]);
@@ -44,7 +44,7 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-timing", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-timing", provider: "callback", send: (event) => { f.events.push(event); } });
   });
   const dispatch = (event: string) => page.evaluate((event) => window.telemetryFixture.video.dispatchEvent(new Event(event)), event);
   await dispatch("play");
@@ -97,7 +97,7 @@ test("final records contain cumulative buffering, seeking and completion measure
       duration: { configurable: true, value: 100 },
       currentTime: { configurable: true, writable: true, value: 0 },
     });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-metrics", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-metrics", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -139,7 +139,7 @@ test("snapshots report cumulative metrics every 30 seconds of active playing tim
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-snapshot", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-snapshot", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -178,7 +178,7 @@ test("sampling keeps a complete selected view and makes a fresh decision for rep
     state.restoreRandom = () => { Math.random = originalRandom; };
     Math.random = () => decisions.shift() ?? 1;
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-sampled", provider: "callback", sampleRate: 0.5,
+      videoId: "asset-sampled", provider: "callback", sampleRate: 0.5,
       send: (event) => { f.events.push(event); },
     });
     f.video.dispatchEvent(new Event("play"));
@@ -221,7 +221,7 @@ test("sample rates zero and one do not require a random decision", async ({ page
     state.restoreRandom = () => { Math.random = originalRandom; };
     Math.random = () => { throw new Error("sampling should not need randomness"); };
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-none", provider: "callback", sampleRate: 0,
+      videoId: "asset-none", provider: "callback", sampleRate: 0,
       send: (event) => { f.events.push(event); },
     });
     f.video.dispatchEvent(new Event("play"));
@@ -235,7 +235,7 @@ test("sample rates zero and one do not require a random decision", async ({ page
     f.session!.destroy();
     const excludedCount = f.events.length;
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-all", provider: "callback", sampleRate: 1,
+      videoId: "asset-all", provider: "callback", sampleRate: 1,
       send: (event) => { f.events.push(event); },
     });
     f.session.startAttempt();
@@ -254,7 +254,7 @@ test("a media error stops an unfinished seek measurement", async ({ page }) => {
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-seek-error", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-seek-error", provider: "callback", send: (event) => { f.events.push(event); } });
     for (const event of ["play", "playing", "seeking"]) f.video.dispatchEvent(new Event(event));
   });
   await page.clock.runFor(2000);
@@ -275,7 +275,7 @@ test("media failures emit one normalized error record without raw error text", a
         currentTime: { configurable: true, writable: true, value: 12.5 },
         error: { configurable: true, value: { code, message: "https://private.example/video.m3u8?token=secret" } },
       });
-      f.session = f.attachTelemetry(f.video, { assetId: "asset-error", provider: "callback", send: (event) => { f.events.push(event); } });
+      f.session = f.attachTelemetry(f.video, { videoId: "asset-error", provider: "callback", send: (event) => { f.events.push(event); } });
       f.session.startAttempt();
       f.video.dispatchEvent(new Event("error"));
       f.video.dispatchEvent(new Event("error"));
@@ -309,7 +309,7 @@ test("browser playback quality reports frame totals for the current view", async
       configurable: true,
       value: () => quality,
     });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-frames", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     quality.totalVideoFrames = 220;
     quality.droppedVideoFrames = 11;
@@ -351,7 +351,7 @@ test("an engine connector enriches a view with normalized rendition and delivery
       },
     };
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-engine", provider: "callback", send: (event) => { f.events.push(event); },
+      videoId: "asset-engine", provider: "callback", send: (event) => { f.events.push(event); },
     });
     f.session.setConnector(connector);
     f.session.startAttempt();
@@ -410,7 +410,7 @@ test("a fatal connector error stops active timing before its error and final rec
     const f = window.telemetryFixture;
     let emitError = (_error: { category: "decode"; code: string; fatal: boolean }) => {};
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-fatal-engine", provider: "callback", send: (event) => { f.events.push(event); },
+      videoId: "asset-fatal-engine", provider: "callback", send: (event) => { f.events.push(event); },
     });
     f.session.setConnector({
       name: "test-engine", version: "1", playerName: "test-engine", playerVersion: "1",
@@ -454,14 +454,14 @@ test("connector subscriptions cannot outlive a destroyed or reentrantly destroye
       subscribeToErrors() { subscribed++; return () => { cleaned++; }; },
     };
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-destroyed-connector", provider: "callback", send() {},
+      videoId: "asset-destroyed-connector", provider: "callback", send() {},
     });
     f.session.destroy();
     f.session.setConnector(connector);
     const afterDestroyed = { subscribed, cleaned };
 
     f.session = f.attachTelemetry(f.video, {
-      assetId: "asset-reentrant-connector", provider: "callback", send() {},
+      videoId: "asset-reentrant-connector", provider: "callback", send() {},
     });
     f.session.setConnector({
       ...connector,
@@ -485,7 +485,7 @@ test("WebKit frame counters are supported and unavailable counters remain null",
       webkitDecodedFrameCount: { configurable: true, writable: true, value: 40 },
       webkitDroppedFrameCount: { configurable: true, writable: true, value: 2 },
     });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-webkit-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-webkit-frames", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     Reflect.set(f.video, "webkitDecodedFrameCount", 70);
     Reflect.set(f.video, "webkitDroppedFrameCount", 5);
@@ -496,7 +496,7 @@ test("WebKit frame counters are supported and unavailable counters remain null",
       webkitDecodedFrameCount: { configurable: true, value: undefined },
       webkitDroppedFrameCount: { configurable: true, value: undefined },
     });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-no-frames", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-no-frames", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     f.session.destroy();
     return { supported, unavailable: f.events };
@@ -513,7 +513,7 @@ test("a failing browser frame API does not interrupt telemetry or expose its err
       webkitDecodedFrameCount: { configurable: true, value: undefined },
       webkitDroppedFrameCount: { configurable: true, value: undefined },
     });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-frame-failure", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-frame-failure", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     f.session.destroy();
     return f.events;
@@ -528,7 +528,7 @@ test("frame metrics remain unavailable after counters reset above their baseline
     const f = window.telemetryFixture;
     const quality = { totalVideoFrames: 100, droppedVideoFrames: 5 };
     Object.defineProperty(f.video, "getVideoPlaybackQuality", { configurable: true, value: () => quality });
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-frame-reset", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-frame-reset", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     quality.totalVideoFrames = 300;
     quality.droppedVideoFrames = 10;
@@ -547,7 +547,7 @@ test("frame metrics remain unavailable after counters reset above their baseline
 test("the first attempt reports a media error that happened during preload", async ({ page }) => {
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-preload-error", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-preload-error", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.preload = "metadata";
     f.video.src = "/tests/fixtures/media/does-not-exist.mp4?private=secret";
   });
@@ -588,7 +588,7 @@ test("a delayed snapshot timer emits once and schedules the next future interval
       state.snapshotCallback = () => { if (typeof handler === "function") handler(); };
       return 1;
     }) as typeof window.setTimeout;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-delayed", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-delayed", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -615,7 +615,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
     f.video.preload = "none";
     f.video.src = "https://media.example.test/private/path/master.m3u8?token=must-not-leak";
     const options = {
-      assetId: "asset-private", provider: "callback" as const,
+      videoId: "asset-private", provider: "callback" as const,
       environment: "test", viewerId: "viewer-pseudonym",
       authorization: "must-not-leak", rawError: "must-not-leak",
       send: (event: import("../../packages/telemetry/src/index.js").ChunkifyPlayerTelemetryEvent) => { f.events.push(event); },
@@ -648,7 +648,7 @@ test("source resets and page exit end separate views, and destroy removes observ
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-reset", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-reset", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -689,7 +689,7 @@ test("callback failures and reentrant cleanup cannot escape or duplicate final r
     for (const mode of ["throw", "reject", "destroy"]) {
       f.events = [];
       f.session = f.attachTelemetry(f.video, {
-        assetId: "asset-callback", provider: "callback",
+        videoId: "asset-callback", provider: "callback",
         send(event) {
           f.events.push(event);
           if (mode === "throw") throw new Error("destination unavailable");
@@ -713,12 +713,12 @@ test("invalid configuration fails before installing listeners or calling a desti
   const result = await page.evaluate(() => {
     const f = window.telemetryFixture;
     const failures: boolean[] = [];
-    for (const invalid of [{ assetId: "" }, { assetId: "  " }, { provider: "unknown" }, { send: null },
+    for (const invalid of [{ videoId: "" }, { videoId: "  " }, { provider: "unknown" }, { send: null },
       { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } },
       { sampleRate: -0.1 }, { sampleRate: 1.1 }, { sampleRate: NaN }, { sampleRate: "1" }, { sampleRate: Infinity }]) {
       try {
         Reflect.apply(f.attachTelemetry, null, [f.video, {
-          assetId: "asset-valid", provider: "callback", send: (event: ChunkifyPlayerTelemetryEvent) => { f.events.push(event); }, ...invalid,
+          videoId: "asset-valid", provider: "callback", send: (event: ChunkifyPlayerTelemetryEvent) => { f.events.push(event); }, ...invalid,
         }]);
         failures.push(false);
       } catch (error) { failures.push(error instanceof TypeError); }
@@ -734,7 +734,7 @@ test("real video playback records source replacement, replay and cleanup without
   page.on("request", (request) => requests.push(new URL(request.url()).pathname));
   await page.evaluate(() => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-real", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-real", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.src = "/tests/fixtures/media/video.mp4";
   });
   await expect.poll(() => page.evaluate(() => window.telemetryFixture.video.readyState)).toBeGreaterThanOrEqual(2);
@@ -784,7 +784,7 @@ test("an immediate attempt with a source child remains one view while its URL is
     const source = document.createElement("source");
     source.src = "/tests/fixtures/media/video.mp4";
     f.video.append(source);
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-source", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-source", provider: "callback", send: (event) => { f.events.push(event); } });
     f.session.startAttempt();
     await f.video.play();
     f.session.destroy();
@@ -799,7 +799,7 @@ test("an immediate attempt after replacing an idle source ignores the previous s
   await expect.poll(() => page.evaluate(() => window.telemetryFixture.video.readyState)).toBeGreaterThanOrEqual(2);
   await page.evaluate(async () => {
     const f = window.telemetryFixture;
-    f.session = f.attachTelemetry(f.video, { assetId: "asset-replacement", provider: "callback", send: (event) => { f.events.push(event); } });
+    f.session = f.attachTelemetry(f.video, { videoId: "asset-replacement", provider: "callback", send: (event) => { f.events.push(event); } });
     f.video.src = "/tests/fixtures/media/video.mp4?immediate";
     f.session.startAttempt();
     await f.video.play();

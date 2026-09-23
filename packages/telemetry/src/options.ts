@@ -2,8 +2,8 @@ import type { TelemetryOptions } from "./core.js";
 
 /** Validate options before installing any media or engine listeners. */
 export function assertTelemetryOptions(options: TelemetryOptions): void {
-  if (typeof options.assetId !== "string" || !options.assetId.trim()) {
-    throw new TypeError("Telemetry requires a non-empty assetId.");
+  if (typeof options.videoId !== "string" || !options.videoId.trim()) {
+    throw new TypeError("Telemetry requires a non-empty videoId.");
   }
   if (options.provider !== "callback" || typeof options.send !== "function") {
     throw new TypeError("Telemetry requires a callback destination with a send function.");

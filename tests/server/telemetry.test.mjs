@@ -9,7 +9,7 @@ test("telemetry imports without a DOM and reports its package version", async ()
   // explicitly started attempt without constructing a browser DOM in Node.
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const events = [];
-  const session = attachTelemetry(media, { assetId: "asset-node", provider: "callback", send: (event) => { events.push(event); } });
+  const session = attachTelemetry(media, { videoId: "asset-node", provider: "callback", send: (event) => { events.push(event); } });
   assert.equal(events.length, 0);
   session.startAttempt();
   session.destroy();

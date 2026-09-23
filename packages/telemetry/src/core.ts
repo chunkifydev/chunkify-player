@@ -58,7 +58,7 @@ export interface CallbackTelemetryConfig {
   sampleRate?: number | undefined;
 }
 export interface TelemetryOptions extends CallbackTelemetryConfig {
-  assetId: string;
+  videoId: string;
 }
 export interface TelemetryConnectorSnapshot {
   renditionWidth: number | null;
@@ -215,7 +215,7 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
 
 export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptions): TelemetrySession {
   assertTelemetryOptions(options);
-  const { assetId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
+  const { videoId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
   let view: View | null = null;
   let destroyed = false;
   let wantsPlay = false;
@@ -248,7 +248,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
     const event: ChunkifyPlayerTelemetryEvent = {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
-      occurred_at: new Date().toISOString(), view_id: current.id, asset_id: assetId,
+      occurred_at: new Date().toISOString(), view_id: current.id, asset_id: videoId,
       sdk_name: "@chunkify/telemetry", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,

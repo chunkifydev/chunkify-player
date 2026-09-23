@@ -17,14 +17,14 @@ const destination: CallbackTelemetryConfig = {
     record.src;
   },
 };
-const session = attachTelemetry(video, { ...destination, assetId: "asset-types" });
+const session = attachTelemetry(video, { ...destination, videoId: "asset-types" });
 session.startAttempt();
 session.destroy();
-// @ts-expect-error An asset identity is required.
+// @ts-expect-error A video identity is required.
 attachTelemetry(video, destination);
 // @ts-expect-error This slice only implements the callback destination.
-attachTelemetry(video, { assetId: "asset-types", provider: "datadog", client: {} });
+attachTelemetry(video, { videoId: "asset-types", provider: "datadog", client: {} });
 // @ts-expect-error Transport secrets are not accepted.
-attachTelemetry(video, { ...destination, assetId: "asset-types", authorization: "secret" });
+attachTelemetry(video, { ...destination, videoId: "asset-types", authorization: "secret" });
 // @ts-expect-error Sample rates are numeric.
-attachTelemetry(video, { ...destination, assetId: "asset-types", sampleRate: "0.5" });
+attachTelemetry(video, { ...destination, videoId: "asset-types", sampleRate: "0.5" });
