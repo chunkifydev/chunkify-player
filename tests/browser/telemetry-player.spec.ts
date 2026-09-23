@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
-import type { ChunkifyPlayerTelemetryEvent } from "../../packages/player-telemetry/src/index.js";
+import type { ChunkifyPlayerTelemetryEvent } from "../../packages/telemetry/src/index.js";
 
 test("the standalone adapter follows Chunkify Player media replacements", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
 
   const result = await page.evaluate(async () => {
-    const { attachPlayerTelemetry } = await import("@chunkify/player-telemetry/player");
+    const { attachPlayerTelemetry } = await import("@chunkify/telemetry/player");
     const events: ChunkifyPlayerTelemetryEvent[] = [];
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
     player.preload = "none";
@@ -51,7 +51,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
   await page.evaluate(async () => {
-    const { attachPlayerTelemetry } = await import("@chunkify/player-telemetry/player");
+    const { attachPlayerTelemetry } = await import("@chunkify/telemetry/player");
     const state = window as typeof window & {
       telemetryEvents: ChunkifyPlayerTelemetryEvent[];
       telemetrySession: ReturnType<typeof attachPlayerTelemetry>;

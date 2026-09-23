@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("telemetry imports without a DOM and reports its package version", async () => {
-  const { attachTelemetry } = await import("@chunkify/player-telemetry");
-  const pkg = JSON.parse(await readFile(new URL("../../packages/player-telemetry/package.json", import.meta.url)));
+  const { attachTelemetry } = await import("@chunkify/telemetry");
+  const pkg = JSON.parse(await readFile(new URL("../../packages/telemetry/package.json", import.meta.url)));
   // HTML media is the external boundary. EventTarget suffices to inspect an
   // explicitly started attempt without constructing a browser DOM in Node.
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });

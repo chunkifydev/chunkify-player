@@ -1,5 +1,5 @@
 {
-  "name": "@chunkify/player-telemetry",
+  "name": "@chunkify/telemetry",
   "version": "0.0.0",
   "description": "Standalone playback telemetry for HTML media and Chunkify Player",
   "license": "MIT",

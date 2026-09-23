@@ -5,8 +5,8 @@
     "jsx": "react-jsx",
     "paths": {
       "@chunkify/player": ["./packages/player/src/index.ts"],
-      "@chunkify/player-telemetry": ["./packages/player-telemetry/src/index.ts"],
-      "@chunkify/player-telemetry/player": ["./packages/player-telemetry/src/player.ts"],
+      "@chunkify/telemetry": ["./packages/telemetry/src/index.ts"],
+      "@chunkify/telemetry/player": ["./packages/telemetry/src/player.ts"],
       "@chunkify/player-react": ["./packages/player-react/src/index.ts"]
     },
     "types": ["node"]

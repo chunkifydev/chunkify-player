@@ -1,9 +1,9 @@
-# @chunkify/player-telemetry
+# @chunkify/telemetry
 
 Standalone playback telemetry for a plain HTML media element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player`, does not send network requests, and does not store viewer data. Each event goes to the callback supplied by the application.
 
 ```ts
-import { attachTelemetry } from "@chunkify/player-telemetry";
+import { attachTelemetry } from "@chunkify/telemetry";
 
 const video = document.querySelector("video")!;
 const session = attachTelemetry(video, {
@@ -24,7 +24,7 @@ For Chunkify Player, import the separate adapter. It follows the player's active
 
 ```ts
 import "@chunkify/player";
-import { attachPlayerTelemetry } from "@chunkify/player-telemetry/player";
+import { attachPlayerTelemetry } from "@chunkify/telemetry/player";
 
 const player = document.querySelector("chunkify-player")!;
 const session = attachPlayerTelemetry(player, {

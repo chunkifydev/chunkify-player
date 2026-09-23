@@ -1,4 +1,4 @@
-import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelemetryEvent, type TelemetryErrorCategory } from "@chunkify/player-telemetry";
+import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelemetryEvent, type TelemetryErrorCategory } from "@chunkify/telemetry";
 
 const video = document.createElement("video");
 const destination: CallbackTelemetryConfig = {

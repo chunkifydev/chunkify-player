@@ -8,7 +8,7 @@ bundled default control theme.
 | --- | --- |
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
-| `@chunkify/player-telemetry` | `packages/player-telemetry` (unpublished) |
+| `@chunkify/telemetry` | `packages/telemetry` (unpublished) |
 
 Install the Web Component package:
 
@@ -233,10 +233,10 @@ on the server and loads the Web Component after mounting in the browser.
 
 ## Telemetry development
 
-The separate, unpublished `@chunkify/player-telemetry` workspace can attach to
+The separate, unpublished `@chunkify/telemetry` workspace can attach to
 a plain `<video>` or to `<chunkify-player>`. It emits playback records to an
 application callback; it does not send data to Chunkify or a destination service.
-See [the telemetry package README](packages/player-telemetry/README.md) for the
+See [the telemetry package README](packages/telemetry/README.md) for the
 current API and limits.
 
 ## Development

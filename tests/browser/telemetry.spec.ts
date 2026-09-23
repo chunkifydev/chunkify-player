@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { attachTelemetry, ChunkifyPlayerTelemetryEvent, TelemetrySession } from "../../packages/player-telemetry/src/index.js";
+import type { attachTelemetry, ChunkifyPlayerTelemetryEvent, TelemetrySession } from "../../packages/telemetry/src/index.js";
 
 declare global {
   interface Window {
@@ -618,7 +618,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
       assetId: "asset-private", provider: "callback" as const,
       environment: "test", viewerId: "viewer-pseudonym",
       authorization: "must-not-leak", rawError: "must-not-leak",
-      send: (event: import("../../packages/player-telemetry/src/index.js").ChunkifyPlayerTelemetryEvent) => { f.events.push(event); },
+      send: (event: import("../../packages/telemetry/src/index.js").ChunkifyPlayerTelemetryEvent) => { f.events.push(event); },
     };
     f.session = f.attachTelemetry(f.video, options);
     f.session.startAttempt();
@@ -629,7 +629,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   for (const event of events) {
     expect(event).toMatchObject({
       schema_version: 1, asset_id: "asset-private", delivery_hostname: "media.example.test",
-      sdk_name: "@chunkify/player-telemetry", sdk_version: "0.0.0",
+      sdk_name: "@chunkify/telemetry", sdk_version: "0.0.0",
       connector_name: "html-media", connector_version: "0.0.0",
       player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",
       metrics: { media_duration_seconds: null, startup_time_ms: null, playing_time_ms: 0 },
