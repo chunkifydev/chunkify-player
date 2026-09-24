@@ -120,6 +120,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { telemetryEvents: ChunkifyPlayerTelemetryEvent[] }
   ).telemetryEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
 
   await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
@@ -149,6 +150,10 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     });
     expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
     expect(events[1]!.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
+    expect(events[1]!.metrics.rendition_playing_time).toEqual([
+      expect.objectContaining({ width: 256, height: 144, playing_time_ms: expect.any(Number) }),
+    ]);
+    expect(events[1]!.metrics.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
   }
 });
@@ -189,6 +194,9 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
   await page.evaluate(() => (
     window as typeof window & { externalVideo: HTMLVideoElement }
   ).externalVideo.play());
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { externalVideo: HTMLVideoElement }
+  ).externalVideo.currentTime)).toBeGreaterThan(0.1);
   const events = await page.evaluate(() => {
     const state = window as typeof window & {
       externalEvents: ChunkifyPlayerTelemetryEvent[];
@@ -208,6 +216,10 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
   });
   expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
+  expect(events[1]!.metrics.rendition_playing_time).toEqual([
+    expect.objectContaining({ width: 256, height: 144, playing_time_ms: expect.any(Number) }),
+  ]);
+  expect(events[1]!.metrics.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
 });
 
 test("the hls.js adapter follows media that was attached earlier or changes later", async ({ page, browserName }) => {

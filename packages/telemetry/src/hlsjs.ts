@@ -4,7 +4,8 @@ import type {
   LevelSwitchedData, LoaderStats, ManifestLoadedData, SubtitleTrackLoadedData,
 } from "hls.js";
 import { attachTelemetry, type TelemetryConnector, type TelemetryConnectorError,
-  type TelemetryConnectorSnapshot, type TelemetryOptions, type TelemetrySession } from "./core.js";
+  type TelemetryConnectorSnapshot, type TelemetryOptions, type TelemetryRendition,
+  type TelemetrySession } from "./core.js";
 import { assertTelemetryOptions } from "./options.js";
 
 export interface HlsJsTelemetryConnector extends TelemetryConnector {
@@ -21,7 +22,9 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
   };
   const seenStats = new WeakSet<object>();
   const errorListeners = new Set<(error: TelemetryConnectorError) => void>();
+  const renditionListeners = new Set<(rendition: TelemetryRendition | null) => void>();
   let selectedLevel: number | null = null;
+  let currentRendition: TelemetryRendition | null = null;
   let destroyed = false;
 
   const selectLevel = (level: number) => {
@@ -33,6 +36,14 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
     snapshot.renditionHeight = rendition.height || null;
     snapshot.renditionCodec = rendition.videoCodec || rendition.codecSet || null;
     snapshot.renditionBitrate = rendition.bitrate || null;
+    currentRendition = {
+      width: snapshot.renditionWidth,
+      height: snapshot.renditionHeight,
+      codec: snapshot.renditionCodec,
+      bitrate_bps: snapshot.renditionBitrate,
+      frame_rate: rendition.frameRate || null,
+    };
+    for (const listener of renditionListeners) listener(currentRendition);
   };
   if (hls.currentLevel >= 0) selectLevel(hls.currentLevel);
 
@@ -75,6 +86,11 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
       errorListeners.add(listener);
       return () => { errorListeners.delete(listener); };
     },
+    subscribeToRenditions(listener) {
+      renditionListeners.add(listener);
+      listener(currentRendition);
+      return () => { renditionListeners.delete(listener); };
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -86,6 +102,7 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
       hls.off(HlsClass.Events.LEVEL_SWITCHED, onLevelSwitched);
       hls.off(HlsClass.Events.ERROR, onError);
       errorListeners.clear();
+      renditionListeners.clear();
     },
   };
 }

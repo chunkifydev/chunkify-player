@@ -4,6 +4,15 @@ const sdkVersion = "0.0.0";
 
 export type TelemetryEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
 export type TelemetryErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
+export interface RenditionPlayingTime {
+  width: number | null;
+  height: number | null;
+  codec: string | null;
+  bitrate_bps: number | null;
+  frame_rate: number | null;
+  playing_time_ms: number;
+}
+export type TelemetryRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
 export interface ViewMetrics {
   media_duration_seconds: number | null;
   startup_time_ms: number | null;
@@ -22,12 +31,13 @@ export interface ViewMetrics {
   selected_rendition_codec: string | null;
   selected_rendition_bitrate_bps: number | null;
   rendition_switch_count: number | null;
+  rendition_playing_time: RenditionPlayingTime[] | null;
   delivery_request_count: number | null;
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
 }
 export interface ChunkifyPlayerTelemetryEvent {
-  schema_version: 1;
+  schema_version: 2;
   event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.playback_error" | "chunkify.video.view_ended";
   event_id: string;
   sequence: number;
@@ -81,6 +91,8 @@ export interface TelemetryConnector {
   playerVersion: string | null;
   snapshot(): TelemetryConnectorSnapshot;
   subscribeToErrors(listener: (error: TelemetryConnectorError) => void): () => void;
+  /** Fires with the rendition currently reaching playback, including the initial selection. */
+  subscribeToRenditions?(listener: (rendition: TelemetryRendition | null) => void): () => void;
 }
 export interface TelemetrySession {
   /** Call immediately before play() to include attempts that reject before a play event. */
@@ -118,6 +130,10 @@ interface View {
   frameMetricsValid: boolean;
   sampled: boolean;
   connectorBaseline: TelemetryConnectorSnapshot | null;
+  renditionTrackingAvailable: boolean;
+  renditionTimes: Map<string, RenditionPlayingTime>;
+  activeRendition: TelemetryRendition | null;
+  activeRenditionSince: number | null;
 }
 
 interface FrameCounts {
@@ -134,6 +150,34 @@ interface NormalizedError {
 
 function finiteNonNegative(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function normalizedRendition(rendition: TelemetryRendition | null): TelemetryRendition | null {
+  if (!rendition) return null;
+  const result = {
+    width: finiteNonNegative(rendition.width),
+    height: finiteNonNegative(rendition.height),
+    codec: typeof rendition.codec === "string" && rendition.codec ? rendition.codec : null,
+    bitrate_bps: finiteNonNegative(rendition.bitrate_bps),
+    frame_rate: finiteNonNegative(rendition.frame_rate),
+  };
+  return Object.values(result).every((value) => value === null) ? null : result;
+}
+
+function renditionKey(rendition: TelemetryRendition): string {
+  return JSON.stringify([rendition.width, rendition.height, rendition.codec, rendition.bitrate_bps, rendition.frame_rate]);
+}
+
+function renditionPlayingTime(current: View, now: number): RenditionPlayingTime[] | null {
+  if (!current.renditionTrackingAvailable) return null;
+  const times = new Map([...current.renditionTimes].map(([key, value]) => [key, { ...value }]));
+  if (current.activeRendition && current.activeRenditionSince !== null) {
+    const key = renditionKey(current.activeRendition);
+    const entry = times.get(key) ?? { ...current.activeRendition, playing_time_ms: 0 };
+    entry.playing_time_ms += Math.max(0, now - current.activeRenditionSince);
+    times.set(key, entry);
+  }
+  return [...times.values()];
 }
 
 const emptyConnectorMetrics = {
@@ -222,6 +266,28 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
   let connector: TelemetryConnector | null = null;
   let unsubscribeConnector: (() => void) | null = null;
+  let unsubscribeRenditions: (() => void) | null = null;
+  let selectedRendition: TelemetryRendition | null = null;
+
+  function closeActiveRendition(now: number) {
+    if (!view || !view.activeRendition || view.activeRenditionSince === null) return;
+    const key = renditionKey(view.activeRendition);
+    const entry = view.renditionTimes.get(key) ?? { ...view.activeRendition, playing_time_ms: 0 };
+    entry.playing_time_ms += Math.max(0, now - view.activeRenditionSince);
+    view.renditionTimes.set(key, entry);
+    view.activeRendition = null;
+    view.activeRenditionSince = null;
+  }
+
+  function onRenditionChanged(rendition: TelemetryRendition | null) {
+    const now = performance.now();
+    closeActiveRendition(now);
+    selectedRendition = normalizedRendition(rendition);
+    if (view && view.playingSince !== null && selectedRendition) {
+      view.activeRendition = selectedRendition;
+      view.activeRenditionSince = now;
+    }
+  }
 
   function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null,
     error: NormalizedError | null = null) {
@@ -246,7 +312,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     if (frames) current.framePrevious = frames;
     const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
     const event: ChunkifyPlayerTelemetryEvent = {
-      schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
+      schema_version: 2, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/telemetry", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
@@ -271,6 +337,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
         dropped_video_frames: viewFrames?.dropped ?? null,
         total_video_frames: viewFrames?.total ?? null,
         ...engineMetrics,
+        rendition_playing_time: renditionPlayingTime(current, now),
       },
     };
     try {
@@ -297,7 +364,9 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
       errorEmitted: false, frameBaseline: initialFrames, framePrevious: initialFrames,
       frameMetricsValid: initialFrames !== null, sampled,
-      connectorBaseline: connector ? safeConnectorSnapshot(connector) : null };
+      connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
+      renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
+      renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null };
     emit(view, "chunkify.video.view_started");
     if (media.error) reportMediaError();
   }
@@ -307,7 +376,9 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       snapshotTimer = null;
     }
     if (!view || view.playingSince === null) return;
-    view.playing += performance.now() - view.playingSince;
+    const now = performance.now();
+    closeActiveRendition(now);
+    view.playing += now - view.playingSince;
     view.playingSince = null;
   }
   function stopRebuffering() {
@@ -355,19 +426,28 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   function setConnector(next: TelemetryConnector | null) {
     if (destroyed) return;
     const previousUnsubscribe = unsubscribeConnector;
+    const previousRenditionUnsubscribe = unsubscribeRenditions;
     unsubscribeConnector = null;
+    unsubscribeRenditions = null;
     try { previousUnsubscribe?.(); } catch {}
+    try { previousRenditionUnsubscribe?.(); } catch {}
     if (destroyed) return;
+    onRenditionChanged(null);
     connector = next;
     if (view) view.connectorBaseline = connector ? safeConnectorSnapshot(connector) : null;
+    if (view && connector?.subscribeToRenditions) view.renditionTrackingAvailable = true;
     if (connector) {
       let unsubscribe: (() => void) | null = null;
       try { unsubscribe = connector.subscribeToErrors(reportConnectorError); } catch {}
+      let unsubscribeRendition: (() => void) | null = null;
+      try { unsubscribeRendition = connector.subscribeToRenditions?.(onRenditionChanged) ?? null; } catch {}
       if (destroyed) {
         try { unsubscribe?.(); } catch {}
+        try { unsubscribeRendition?.(); } catch {}
         return;
       }
       unsubscribeConnector = unsubscribe;
+      unsubscribeRenditions = unsubscribeRendition;
     }
   }
   function scheduleSnapshot() {
@@ -395,6 +475,10 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     view.startup ??= now - view.startedAt;
     stopRebuffering();
     view.playingSince ??= now;
+    if (view.activeRenditionSince === null && selectedRendition) {
+      view.activeRendition = selectedRendition;
+      view.activeRenditionSince = now;
+    }
     scheduleSnapshot();
   }
   function finish(reason: TelemetryEndReason) {
@@ -469,7 +553,9 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       page?.removeEventListener("pagehide", pagehide);
       finish("destroyed");
       try { unsubscribeConnector?.(); } catch {}
+      try { unsubscribeRenditions?.(); } catch {}
       unsubscribeConnector = null;
+      unsubscribeRenditions = null;
       connector = null;
     },
   };

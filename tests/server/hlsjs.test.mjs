@@ -16,8 +16,8 @@ class FakeHls {
 
   currentLevel = -1;
   levels = [
-    { width: 256, height: 144, videoCodec: "avc1.42E01E", codecSet: "", bitrate: 250_000 },
-    { width: 640, height: 360, videoCodec: "avc1.4D401E", codecSet: "", bitrate: 750_000 },
+    { width: 256, height: 144, videoCodec: "avc1.42E01E", codecSet: "", bitrate: 250_000, frameRate: 24 },
+    { width: 640, height: 360, videoCodec: "avc1.4D401E", codecSet: "", bitrate: 750_000, frameRate: 30 },
   ];
   listeners = new Map();
 
@@ -36,7 +36,9 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
   const hls = new FakeHls();
   const connector = createHlsJsConnector(hls);
   const errors = [];
+  const renditions = [];
   const unsubscribe = connector.subscribeToErrors((error) => errors.push(error));
+  const unsubscribeRenditions = connector.subscribeToRenditions((rendition) => renditions.push(rendition));
   const manifestStats = { loaded: 1000, loading: { start: 10, end: 30 } };
   const fragmentStats = { loaded: 500, loading: { start: 50, end: 60 } };
 
@@ -54,9 +56,15 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
     deliveryRequestCount: 2, deliveryTransferredBytes: 1500, deliveryDurationMs: 30,
   });
   assert.deepEqual(errors, [{ category: "network", code: "manifestLoadError", fatal: true }]);
+  assert.deepEqual(renditions, [
+    null,
+    { width: 256, height: 144, codec: "avc1.42E01E", bitrate_bps: 250_000, frame_rate: 24 },
+    { width: 640, height: 360, codec: "avc1.4D401E", bitrate_bps: 750_000, frame_rate: 30 },
+  ]);
   assert.equal(connector.version, "1.7.3");
 
   unsubscribe();
+  unsubscribeRenditions();
   connector.destroy();
   connector.destroy();
   hls.emit(FakeHls.Events.LEVEL_SWITCHED, { level: 0 });

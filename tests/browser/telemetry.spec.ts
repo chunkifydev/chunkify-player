@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { attachTelemetry, ChunkifyPlayerTelemetryEvent, TelemetrySession } from "../../packages/telemetry/src/index.js";
+import type { attachTelemetry, ChunkifyPlayerTelemetryEvent, TelemetryRendition, TelemetrySession } from "../../packages/telemetry/src/index.js";
 
 declare global {
   interface Window {
@@ -86,6 +86,85 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
       seek_duration_ms: 3000,
     } });
   }
+});
+
+test("rendition playing time follows playback, switches and view boundaries", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.telemetryFixture;
+    const state = window as typeof window & { changeRendition: (rendition: TelemetryRendition | null) => void };
+    f.session = f.attachTelemetry(f.video, {
+      videoId: "asset-rendition-time", send: (event) => { f.events.push(event); },
+    });
+    f.session.setConnector({
+      name: "hls.js", version: "1", playerName: "hls.js", playerVersion: "1",
+      snapshot: () => ({
+        renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
+        renditionSwitchCount: 0, deliveryRequestCount: 0, deliveryTransferredBytes: 0, deliveryDurationMs: 0,
+      }),
+      subscribeToErrors: () => () => {},
+      subscribeToRenditions(listener) {
+        state.changeRendition = listener;
+        listener(null);
+        return () => {};
+      },
+    });
+    f.session.startAttempt();
+    f.video.playbackRate = 2;
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  const low = { width: 256, height: 144, codec: "avc1", bitrate_bps: 250_000, frame_rate: 24 };
+  const high = { width: 640, height: 360, codec: "avc1", bitrate_bps: 750_000, frame_rate: 30 };
+  const dispatch = (event: string) => page.evaluate((event) => window.telemetryFixture.video.dispatchEvent(new Event(event)), event);
+  const select = (rendition: TelemetryRendition) => page.evaluate((rendition) => (
+    window as typeof window & { changeRendition: (rendition: TelemetryRendition | null) => void }
+  ).changeRendition(rendition), rendition);
+
+  await page.clock.runFor(2000); // An unknown rendition is not attributed to a quality level.
+  await select(low);
+  await page.clock.runFor(20000);
+  await select(high);
+  await page.clock.runFor(8000);
+  const snapshot = (await page.evaluate(() => window.telemetryFixture.events))[1]!;
+  expect(snapshot.event_name).toBe("chunkify.video.view_snapshot");
+  expect(snapshot.metrics.playing_time_ms).toBe(30000);
+  expect(snapshot.metrics.rendition_playing_time).toEqual([
+    { ...low, playing_time_ms: 20000 }, { ...high, playing_time_ms: 8000 },
+  ]);
+
+  await dispatch("waiting");
+  await page.clock.runFor(5000);
+  await dispatch("playing");
+  await page.clock.runFor(5000);
+  await dispatch("seeking");
+  await page.clock.runFor(4000);
+  await dispatch("seeked");
+  await dispatch("playing");
+  await page.clock.runFor(3000);
+  await dispatch("pause");
+  await page.clock.runFor(2000);
+  await dispatch("play");
+  await dispatch("playing");
+  await select(low);
+  await page.clock.runFor(2000);
+  await dispatch("ended");
+  const events = await page.evaluate(() => window.telemetryFixture.events);
+  expect(events[0]!.metrics.rendition_playing_time).toEqual([]);
+  expect(events.at(-1)!.metrics.playing_time_ms).toBe(40000);
+  expect(events.at(-1)!.metrics.rendition_playing_time).toEqual([
+    { ...low, playing_time_ms: 22000 }, { ...high, playing_time_ms: 16000 },
+  ]);
+  expect(snapshot.metrics.rendition_playing_time).toEqual([
+    { ...low, playing_time_ms: 20000 }, { ...high, playing_time_ms: 8000 },
+  ]);
+
+  await dispatch("play");
+  await dispatch("playing");
+  await page.clock.runFor(1000);
+  await dispatch("ended");
+  const replay = (await page.evaluate(() => window.telemetryFixture.events)).at(-1)!;
+  expect(replay.metrics.rendition_playing_time).toEqual([{ ...low, playing_time_ms: 1000 }]);
 });
 
 test("final records contain cumulative buffering, seeking and completion measurements", async ({ page }) => {
@@ -628,7 +707,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   expect(events).toHaveLength(2);
   for (const event of events) {
     expect(event).toMatchObject({
-      schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test",
+      schema_version: 2, video_id: "asset-private", delivery_hostname: "media.example.test",
       sdk_name: "@chunkify/telemetry", sdk_version: "0.0.0",
       connector_name: "html-media", connector_version: "0.0.0",
       player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",
