@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Standalone telemetry fixture</title></head>
+  <head><meta charset="utf-8"><title>Standalone analytics fixture</title></head>
   <body>
     <video muted playsinline></video>
     <script type="module">
-      import { attachTelemetry } from "/packages/telemetry/dist/index.js";
-      window.telemetryFixture = {
-        attachTelemetry,
+      import { attachAnalytics } from "/packages/analytics/dist/index.js";
+      window.analyticsFixture = {
+        attachAnalytics,
         video: document.querySelector("video"),
         events: [],
         session: null,

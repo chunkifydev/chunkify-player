@@ -1,9 +1,9 @@
-# @chunkify/telemetry
+# @chunkify/analytics
 
-Standalone playback telemetry for a `<video>` element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player`, does not send network requests, and does not store viewer data. Each event goes to the callback supplied by the application.
+Standalone playback analytics for a `<video>` element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player`, does not send network requests, and does not store viewer data. Each event goes to the callback supplied by the application.
 
 ```ts
-import { monitor } from "@chunkify/telemetry";
+import { monitor } from "@chunkify/analytics";
 
 const video = document.querySelector("video")!;
 const session = monitor(video, {
@@ -15,7 +15,7 @@ const session = monitor(video, {
 session.startAttempt();
 await video.play();
 
-// Call when removing the video or disabling telemetry.
+// Call when removing the video or disabling analytics.
 session.destroy();
 ```
 
@@ -23,7 +23,7 @@ The same function accepts Chunkify Player. Import the player first so its custom
 
 ```ts
 import "@chunkify/player";
-import { monitor } from "@chunkify/telemetry";
+import { monitor } from "@chunkify/analytics";
 
 const player = document.querySelector("chunkify-player")!;
 const session = monitor(player, {
@@ -31,11 +31,11 @@ const session = monitor(player, {
   send: (event) => console.log(event),
 });
 
-// Call when the application removes the player or disables telemetry.
+// Call when the application removes the player or disables analytics.
 session.destroy();
 ```
 
-`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachTelemetry()` and `attachPlayerTelemetry()` functions remain available for explicit use.
+`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use.
 
 When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
 
@@ -43,7 +43,7 @@ For a separate player that gives you its `Hls` instance, use the optional hls.js
 
 ```ts
 import Hls from "hls.js";
-import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
+import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
 
 const video = document.querySelector("video")!;
 const hls = new Hls();

@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
-import type { ChunkifyPlayerTelemetryEvent } from "../../packages/telemetry/src/index.js";
+import type { ChunkifyPlayerAnalyticsEvent } from "../../packages/analytics/src/index.js";
 
 test("monitor selects the video collector or Chunkify adapter from its target", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
 
   const result = await page.evaluate(async () => {
-    const { monitor } = await import("@chunkify/telemetry");
-    const videoEvents: ChunkifyPlayerTelemetryEvent[] = [];
-    const playerEvents: ChunkifyPlayerTelemetryEvent[] = [];
+    const { monitor } = await import("@chunkify/analytics");
+    const videoEvents: ChunkifyPlayerAnalyticsEvent[] = [];
+    const playerEvents: ChunkifyPlayerAnalyticsEvent[] = [];
     const video = document.createElement("video");
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
     player.preload = "none";
@@ -53,12 +53,12 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
 
   const result = await page.evaluate(async () => {
-    const { attachPlayerTelemetry } = await import("@chunkify/telemetry/player");
-    const events: ChunkifyPlayerTelemetryEvent[] = [];
+    const { attachPlayerAnalytics } = await import("@chunkify/analytics/player");
+    const events: ChunkifyPlayerAnalyticsEvent[] = [];
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
     player.preload = "none";
     document.body.append(player);
-    const session = attachPlayerTelemetry(player, {
+    const session = attachPlayerAnalytics(player, {
       videoId: "asset-adapter",
       send(event) { events.push(event); },
     });
@@ -96,19 +96,19 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
   await page.evaluate(async () => {
-    const { attachPlayerTelemetry } = await import("@chunkify/telemetry/player");
+    const { attachPlayerAnalytics } = await import("@chunkify/analytics/player");
     const state = window as typeof window & {
-      telemetryEvents: ChunkifyPlayerTelemetryEvent[];
-      telemetrySession: ReturnType<typeof attachPlayerTelemetry>;
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: ReturnType<typeof attachPlayerAnalytics>;
     };
-    state.telemetryEvents = [];
+    state.analyticsEvents = [];
     const player = document.createElement("chunkify-player");
     player.muted = true;
     player.src = "/tests/fixtures/media/master.m3u8";
     document.body.append(player);
-    state.telemetrySession = attachPlayerTelemetry(player, {
+    state.analyticsSession = attachPlayerAnalytics(player, {
       videoId: "asset-real-playback",
-      send(event) { state.telemetryEvents.push(event); },
+      send(event) { state.analyticsEvents.push(event); },
     });
   });
 
@@ -118,24 +118,24 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     Boolean((element.media as ChunkifyPlayer["media"] & { api?: unknown }).api));
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
   await expect.poll(() => page.evaluate(() => (
-    window as typeof window & { telemetryEvents: ChunkifyPlayerTelemetryEvent[] }
-  ).telemetryEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
+    window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
+  ).analyticsEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
 
   await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
   await expect.poll(() => page.evaluate(() => (
-    window as typeof window & { telemetryEvents: ChunkifyPlayerTelemetryEvent[] }
-  ).telemetryEvents.filter((event) => event.event_name === "chunkify.video.view_started").length)).toBe(2);
+    window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
+  ).analyticsEvents.filter((event) => event.event_name === "chunkify.video.view_started").length)).toBe(2);
 
   const events = await page.evaluate(() => {
     const state = window as typeof window & {
-      telemetryEvents: ChunkifyPlayerTelemetryEvent[];
-      telemetrySession: { destroy(): void };
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: { destroy(): void };
     };
-    state.telemetrySession.destroy();
-    return state.telemetryEvents;
+    state.analyticsSession.destroy();
+    return state.analyticsEvents;
   });
   expect(events.map((event) => [event.event_name, event.reason])).toEqual([
     ["chunkify.video.view_started", null],
@@ -168,11 +168,11 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
 
   await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { monitorHlsJs } = await import("@chunkify/telemetry/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
     const state = window as typeof window & {
       externalVideo: HTMLVideoElement;
       externalHls: InstanceType<typeof Hls>;
-      externalEvents: ChunkifyPlayerTelemetryEvent[];
+      externalEvents: ChunkifyPlayerAnalyticsEvent[];
       externalSession: ReturnType<typeof monitorHlsJs>;
     };
     state.externalVideo = document.createElement("video");
@@ -199,7 +199,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
   ).externalVideo.currentTime)).toBeGreaterThan(0.1);
   const events = await page.evaluate(() => {
     const state = window as typeof window & {
-      externalEvents: ChunkifyPlayerTelemetryEvent[];
+      externalEvents: ChunkifyPlayerAnalyticsEvent[];
       externalSession: { destroy(): void };
       externalHls: { destroy(): void };
     };
@@ -232,13 +232,13 @@ test("the hls.js adapter follows media that was attached earlier or changes late
 
   const events = await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { monitorHlsJs } = await import("@chunkify/telemetry/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
     const first = document.createElement("video");
     const second = document.createElement("video");
     document.body.append(first, second);
     const hls = new Hls();
     hls.attachMedia(first);
-    const records: ChunkifyPlayerTelemetryEvent[] = [];
+    const records: ChunkifyPlayerAnalyticsEvent[] = [];
     const session = monitorHlsJs(hls, {
       videoId: "asset-reattach", send(event) { records.push(event); },
     });

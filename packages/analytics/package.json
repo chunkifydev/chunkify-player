@@ -1,7 +1,7 @@
 {
-  "name": "@chunkify/telemetry",
+  "name": "@chunkify/analytics",
   "version": "0.0.0",
-  "description": "Standalone playback telemetry for HTML media and Chunkify Player",
+  "description": "Standalone playback analytics for HTML media and Chunkify Player",
   "license": "MIT",
   "type": "module",
   "files": ["dist", "src"],

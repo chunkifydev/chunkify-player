@@ -8,7 +8,7 @@ bundled default control theme.
 | --- | --- |
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
-| `@chunkify/telemetry` | `packages/telemetry` (unpublished) |
+| `@chunkify/analytics` | `packages/analytics` (unpublished) |
 
 Install the Web Component package:
 
@@ -231,12 +231,12 @@ also typed. The ref exposes the Web Component and its current `media` element.
 The React entry is safe to import during server rendering. It renders nothing
 on the server and loads the Web Component after mounting in the browser.
 
-## Telemetry development
+## Analytics development
 
-The separate, unpublished `@chunkify/telemetry` workspace can monitor
+The separate, unpublished `@chunkify/analytics` workspace can monitor
 a plain `<video>` or `<chunkify-player>`. It emits playback records to an
 application callback; it does not send data to Chunkify or a destination service.
-See [the telemetry package README](packages/telemetry/README.md) for the
+See [the analytics package README](packages/analytics/README.md) for the
 current API and limits.
 
 ## Development
@@ -260,7 +260,7 @@ npm run serve
 - `http://127.0.0.1:4173/examples/basic/`
 - `http://127.0.0.1:4173/examples/theming/`
 - `http://127.0.0.1:4173/examples/react/`
-- `http://127.0.0.1:4173/examples/telemetry/`
+- `http://127.0.0.1:4173/examples/analytics/`
 
 The repository uses TypeScript without Vite. Plain HTML examples use import
 maps, and esbuild only prepares the React example and test fixture.

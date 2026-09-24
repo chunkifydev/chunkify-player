@@ -3,28 +3,28 @@ import type {
   AudioTrackLoadedData, ErrorData, FragLoadedData, LevelLoadedData,
   LevelSwitchedData, LoaderStats, ManifestLoadedData, SubtitleTrackLoadedData,
 } from "hls.js";
-import { attachTelemetry, type TelemetryConnector, type TelemetryConnectorError,
-  type TelemetryConnectorSnapshot, type TelemetryOptions, type TelemetryRendition,
-  type TelemetrySession } from "./core.js";
-import { assertTelemetryOptions } from "./options.js";
+import { attachAnalytics, type AnalyticsConnector, type AnalyticsConnectorError,
+  type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
+  type AnalyticsSession } from "./core.js";
+import { assertAnalyticsOptions } from "./options.js";
 
-export interface HlsJsTelemetryConnector extends TelemetryConnector {
+export interface HlsJsAnalyticsConnector extends AnalyticsConnector {
   destroy(): void;
 }
 
 /** Observe an hls.js instance without changing its playback configuration. */
-export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
+export function createHlsJsConnector(hls: Hls): HlsJsAnalyticsConnector {
   const HlsClass = hls.constructor as typeof Hls;
-  const snapshot: TelemetryConnectorSnapshot = {
+  const snapshot: AnalyticsConnectorSnapshot = {
     renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
     renditionSwitchCount: 0, deliveryRequestCount: 0, deliveryTransferredBytes: 0,
     deliveryDurationMs: 0,
   };
   const seenStats = new WeakSet<object>();
-  const errorListeners = new Set<(error: TelemetryConnectorError) => void>();
-  const renditionListeners = new Set<(rendition: TelemetryRendition | null) => void>();
+  const errorListeners = new Set<(error: AnalyticsConnectorError) => void>();
+  const renditionListeners = new Set<(rendition: AnalyticsRendition | null) => void>();
   let selectedLevel: number | null = null;
-  let currentRendition: TelemetryRendition | null = null;
+  let currentRendition: AnalyticsRendition | null = null;
   let destroyed = false;
 
   const selectLevel = (level: number) => {
@@ -108,13 +108,13 @@ export function createHlsJsConnector(hls: Hls): HlsJsTelemetryConnector {
 }
 
 /** Follow an hls.js instance as it attaches to or detaches from media. */
-export function monitorHlsJs(hls: Hls, options: TelemetryOptions):
-  Pick<TelemetrySession, "startAttempt" | "sourceChanged" | "destroy"> {
-  assertTelemetryOptions(options);
+export function monitorHlsJs(hls: Hls, options: AnalyticsOptions):
+  Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
+  assertAnalyticsOptions(options);
   const HlsClass = hls.constructor as typeof Hls;
   let media: HTMLMediaElement | null = null;
-  let session: TelemetrySession | null = null;
-  let connector: HlsJsTelemetryConnector | null = null;
+  let session: AnalyticsSession | null = null;
+  let connector: HlsJsAnalyticsConnector | null = null;
   let pendingAttempt = false;
   let destroyed = false;
 
@@ -132,14 +132,14 @@ export function monitorHlsJs(hls: Hls, options: TelemetryOptions):
     const nextMedia = hls.media;
     if (destroyed || !nextMedia || nextMedia === media) return;
     if (media) releaseMedia(true);
-    const nextSession = attachTelemetry(nextMedia, options);
+    const nextSession = attachAnalytics(nextMedia, options);
     media = nextMedia;
     session = nextSession;
     try {
       connector = createHlsJsConnector(hls);
       nextSession.setConnector(connector);
     } catch {
-      // An engine measurement failure must not prevent media playback telemetry.
+      // An engine measurement failure must not prevent media playback analytics.
     }
     if (pendingAttempt) {
       pendingAttempt = false;

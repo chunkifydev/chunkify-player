@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chunkify telemetry example</title>
+    <title>Chunkify analytics example</title>
     <style>
       body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
       form { display: grid; gap: 0.75rem; }
@@ -21,8 +21,8 @@
       {
         "imports": {
           "@chunkify/player": "../../packages/player/dist/index.js",
-          "@chunkify/telemetry": "../../packages/telemetry/dist/index.js",
-          "@chunkify/telemetry/hlsjs": "../../packages/telemetry/dist/hlsjs.js",
+          "@chunkify/analytics": "../../packages/analytics/dist/index.js",
+          "@chunkify/analytics/hlsjs": "../../packages/analytics/dist/hlsjs.js",
           "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
           "hls.js/": "../../node_modules/hls.js/",
           "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
@@ -35,7 +35,7 @@
     </script>
   </head>
   <body>
-    <h1>Playback telemetry</h1>
+    <h1>Playback analytics</h1>
     <p>Enter a video ID and URL, load the player, then press play. Events appear below as the callback receives them. This page does not send or store events.</p>
     <form id="setup">
       <label>Video ID <input name="videoId" value="video-demo" required /></label>
@@ -60,8 +60,8 @@
     <script type="module">
       import "@chunkify/player";
       import Hls from "hls.js";
-      import { monitor } from "@chunkify/telemetry";
-      import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
+      import { monitor } from "@chunkify/analytics";
+      import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
 
       const form = document.querySelector("#setup");
       const container = document.querySelector("#player-container");
@@ -137,7 +137,7 @@
           stopButton.disabled = false;
           status.textContent = mode === "video" && new URL(source.trim(), location.href).pathname.endsWith(".m3u8")
             ? "A plain video element needs native HLS support for this URL. Select Chunkify Player or external hls.js here, or enter an MP4 URL."
-            : "Ready. Press Play to start a telemetry view. Stop monitoring to emit its final event.";
+            : "Ready. Press Play to start a analytics view. Stop monitoring to emit its final event.";
         } catch (error) {
           stop();
           status.textContent = `Could not start: ${error.message}`;

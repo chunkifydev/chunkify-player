@@ -1,9 +1,9 @@
-import { assertTelemetryOptions } from "./options.js";
+import { assertAnalyticsOptions } from "./options.js";
 
 const sdkVersion = "0.0.0";
 
-export type TelemetryEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
-export type TelemetryErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
+export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
+export type AnalyticsErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
 export interface RenditionPlayingTime {
   width: number | null;
   height: number | null;
@@ -12,7 +12,7 @@ export interface RenditionPlayingTime {
   frame_rate: number | null;
   playing_time_ms: number;
 }
-export type TelemetryRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
+export type AnalyticsRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
 export interface ViewMetrics {
   media_duration_seconds: number | null;
   startup_time_ms: number | null;
@@ -36,7 +36,7 @@ export interface ViewMetrics {
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
 }
-export interface ChunkifyPlayerTelemetryEvent {
+export interface ChunkifyPlayerAnalyticsEvent {
   schema_version: 2;
   event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.playback_error" | "chunkify.video.view_ended";
   event_id: string;
@@ -44,7 +44,7 @@ export interface ChunkifyPlayerTelemetryEvent {
   occurred_at: string;
   view_id: string;
   video_id: string;
-  sdk_name: "@chunkify/telemetry";
+  sdk_name: "@chunkify/analytics";
   sdk_version: string;
   connector_name: string;
   connector_version: string | null;
@@ -54,22 +54,22 @@ export interface ChunkifyPlayerTelemetryEvent {
   environment: string | null;
   viewer_id: string | null;
   metrics: ViewMetrics;
-  reason: TelemetryEndReason | null;
-  error_category: TelemetryErrorCategory | null;
+  reason: AnalyticsEndReason | null;
+  error_category: AnalyticsErrorCategory | null;
   error_code: string | number | null;
   error_fatal: boolean | null;
   error_playhead_seconds: number | null;
 }
-export interface CallbackTelemetryConfig {
-  send: (event: ChunkifyPlayerTelemetryEvent) => void | Promise<void>;
+export interface CallbackAnalyticsConfig {
+  send: (event: ChunkifyPlayerAnalyticsEvent) => void | Promise<void>;
   environment?: string | undefined;
   viewerId?: string | undefined;
   sampleRate?: number | undefined;
 }
-export interface TelemetryOptions extends CallbackTelemetryConfig {
+export interface AnalyticsOptions extends CallbackAnalyticsConfig {
   videoId: string;
 }
-export interface TelemetryConnectorSnapshot {
+export interface AnalyticsConnectorSnapshot {
   renditionWidth: number | null;
   renditionHeight: number | null;
   renditionCodec: string | null;
@@ -79,29 +79,29 @@ export interface TelemetryConnectorSnapshot {
   deliveryTransferredBytes: number;
   deliveryDurationMs: number;
 }
-export interface TelemetryConnectorError {
-  category: TelemetryErrorCategory;
+export interface AnalyticsConnectorError {
+  category: AnalyticsErrorCategory;
   code: string | number | null;
   fatal: boolean;
 }
-export interface TelemetryConnector {
+export interface AnalyticsConnector {
   name: string;
   version: string | null;
   playerName: string | null;
   playerVersion: string | null;
-  snapshot(): TelemetryConnectorSnapshot;
-  subscribeToErrors(listener: (error: TelemetryConnectorError) => void): () => void;
+  snapshot(): AnalyticsConnectorSnapshot;
+  subscribeToErrors(listener: (error: AnalyticsConnectorError) => void): () => void;
   /** Fires with the rendition currently reaching playback, including the initial selection. */
-  subscribeToRenditions?(listener: (rendition: TelemetryRendition | null) => void): () => void;
+  subscribeToRenditions?(listener: (rendition: AnalyticsRendition | null) => void): () => void;
 }
-export interface TelemetrySession {
+export interface AnalyticsSession {
   /** Call immediately before play() to include attempts that reject before a play event. */
   startAttempt(): void;
   /** Finish the current view before its media source or playback engine is replaced. */
   sourceChanged(): void;
   /** Add or replace optional engine-specific measurements for subsequent records. */
-  setConnector(connector: TelemetryConnector | null): void;
-  /** End the current view, if any, and remove all telemetry listeners. Idempotent. */
+  setConnector(connector: AnalyticsConnector | null): void;
+  /** End the current view, if any, and remove all analytics listeners. Idempotent. */
   destroy(): void;
 }
 
@@ -129,10 +129,10 @@ interface View {
   framePrevious: FrameCounts | null;
   frameMetricsValid: boolean;
   sampled: boolean;
-  connectorBaseline: TelemetryConnectorSnapshot | null;
+  connectorBaseline: AnalyticsConnectorSnapshot | null;
   renditionTrackingAvailable: boolean;
   renditionTimes: Map<string, RenditionPlayingTime>;
-  activeRendition: TelemetryRendition | null;
+  activeRendition: AnalyticsRendition | null;
   activeRenditionSince: number | null;
 }
 
@@ -142,7 +142,7 @@ interface FrameCounts {
 }
 
 interface NormalizedError {
-  category: TelemetryErrorCategory;
+  category: AnalyticsErrorCategory;
   code: string | number | null;
   fatal: boolean;
   playhead: number | null;
@@ -152,7 +152,7 @@ function finiteNonNegative(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-function normalizedRendition(rendition: TelemetryRendition | null): TelemetryRendition | null {
+function normalizedRendition(rendition: AnalyticsRendition | null): AnalyticsRendition | null {
   if (!rendition) return null;
   const result = {
     width: finiteNonNegative(rendition.width),
@@ -164,7 +164,7 @@ function normalizedRendition(rendition: TelemetryRendition | null): TelemetryRen
   return Object.values(result).every((value) => value === null) ? null : result;
 }
 
-function renditionKey(rendition: TelemetryRendition): string {
+function renditionKey(rendition: AnalyticsRendition): string {
   return JSON.stringify([rendition.width, rendition.height, rendition.codec, rendition.bitrate_bps, rendition.frame_rate]);
 }
 
@@ -191,12 +191,12 @@ const emptyConnectorMetrics = {
   delivery_throughput_bps: null,
 };
 
-function connectorMetrics(connector: TelemetryConnector | null, baseline: TelemetryConnectorSnapshot | null): Pick<ViewMetrics,
+function connectorMetrics(connector: AnalyticsConnector | null, baseline: AnalyticsConnectorSnapshot | null): Pick<ViewMetrics,
   "selected_rendition_width" | "selected_rendition_height" | "selected_rendition_codec" |
   "selected_rendition_bitrate_bps" | "rendition_switch_count" | "delivery_request_count" |
   "delivery_transferred_bytes" | "delivery_throughput_bps"> {
   if (!connector || !baseline) return { ...emptyConnectorMetrics };
-  let current: TelemetryConnectorSnapshot;
+  let current: AnalyticsConnectorSnapshot;
   try {
     current = connector.snapshot();
   } catch {
@@ -230,7 +230,7 @@ function deliveryHostname(media: HTMLMediaElement): string | null {
 function duration(media: HTMLMediaElement): number | null {
   return Number.isFinite(media.duration) && media.duration >= 0 ? media.duration : null;
 }
-function mediaErrorCategory(code: number | null): TelemetryErrorCategory {
+function mediaErrorCategory(code: number | null): AnalyticsErrorCategory {
   return code === 1 ? "aborted" : code === 2 ? "network" : code === 3 ? "decode"
     : code === 4 ? "unsupported" : "unknown";
 }
@@ -256,18 +256,18 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
   return { dropped: webkit.webkitDroppedFrameCount!, total: webkit.webkitDecodedFrameCount! };
 }
 
-export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptions): TelemetrySession {
-  assertTelemetryOptions(options);
+export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+  assertAnalyticsOptions(options);
   const { videoId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
   let view: View | null = null;
   let destroyed = false;
   let wantsPlay = false;
   let seeking = false;
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
-  let connector: TelemetryConnector | null = null;
+  let connector: AnalyticsConnector | null = null;
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
-  let selectedRendition: TelemetryRendition | null = null;
+  let selectedRendition: AnalyticsRendition | null = null;
 
   function closeActiveRendition(now: number) {
     if (!view || !view.activeRendition || view.activeRenditionSince === null) return;
@@ -279,7 +279,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     view.activeRenditionSince = null;
   }
 
-  function onRenditionChanged(rendition: TelemetryRendition | null) {
+  function onRenditionChanged(rendition: AnalyticsRendition | null) {
     const now = performance.now();
     closeActiveRendition(now);
     selectedRendition = normalizedRendition(rendition);
@@ -289,7 +289,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     }
   }
 
-  function emit(current: View, event_name: ChunkifyPlayerTelemetryEvent["event_name"], reason: TelemetryEndReason | null = null,
+  function emit(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"], reason: AnalyticsEndReason | null = null,
     error: NormalizedError | null = null) {
     if (!current.sampled) return;
     const now = performance.now();
@@ -311,10 +311,10 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     }
     if (frames) current.framePrevious = frames;
     const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
-    const event: ChunkifyPlayerTelemetryEvent = {
+    const event: ChunkifyPlayerAnalyticsEvent = {
       schema_version: 2, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
-      sdk_name: "@chunkify/telemetry", sdk_version: sdkVersion,
+      sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
       delivery_hostname: current.hostname,
@@ -341,7 +341,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       },
     };
     try {
-      // A customer destination must not interrupt playback or telemetry cleanup.
+      // A customer destination must not interrupt playback or analytics cleanup.
       void Promise.resolve(send(event)).catch(() => {});
     } catch {
       // Synchronous callback failures are isolated for the same reason.
@@ -405,7 +405,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
   }
-  function reportConnectorError(error: TelemetryConnectorError) {
+  function reportConnectorError(error: AnalyticsConnectorError) {
     if (!view || view.errorEmitted) return;
     if (error.fatal) {
       stopPlaying();
@@ -423,7 +423,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
   }
-  function setConnector(next: TelemetryConnector | null) {
+  function setConnector(next: AnalyticsConnector | null) {
     if (destroyed) return;
     const previousUnsubscribe = unsubscribeConnector;
     const previousRenditionUnsubscribe = unsubscribeRenditions;
@@ -481,7 +481,7 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
     }
     scheduleSnapshot();
   }
-  function finish(reason: TelemetryEndReason) {
+  function finish(reason: AnalyticsEndReason) {
     if (!view) return;
     const current = view;
     stopPlaying();
@@ -561,6 +561,6 @@ export function attachTelemetry(media: HTMLMediaElement, options: TelemetryOptio
   };
 }
 
-function safeConnectorSnapshot(connector: TelemetryConnector): TelemetryConnectorSnapshot | null {
+function safeConnectorSnapshot(connector: AnalyticsConnector): AnalyticsConnectorSnapshot | null {
   try { return connector.snapshot(); } catch { return null; }
 }

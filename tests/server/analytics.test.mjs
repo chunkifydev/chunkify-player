@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("telemetry imports without a DOM and reports its package version", async () => {
-  const { attachTelemetry } = await import("@chunkify/telemetry");
-  const pkg = JSON.parse(await readFile(new URL("../../packages/telemetry/package.json", import.meta.url)));
+test("analytics imports without a DOM and reports its package version", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const pkg = JSON.parse(await readFile(new URL("../../packages/analytics/package.json", import.meta.url)));
   // HTML media is the external boundary. EventTarget suffices to inspect an
   // explicitly started attempt without constructing a browser DOM in Node.
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const events = [];
-  const session = attachTelemetry(media, { videoId: "asset-node", send: (event) => { events.push(event); } });
+  const session = attachAnalytics(media, { videoId: "asset-node", send: (event) => { events.push(event); } });
   assert.equal(events.length, 0);
   session.startAttempt();
   session.destroy();

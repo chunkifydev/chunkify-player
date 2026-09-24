@@ -1,5 +1,5 @@
-import { attachTelemetry, type TelemetryOptions, type TelemetrySession } from "./core.js";
-import { createHlsJsConnector, type HlsJsTelemetryConnector } from "./hlsjs.js";
+import { attachAnalytics, type AnalyticsOptions, type AnalyticsSession } from "./core.js";
+import { createHlsJsConnector, type HlsJsAnalyticsConnector } from "./hlsjs.js";
 import type Hls from "hls.js";
 
 /** The public surface needed from a player that can replace its media element. */
@@ -8,15 +8,15 @@ export interface MediaPlayerHost extends HTMLElement {
 }
 
 /** Attach the standalone media collector to a Chunkify Player. */
-export function attachPlayerTelemetry(
+export function attachPlayerAnalytics(
   player: MediaPlayerHost,
-  options: TelemetryOptions,
-): Pick<TelemetrySession, "startAttempt" | "sourceChanged" | "destroy"> {
+  options: AnalyticsOptions,
+): Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   let media = player.media;
-  let session = attachTelemetry(media, options);
+  let session = attachAnalytics(media, options);
   let destroyed = false;
   let activeHls: Hls | null = null;
-  let connector: HlsJsTelemetryConnector | null = null;
+  let connector: HlsJsAnalyticsConnector | null = null;
   let checkTimer: ReturnType<typeof setTimeout> | null = null;
 
   const clearCheckTimer = () => {
@@ -43,7 +43,7 @@ export function attachPlayerTelemetry(
       connector = next;
       activeHls = hls;
     } catch {
-      // Telemetry must not interrupt playback if an engine is unavailable.
+      // Analytics must not interrupt playback if an engine is unavailable.
     }
   };
   const scheduleConnectorCheck = () => {
@@ -76,7 +76,7 @@ export function attachPlayerTelemetry(
     session.destroy();
     detachConnector();
     media = next;
-    session = attachTelemetry(media, options);
+    session = attachAnalytics(media, options);
     bindMedia();
   };
   player.addEventListener("mediachange", onMediaChange);
