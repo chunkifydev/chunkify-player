@@ -5,8 +5,8 @@ export function assertTelemetryOptions(options: TelemetryOptions): void {
   if (typeof options.videoId !== "string" || !options.videoId.trim()) {
     throw new TypeError("Telemetry requires a non-empty videoId.");
   }
-  if (options.provider !== "callback" || typeof options.send !== "function") {
-    throw new TypeError("Telemetry requires a callback destination with a send function.");
+  if (typeof options.send !== "function") {
+    throw new TypeError("Telemetry requires a send function.");
   }
   if ((options.environment !== undefined && typeof options.environment !== "string") ||
       (options.viewerId !== undefined && typeof options.viewerId !== "string")) {

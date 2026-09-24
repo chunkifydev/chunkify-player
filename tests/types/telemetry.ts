@@ -2,7 +2,6 @@ import { attachTelemetry, type CallbackTelemetryConfig, type ChunkifyPlayerTelem
 
 const video = document.createElement("video");
 const destination: CallbackTelemetryConfig = {
-  provider: "callback",
   sampleRate: 1,
   async send(event) {
     const record: ChunkifyPlayerTelemetryEvent = event;
@@ -22,8 +21,8 @@ session.startAttempt();
 session.destroy();
 // @ts-expect-error A video identity is required.
 attachTelemetry(video, destination);
-// @ts-expect-error This slice only implements the callback destination.
-attachTelemetry(video, { videoId: "asset-types", provider: "datadog", client: {} });
+// @ts-expect-error A send function is required.
+attachTelemetry(video, { videoId: "asset-types" });
 // @ts-expect-error Transport secrets are not accepted.
 attachTelemetry(video, { ...destination, videoId: "asset-types", authorization: "secret" });
 // @ts-expect-error Sample rates are numeric.

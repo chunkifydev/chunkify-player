@@ -106,7 +106,7 @@
         eventCount.textContent = "0";
 
         const { videoId, source, mode } = Object.fromEntries(new FormData(form));
-        const options = { videoId: videoId.trim(), provider: "callback", send: record };
+        const options = { videoId: videoId.trim(), send: record };
         try {
           if (mode === "player") {
             const player = document.createElement("chunkify-player");

@@ -51,7 +51,6 @@ export interface ChunkifyPlayerTelemetryEvent {
   error_playhead_seconds: number | null;
 }
 export interface CallbackTelemetryConfig {
-  provider: "callback";
   send: (event: ChunkifyPlayerTelemetryEvent) => void | Promise<void>;
   environment?: string | undefined;
   viewerId?: string | undefined;

@@ -8,7 +8,6 @@ import { monitor } from "@chunkify/telemetry";
 const video = document.querySelector("video")!;
 const session = monitor(video, {
   videoId: "video_123",
-  provider: "callback",
   send: (event) => console.log(event),
 });
 
@@ -29,7 +28,6 @@ import { monitor } from "@chunkify/telemetry";
 const player = document.querySelector("chunkify-player")!;
 const session = monitor(player, {
   videoId: "video_123",
-  provider: "callback",
   send: (event) => console.log(event),
 });
 
@@ -50,7 +48,7 @@ import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
 const video = document.querySelector("video")!;
 const hls = new Hls();
 const session = monitorHlsJs(hls, {
-  videoId: "video_123", provider: "callback", send: (event) => console.log(event),
+  videoId: "video_123", send: (event) => console.log(event),
 });
 session.startAttempt(); // Call before starting HLS loading to include startup requests.
 hls.attachMedia(video);
