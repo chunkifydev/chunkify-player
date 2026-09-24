@@ -147,6 +147,7 @@
       playButton.addEventListener("click", async () => {
         if (!session || !playbackTarget) return;
         const media = playbackTarget.localName === "chunkify-player" ? playbackTarget.media : playbackTarget;
+        // Optional: count this explicit attempt even if play() rejects before emitting "play".
         session.startAttempt();
         try {
           await media.play();

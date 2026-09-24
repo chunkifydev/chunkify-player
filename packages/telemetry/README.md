@@ -39,7 +39,7 @@ session.destroy();
 
 When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
 
-For a separate player that gives you its `Hls` instance, use the optional hls.js adapter. It follows the `<video>` element attached to that instance:
+For a separate player that gives you its `Hls` instance, use the optional hls.js adapter. This example assumes the page has a `<video controls>` element. The adapter follows that element once hls.js attaches it:
 
 ```ts
 import Hls from "hls.js";
@@ -48,9 +48,9 @@ import { monitorHlsJs } from "@chunkify/telemetry/hlsjs";
 const video = document.querySelector("video")!;
 const hls = new Hls();
 const session = monitorHlsJs(hls, {
-  videoId: "video_123", send: (event) => console.log(event),
+  videoId: "video_123",
+  send: (event) => console.log(event),
 });
-session.startAttempt(); // Call before starting HLS loading to include startup requests.
 hls.attachMedia(video);
 hls.loadSource("https://example.com/video.m3u8");
 
