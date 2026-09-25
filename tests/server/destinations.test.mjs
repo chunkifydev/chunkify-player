@@ -3,7 +3,7 @@ import test from "node:test";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
 
-test("Datadog adapter sends the event and final per-rendition actions", () => {
+test("Datadog adapter sends one action per event with optional context mapping", () => {
   const actions = [];
   const adapter = createDatadogAdapter({ addAction(name, context) { actions.push({ name, context }); } });
   const event = {
@@ -18,10 +18,15 @@ test("Datadog adapter sends the event and final per-rendition actions", () => {
   assert.deepEqual(actions, [
     { name: "chunkify.video.view_snapshot", context: { chunkify: event } },
     { name: "chunkify.video.view_ended", context: { chunkify: { ...event, event_name: "chunkify.video.view_ended" } } },
-    { name: "chunkify.video.rendition_playing_time", context: { chunkify: {
-      video_id: "asset-1", view_id: "view-1", resolution: "640x360", playing_time_ms: 12000,
-    } } },
   ]);
+
+  const mapped = createDatadogAdapter({ addAction(name, context) { actions.push({ name, context }); } },
+    (record) => ({ video_id: record.video_id, rendition_count: record.rendition_playing_time?.length ?? 0 }));
+  mapped.send(event);
+  assert.deepEqual(actions.at(-1), {
+    name: "chunkify.video.view_snapshot", context: { video_id: "asset-1", rendition_count: 2 },
+  });
+  assert.throws(() => createDatadogAdapter({ addAction() {} }, null), TypeError);
 });
 
 test("HTTP adapter posts JSON without browser credentials and checks delivery status", async () => {

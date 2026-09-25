@@ -107,16 +107,22 @@ monitor(video, {
 
 The mapping runs for each event passed to the destination. For destinations that accept the Chunkify event directly, pass `event` without a mapper. Mapping does not alter collection, event selection, or snapshot timing.
 
-An initialized Datadog RUM client can be passed to the Datadog adapter. The adapter adds one custom action per analytics event. On `view_ended`, it also adds one action per rendition with known resolution and positive playing time, matching the test dashboard's per-resolution totals. Datadog setup and sampling remain the application's responsibility:
+An initialized Datadog RUM client can be passed to the Datadog adapter. It adds one custom action per analytics event, with the full event in its `chunkify` context by default. Pass a mapper as the second argument to choose the action's context; it runs once for each event. For example, this puts two fields directly in the Datadog context:
 
 ```ts
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+import { createEventMapper } from "@chunkify/analytics";
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createDatadogAdapter(datadogRum)],
+  destinations: [createDatadogAdapter(datadogRum, createEventMapper({
+    video_id: "video_id",
+    playing_time_ms: "playing_time_ms",
+  }))],
 });
 ```
+
+Without a mapper, use `createDatadogAdapter(datadogRum)`. The mapper creates the payload for each action from the current event; it is not a fixed payload supplied at setup time. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
 
 The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
 

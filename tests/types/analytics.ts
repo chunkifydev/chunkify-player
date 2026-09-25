@@ -35,7 +35,7 @@ const config: AnalyticsConfig = {
     record.src;
   } }],
 };
-const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } });
+const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } }, mapEvent);
 const http = createHttpAdapter("/api/analytics", mapEvent);
 const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, http] });
 session.startAttempt();
