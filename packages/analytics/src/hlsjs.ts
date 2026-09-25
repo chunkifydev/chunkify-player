@@ -12,10 +12,17 @@ export interface HlsJsAnalyticsConnector extends AnalyticsConnector {
   destroy(): void;
 }
 
+type HlsJsSnapshot = AnalyticsConnectorSnapshot & {
+  renditionSwitchCount: number;
+  deliveryRequestCount: number;
+  deliveryTransferredBytes: number;
+  deliveryDurationMs: number;
+};
+
 /** Observe an hls.js instance without changing its playback configuration. */
 export function createHlsJsConnector(hls: Hls): HlsJsAnalyticsConnector {
   const HlsClass = hls.constructor as typeof Hls;
-  const snapshot: AnalyticsConnectorSnapshot = {
+  const snapshot: HlsJsSnapshot = {
     renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
     renditionSwitchCount: 0, deliveryRequestCount: 0, deliveryTransferredBytes: 0,
     deliveryDurationMs: 0,

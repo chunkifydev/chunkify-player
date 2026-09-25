@@ -58,6 +58,22 @@ hls.loadSource("https://example.com/video.m3u8");
 // When finished, call session.destroy() and hls.destroy().
 ```
 
+For Video.js, call `monitorVideoJs()` after the player is ready. It supports Video.js's HTML5 video Tech and cleans up when Video.js disposes the player. If the optional quality-levels API is present, the adapter records the selected quality and switch count. It does not infer rendition playing time from ABR selections or report network totals that Video.js does not expose through this API:
+
+```ts
+import videojs from "video.js";
+import { monitorVideoJs } from "@chunkify/analytics/videojs";
+
+const player = videojs("my-video");
+player.ready(() => {
+  const session = monitorVideoJs(player, {
+    videoId: "video_123",
+    destinations: [{ send: (event) => console.log(event) }],
+  });
+  // Call session.destroy() if analytics stops before player.dispose().
+});
+```
+
 Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
 The final `view_ended` record has `startup_outcome`: `started` after a `playing` event, `failed_before_start` after a fatal error before playback, or `ended_before_start` if the attempt ended without either. Other records have `startup_outcome: null`. Ending before start does not imply that the viewer chose to leave.
@@ -68,7 +84,7 @@ Schema version 4 puts measurements directly on each event, alongside `video_id`,
 
 `video_intrinsic_width_css_px` and `video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
 
-Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
+Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, `monitorVideoJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
 
 ```ts
 monitor(video, {

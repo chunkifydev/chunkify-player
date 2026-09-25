@@ -88,10 +88,10 @@ export interface AnalyticsConnectorSnapshot {
   renditionHeight: number | null;
   renditionCodec: string | null;
   renditionBitrate: number | null;
-  renditionSwitchCount: number;
-  deliveryRequestCount: number;
-  deliveryTransferredBytes: number;
-  deliveryDurationMs: number;
+  renditionSwitchCount: number | null;
+  deliveryRequestCount: number | null;
+  deliveryTransferredBytes: number | null;
+  deliveryDurationMs: number | null;
 }
 export interface AnalyticsConnectorError {
   category: AnalyticsErrorCategory;
@@ -171,6 +171,10 @@ function finiteNonNegative(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+function nonNegativeDelta(current: number | null, baseline: number | null): number | null {
+  return current === null || baseline === null ? null : finiteNonNegative(current - baseline);
+}
+
 function finitePositive(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -238,10 +242,10 @@ function connectorMetrics(connector: AnalyticsConnector | null, baseline: Analyt
   } catch {
     return { ...emptyConnectorMetrics };
   }
-  const switches = finiteNonNegative(current.renditionSwitchCount - baseline.renditionSwitchCount);
-  const requests = finiteNonNegative(current.deliveryRequestCount - baseline.deliveryRequestCount);
-  const bytes = finiteNonNegative(current.deliveryTransferredBytes - baseline.deliveryTransferredBytes);
-  const deliveryDuration = finiteNonNegative(current.deliveryDurationMs - baseline.deliveryDurationMs);
+  const switches = nonNegativeDelta(current.renditionSwitchCount, baseline.renditionSwitchCount);
+  const requests = nonNegativeDelta(current.deliveryRequestCount, baseline.deliveryRequestCount);
+  const bytes = nonNegativeDelta(current.deliveryTransferredBytes, baseline.deliveryTransferredBytes);
+  const deliveryDuration = nonNegativeDelta(current.deliveryDurationMs, baseline.deliveryDurationMs);
   return {
     selected_rendition_width: finiteNonNegative(current.renditionWidth),
     selected_rendition_height: finiteNonNegative(current.renditionHeight),

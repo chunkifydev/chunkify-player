@@ -3,6 +3,7 @@ import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
 import { createOtlpAdapter } from "@chunkify/analytics/otlp";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
+import { monitorVideoJs } from "@chunkify/analytics/videojs";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",
@@ -44,6 +45,14 @@ const otlp = createOtlpAdapter("https://collector.example.com/v1/logs");
 const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp] });
 session.startAttempt();
 session.destroy();
+const videoJsPlayer = {
+  tech(_safety: true) { return { el: () => video }; },
+  on(_type: string, _listener: () => void) {},
+  off(_type: string, _listener: () => void) {},
+  error() { return null; },
+};
+const videoJsSession = monitorVideoJs(videoJsPlayer, { videoId: "videojs-types", destinations: [http] });
+videoJsSession.destroy();
 // @ts-expect-error A video identity is required.
 attachAnalytics(video, config);
 // @ts-expect-error At least one destination is required.
