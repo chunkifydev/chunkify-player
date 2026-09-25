@@ -74,6 +74,28 @@ player.ready(() => {
 });
 ```
 
+For Shaka Player, attach the media element first, then call `monitorShaka()` before `load()`. The connector enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
+
+```ts
+import shaka from "shaka-player";
+import { monitorShaka } from "@chunkify/analytics/shaka";
+
+const video = document.querySelector("video")!;
+const player = new shaka.Player();
+await player.attach(video);
+const session = monitorShaka(player, {
+  videoId: "video_123",
+  destinations: [{ send: (event) => console.log(event) }],
+});
+session.startAttempt();
+await player.load("https://example.com/video.m3u8");
+await video.play();
+
+// Call session.destroy() before player.destroy().
+```
+
+Shaka's `unloading` event ends the current view on a source change. The next view starts when the new media plays. For that view, downloads completed before playback begins are not included in delivery totals. Call `session.sourceChanged()` yourself if you replace the source outside Shaka. The quality observer must be enabled before Shaka loads content; creating the session after `load()` may leave rendition playing time unavailable until the next load.
+
 Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
 The final `view_ended` record has `startup_outcome`: `started` after a `playing` event, `failed_before_start` after a fatal error before playback, or `ended_before_start` if the attempt ended without either. Other records have `startup_outcome: null`. Ending before start does not imply that the viewer chose to leave.
@@ -82,9 +104,9 @@ The final `view_ended` record has `startup_outcome`: `started` after a `playing`
 
 Schema version 4 puts measurements directly on each event, alongside `video_id`, `view_id`, and the other event fields. For example, read `event.startup_time_ms` and `event.rebuffer_count`; there is no `event.metrics` object. The former `completion_ratio` field is now `furthest_progress_ratio`: the highest playhead position divided by media duration, capped at 1. Seeking near the end raises this value even without watching that part of the video, so it is not a percentage watched.
 
-`video_intrinsic_width_css_px` and `video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
+`video_intrinsic_width_css_px` and `video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. Selected rendition dimensions remain separate and require an engine connector such as hls.js or Shaka.
 
-Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, `monitorVideoJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
+Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, `monitorVideoJs()`, `monitorShaka()`, and the explicit attach functions. By default, all four event types are sent. For example:
 
 ```ts
 monitor(video, {
@@ -97,7 +119,7 @@ monitor(video, {
 
 Event selection does not change collection of the final view's metrics. Excluding `view_snapshot` also skips the snapshot timer. An empty `includeEvents` array sends no records. `destinations` must contain at least one object with a `send(event)` method. The collector delivers each sampled event to every destination and isolates delivery failures.
 
-For hls.js playback, `rendition_playing_time` contains cumulative wall-clock milliseconds for each rendition played in the view, grouped by width, height, codec, manifest bitrate, and frame rate. It excludes pauses, buffering, and seeks; playback speed does not change the elapsed time counted. Time before the first known rendition is omitted, so the sum can be less than `playing_time_ms`. The field is `null` without a rendition-aware connector and an empty array when hls.js has not identified a rendition yet. Snapshots repeat cumulative totals; consumers should use the final view record or differences between snapshots rather than summing entire snapshots. The package does not aggregate results across viewers.
+For hls.js or Shaka playback, `rendition_playing_time` contains cumulative wall-clock milliseconds for each rendition played in the view, grouped by width, height, codec, bitrate, and frame rate. It excludes pauses, buffering, and seeks; playback speed does not change the elapsed time counted. Time before the first known rendition is omitted, so the sum can be less than `playing_time_ms`. The field is `null` without a rendition-aware connector and an empty array when the connector has not identified a rendition yet. Snapshots repeat cumulative totals; consumers should use the final view record or differences between snapshots rather than summing entire snapshots. The package does not aggregate results across viewers.
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
 

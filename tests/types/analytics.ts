@@ -4,6 +4,7 @@ import { createHttpAdapter } from "@chunkify/analytics/http";
 import { createOtlpAdapter } from "@chunkify/analytics/otlp";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 import { monitorVideoJs } from "@chunkify/analytics/videojs";
+import { monitorShaka } from "@chunkify/analytics/shaka";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",
@@ -53,6 +54,15 @@ const videoJsPlayer = {
 };
 const videoJsSession = monitorVideoJs(videoJsPlayer, { videoId: "videojs-types", destinations: [http] });
 videoJsSession.destroy();
+const shakaPlayer = {
+  getMediaElement: () => video,
+  getConfiguration: () => ({ streaming: { observeQualityChanges: true } }),
+  configure: (_config: { streaming: { observeQualityChanges: boolean } }) => true,
+  addEventListener(_type: string, _listener: (event: Event) => void) {},
+  removeEventListener(_type: string, _listener: (event: Event) => void) {},
+};
+const shakaSession = monitorShaka(shakaPlayer, { videoId: "shaka-types", destinations: [http] });
+shakaSession.destroy();
 // @ts-expect-error A video identity is required.
 attachAnalytics(video, config);
 // @ts-expect-error At least one destination is required.

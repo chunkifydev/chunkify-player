@@ -14,7 +14,8 @@
     "./otlp": { "types": "./dist/otlp.d.ts", "import": "./dist/otlp.js" },
     "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" },
     "./hlsjs": { "types": "./dist/hlsjs.d.ts", "import": "./dist/hlsjs.js" },
-    "./videojs": { "types": "./dist/videojs.d.ts", "import": "./dist/videojs.js" }
+    "./videojs": { "types": "./dist/videojs.d.ts", "import": "./dist/videojs.js" },
+    "./shaka": { "types": "./dist/shaka.d.ts", "import": "./dist/shaka.js" }
   },
   "peerDependencies": { "hls.js": "^1.6.5" },
   "peerDependenciesMeta": { "hls.js": { "optional": true } },
