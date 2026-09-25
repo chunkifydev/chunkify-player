@@ -1,4 +1,7 @@
+import { analyticsEventTypes, type AnalyticsEventType } from "./event-types.js";
 import { assertAnalyticsOptions } from "./options.js";
+
+export type { AnalyticsEventType } from "./event-types.js";
 
 const sdkVersion = "0.0.0";
 
@@ -38,7 +41,7 @@ export interface ViewMetrics {
 }
 export interface ChunkifyPlayerAnalyticsEvent {
   schema_version: 2;
-  event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" | "chunkify.video.playback_error" | "chunkify.video.view_ended";
+  event_name: `chunkify.video.${AnalyticsEventType}`;
   event_id: string;
   sequence: number;
   occurred_at: string;
@@ -65,6 +68,10 @@ export interface CallbackAnalyticsConfig {
   environment?: string | undefined;
   viewerId?: string | undefined;
   sampleRate?: number | undefined;
+  /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
+  snapshotIntervalMs?: number | undefined;
+  /** Event types passed to send(). Defaults to all four types. */
+  includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
 export interface AnalyticsOptions extends CallbackAnalyticsConfig {
   videoId: string;
@@ -258,7 +265,9 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
 
 export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
   assertAnalyticsOptions(options);
-  const { videoId, send, environment = null, viewerId = null, sampleRate = 1 } = options;
+  const { videoId, send, environment = null, viewerId = null, sampleRate = 1, snapshotIntervalMs = 30000 } = options;
+  const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
+    .map((event) => `chunkify.video.${event}`));
   let view: View | null = null;
   let destroyed = false;
   let wantsPlay = false;
@@ -291,7 +300,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
 
   function emit(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"], reason: AnalyticsEndReason | null = null,
     error: NormalizedError | null = null) {
-    if (!current.sampled) return;
+    if (!current.sampled || !includedEvents.has(event_name)) return;
     const now = performance.now();
     const playingTime = current.playing + (current.playingSince === null ? 0 : now - current.playingSince);
     const rebufferDuration = current.rebufferDuration + (current.rebufferSince === null ? 0 : now - current.rebufferSince);
@@ -358,7 +367,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
       seekCount: 0, seekDuration: 0, seekSince: null,
       maximumPlayhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : 0,
-      nextSnapshotAt: 30000,
+      nextSnapshotAt: snapshotIntervalMs,
       duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
@@ -451,7 +460,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     }
   }
   function scheduleSnapshot() {
-    if (!view || !view.sampled || snapshotTimer !== null) return;
+    if (!view || !view.sampled || !includedEvents.has("chunkify.video.view_snapshot") || snapshotTimer !== null) return;
     const playingSince = view.playingSince;
     if (playingSince === null) return;
     const current = view;
@@ -463,8 +472,8 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       metadata();
       emit(current, "chunkify.video.view_snapshot");
       const currentPlayingTime = current.playing + performance.now() - current.playingSince;
-      const nextFutureInterval = (Math.floor(currentPlayingTime / 30000) + 1) * 30000;
-      current.nextSnapshotAt = Math.max(current.nextSnapshotAt + 30000, nextFutureInterval);
+      const nextFutureInterval = (Math.floor(currentPlayingTime / snapshotIntervalMs) + 1) * snapshotIntervalMs;
+      current.nextSnapshotAt = Math.max(current.nextSnapshotAt + snapshotIntervalMs, nextFutureInterval);
       if (view === current) scheduleSnapshot();
     }, Math.max(0, current.nextSnapshotAt - playingTime));
   }

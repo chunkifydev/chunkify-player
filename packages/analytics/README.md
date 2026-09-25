@@ -60,6 +60,19 @@ hls.loadSource("https://example.com/video.m3u8");
 
 Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, completion, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
+Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach `send`. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
+
+```ts
+monitor(video, {
+  videoId: "video_123",
+  snapshotIntervalMs: 10000,
+  includeEvents: ["view_snapshot", "view_ended"],
+  send: (event) => console.log(event),
+});
+```
+
+Event selection does not change collection of the final view's metrics. Excluding `view_snapshot` also skips the snapshot timer. An empty `includeEvents` array sends no records.
+
 For hls.js playback, `metrics.rendition_playing_time` contains cumulative wall-clock milliseconds for each rendition played in the view, grouped by width, height, codec, manifest bitrate, and frame rate. It excludes pauses, buffering, and seeks; playback speed does not change the elapsed time counted. Time before the first known rendition is omitted, so the sum can be less than `playing_time_ms`. The field is `null` without a rendition-aware connector and an empty array when hls.js has not identified a rendition yet. Snapshots repeat cumulative totals; consumers should use the final view record or differences between snapshots rather than summing entire snapshots. The package does not aggregate results across viewers.
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.

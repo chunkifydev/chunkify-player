@@ -3,6 +3,8 @@ import { attachAnalytics, type CallbackAnalyticsConfig, type ChunkifyPlayerAnaly
 const video = document.createElement("video");
 const destination: CallbackAnalyticsConfig = {
   sampleRate: 1,
+  snapshotIntervalMs: 10000,
+  includeEvents: ["view_started", "view_ended"],
   async send(event) {
     const record: ChunkifyPlayerAnalyticsEvent = event;
     const startup: number | null = record.metrics.startup_time_ms;
@@ -27,3 +29,7 @@ attachAnalytics(video, { videoId: "asset-types" });
 attachAnalytics(video, { ...destination, videoId: "asset-types", authorization: "secret" });
 // @ts-expect-error Sample rates are numeric.
 attachAnalytics(video, { ...destination, videoId: "asset-types", sampleRate: "0.5" });
+// @ts-expect-error Snapshot intervals are numeric.
+attachAnalytics(video, { ...destination, videoId: "asset-types", snapshotIntervalMs: "10000" });
+// @ts-expect-error Event names are from the supported set.
+attachAnalytics(video, { ...destination, videoId: "asset-types", includeEvents: ["unknown"] });
