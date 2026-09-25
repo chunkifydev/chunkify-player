@@ -1,4 +1,4 @@
-import { attachAnalytics, type CallbackAnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory } from "@chunkify/analytics";
+import { attachAnalytics, type CallbackAnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
 
 const video = document.createElement("video");
 const destination: CallbackAnalyticsConfig = {
@@ -13,7 +13,8 @@ const destination: CallbackAnalyticsConfig = {
     const snapshot: boolean = record.event_name === "chunkify.video.view_snapshot";
     const frames: number | null = record.metrics.total_video_frames;
     const category: AnalyticsErrorCategory | null = record.error_category;
-    void startup; void buffering; void completion; void snapshot; void frames; void category;
+    const outcome: AnalyticsStartupOutcome | null = record.startup_outcome;
+    void startup; void buffering; void completion; void snapshot; void frames; void category; void outcome;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;
   },

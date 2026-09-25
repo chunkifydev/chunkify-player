@@ -37,6 +37,7 @@ test("attachment stays idle and one playback attempt emits ordered start and end
   expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   expect(events[0]!.view_id).toBe(events[1]!.view_id);
   expect(events[0]!.event_id).not.toBe(events[1]!.event_id);
+  expect(events.map((event) => event.startup_outcome)).toEqual([null, "started"]);
 });
 
 test("startup and playing time exclude loading, buffering, pauses and seeks", async ({ page }) => {
@@ -420,6 +421,7 @@ test("media failures emit one normalized error record without raw error text", a
       "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => event.startup_outcome)).toEqual([null, null, "failed_before_start"]);
     expect(events[1]).toMatchObject({
       error_code: [1, 2, 3, 4, 99][index],
       error_fatal: true,
@@ -529,6 +531,7 @@ test("an engine connector enriches a view with normalized rendition and delivery
       delivery_throughput_bps: 2_000_000,
     },
   });
+  expect(events[2]).toMatchObject({ startup_outcome: "failed_before_start" });
   expect(JSON.stringify(events)).not.toMatch(/url|secret|stack|message/i);
 });
 
@@ -566,7 +569,7 @@ test("a fatal connector error stops active timing before its error and final rec
     "chunkify.video.view_started", "chunkify.video.playback_error", "chunkify.video.view_ended",
   ]);
   expect(events[1]).toMatchObject({ metrics: { playing_time_ms: 1000 } });
-  expect(events[2]).toMatchObject({ metrics: { playing_time_ms: 1000 } });
+  expect(events[2]).toMatchObject({ startup_outcome: "started", metrics: { playing_time_ms: 1000 } });
 });
 
 test("connector subscriptions cannot outlive a destroyed or reentrantly destroyed session", async ({ page }) => {
@@ -765,7 +768,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
     });
     expect(event).toHaveProperty("occurred_at", expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
   }
-  expect(events[1]).toMatchObject({ reason: "destroyed" });
+  expect(events[1]).toMatchObject({ reason: "destroyed", startup_outcome: "ended_before_start" });
   const serialized = JSON.stringify(events);
   for (const excluded of ["https://", "/private/path", "must-not-leak", "authorization", "rawError"]) {
     expect(serialized).not.toContain(excluded);

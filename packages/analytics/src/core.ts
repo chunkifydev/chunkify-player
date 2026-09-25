@@ -7,6 +7,7 @@ const sdkVersion = "0.0.0";
 
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
 export type AnalyticsErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
+export type AnalyticsStartupOutcome = "started" | "failed_before_start" | "ended_before_start";
 export interface RenditionPlayingTime {
   width: number | null;
   height: number | null;
@@ -58,6 +59,7 @@ export interface ChunkifyPlayerAnalyticsEvent {
   viewer_id: string | null;
   metrics: ViewMetrics;
   reason: AnalyticsEndReason | null;
+  startup_outcome: AnalyticsStartupOutcome | null;
   error_category: AnalyticsErrorCategory | null;
   error_code: string | number | null;
   error_fatal: boolean | null;
@@ -132,6 +134,7 @@ interface View {
   source: string;
   resourceStarted: boolean;
   errorEmitted: boolean;
+  fatalErrorBeforeStart: boolean;
   frameBaseline: FrameCounts | null;
   framePrevious: FrameCounts | null;
   frameMetricsValid: boolean;
@@ -320,6 +323,12 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     }
     if (frames) current.framePrevious = frames;
     const engineMetrics = connectorMetrics(connector, current.connectorBaseline);
+    let startupOutcome: AnalyticsStartupOutcome | null = null;
+    if (event_name === "chunkify.video.view_ended") {
+      if (current.startup !== null) startupOutcome = "started";
+      else if (current.fatalErrorBeforeStart) startupOutcome = "failed_before_start";
+      else startupOutcome = "ended_before_start";
+    }
     const event: ChunkifyPlayerAnalyticsEvent = {
       schema_version: 2, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
@@ -328,6 +337,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
       delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
+      startup_outcome: startupOutcome,
       error_category: error?.category ?? null,
       error_code: error?.code ?? null,
       error_fatal: error?.fatal ?? null,
@@ -371,7 +381,8 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
-      errorEmitted: false, frameBaseline: initialFrames, framePrevious: initialFrames,
+      errorEmitted: false, fatalErrorBeforeStart: false,
+      frameBaseline: initialFrames, framePrevious: initialFrames,
       frameMetricsValid: initialFrames !== null, sampled,
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
@@ -405,7 +416,9 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
   }
   function reportMediaError() {
-    if (!view || view.errorEmitted) return;
+    if (!view) return;
+    if (view.startup === null) view.fatalErrorBeforeStart = true;
+    if (view.errorEmitted) return;
     updatePlaybackPosition();
     view.errorEmitted = true;
     const code = media.error && Number.isFinite(media.error.code) ? media.error.code : null;
@@ -415,7 +428,9 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     });
   }
   function reportConnectorError(error: AnalyticsConnectorError) {
-    if (!view || view.errorEmitted) return;
+    if (!view) return;
+    if (error.fatal && view.startup === null) view.fatalErrorBeforeStart = true;
+    if (view.errorEmitted) return;
     if (error.fatal) {
       stopPlaying();
       stopRebuffering();
