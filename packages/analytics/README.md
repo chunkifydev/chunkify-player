@@ -87,4 +87,24 @@ For hls.js playback, `rendition_playing_time` contains cumulative wall-clock mil
 
 The callback keeps collection separate from delivery. It can inspect or store events now; a future destination adapter can consume the same versioned events without changing the player integration. The package does not retry, queue, or guarantee delivery of asynchronous callbacks on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
 
+Use `createEventMapper()` when a destination needs different field names or values. Each output field names a source event field or calculates a value from the event. The mapper returns a new object and leaves the original event unchanged:
+
+```ts
+import { createEventMapper, monitor } from "@chunkify/analytics";
+
+const mapForEndpoint = createEventMapper({
+  videoId: "video_id",
+  viewId: "view_id",
+  eventName: "event_name",
+  playtimeSeconds: (event) => event.playing_time_ms / 1000,
+});
+
+monitor(video, {
+  videoId: "video_123",
+  send: (event) => myClient.send(mapForEndpoint(event)),
+});
+```
+
+The mapping runs for each event passed to `send`. For destinations that accept the Chunkify event directly, pass `event` without a mapper. Mapping does not alter collection, event selection, or snapshot timing.
+
 The application should call `destroy()` when it no longer needs the session. The hls.js adapter removes its listeners but does not destroy the application's HLS engine.

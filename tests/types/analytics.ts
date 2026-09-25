@@ -1,4 +1,13 @@
-import { attachAnalytics, type CallbackAnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
+import { attachAnalytics, createEventMapper, type CallbackAnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
+
+const mapEvent = createEventMapper({
+  videoId: "video_id",
+  playtimeSeconds: (event) => event.playing_time_ms / 1000,
+});
+const mapped = mapEvent({} as ChunkifyPlayerAnalyticsEvent);
+const mappedVideoId: string = mapped.videoId;
+const mappedPlaytime: number = mapped.playtimeSeconds;
+void mappedVideoId; void mappedPlaytime;
 
 const video = document.createElement("video");
 const destination: CallbackAnalyticsConfig = {

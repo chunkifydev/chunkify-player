@@ -17,3 +17,30 @@ test("analytics imports without a DOM and reports its package version", async ()
   assert.equal(events[0].sdk_version, pkg.version);
   assert.equal(events[0].connector_version, pkg.version);
 });
+
+test("event mapper selects, renames, and calculates fields without changing the source event", async () => {
+  const { attachAnalytics, createEventMapper } = await import("@chunkify/analytics");
+  const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
+  const events = [];
+  const session = attachAnalytics(media, { videoId: "asset-map", send: (event) => { events.push(event); } });
+  session.startAttempt();
+  session.destroy();
+
+  const mapEvent = createEventMapper({
+    videoId: "video_id",
+    eventName: "event_name",
+    playtimeSeconds: (event) => event.playing_time_ms / 1000,
+    unavailable: "media_duration_seconds",
+  });
+  const event = events[1];
+  const mapped = mapEvent(event);
+  assert.deepEqual(mapped, {
+    videoId: "asset-map",
+    eventName: "chunkify.video.view_ended",
+    playtimeSeconds: 0,
+    unavailable: null,
+  });
+  assert.equal(event.video_id, "asset-map");
+  assert.equal(Object.hasOwn(event, "videoId"), false);
+  assert.notEqual(mapped, event);
+});
