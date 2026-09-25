@@ -43,8 +43,8 @@ export interface ViewMetrics {
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
 }
-export interface ChunkifyPlayerAnalyticsEvent {
-  schema_version: 3;
+export interface ChunkifyPlayerAnalyticsEvent extends ViewMetrics {
+  schema_version: 4;
   event_name: `chunkify.video.${AnalyticsEventType}`;
   event_id: string;
   sequence: number;
@@ -60,7 +60,6 @@ export interface ChunkifyPlayerAnalyticsEvent {
   delivery_hostname: string | null;
   environment: string | null;
   viewer_id: string | null;
-  metrics: ViewMetrics;
   reason: AnalyticsEndReason | null;
   startup_outcome: AnalyticsStartupOutcome | null;
   error_category: AnalyticsErrorCategory | null;
@@ -388,7 +387,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     }
     refreshIntrinsicVideoSize(current);
     const event: ChunkifyPlayerAnalyticsEvent = {
-      schema_version: 3, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
+      schema_version: 4, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
@@ -400,25 +399,23 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       error_code: error?.code ?? null,
       error_fatal: error?.fatal ?? null,
       error_playhead_seconds: error?.playhead ?? null,
-      metrics: {
-        media_duration_seconds: current.duration,
-        startup_time_ms: current.startup,
-        first_video_frame_time_ms: current.firstVideoFrame,
-        playing_time_ms: playingTime,
-        rebuffer_count: current.rebufferCount,
-        rebuffer_duration_ms: rebufferDuration,
-        rebuffer_ratio: rebufferDenominator > 0 ? rebufferDuration / rebufferDenominator : null,
-        seek_count: current.seekCount,
-        seek_duration_ms: seekDuration,
-        maximum_playhead_seconds: current.maximumPlayhead,
-        furthest_progress_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
-        video_intrinsic_width_css_px: current.intrinsicVideoWidth,
-        video_intrinsic_height_css_px: current.intrinsicVideoHeight,
-        dropped_video_frames: viewFrames?.dropped ?? null,
-        total_video_frames: viewFrames?.total ?? null,
-        ...engineMetrics,
-        rendition_playing_time: renditionPlayingTime(current, now),
-      },
+      media_duration_seconds: current.duration,
+      startup_time_ms: current.startup,
+      first_video_frame_time_ms: current.firstVideoFrame,
+      playing_time_ms: playingTime,
+      rebuffer_count: current.rebufferCount,
+      rebuffer_duration_ms: rebufferDuration,
+      rebuffer_ratio: rebufferDenominator > 0 ? rebufferDuration / rebufferDenominator : null,
+      seek_count: current.seekCount,
+      seek_duration_ms: seekDuration,
+      maximum_playhead_seconds: current.maximumPlayhead,
+      furthest_progress_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
+      video_intrinsic_width_css_px: current.intrinsicVideoWidth,
+      video_intrinsic_height_css_px: current.intrinsicVideoHeight,
+      dropped_video_frames: viewFrames?.dropped ?? null,
+      total_video_frames: viewFrames?.total ?? null,
+      ...engineMetrics,
+      rendition_playing_time: renditionPlayingTime(current, now),
     };
     try {
       // A customer destination must not interrupt playback or analytics cleanup.

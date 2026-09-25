@@ -159,28 +159,28 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     ["chunkify.video.view_ended", "destroyed"],
   ]);
   if (hlsFrameCallbacksAvailable) {
-    expect(events[1]!.metrics.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
+    expect(events[1]!.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
   }
   if (mp4FrameCallbacksAvailable) {
-    expect(events[3]!.metrics.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
+    expect(events[3]!.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
   }
   if (hlsJsActive) {
     expect(events[1]).toMatchObject({
       connector_name: "hls.js",
-      metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
+      selected_rendition_width: 256, selected_rendition_height: 144,
     });
-    expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
-    expect(events[1]!.metrics.delivery_transferred_bytes).toBeGreaterThan(0);
-    expect(events[1]!.metrics.rendition_playing_time).toEqual([
+    expect(events[1]!.delivery_request_count).toBeGreaterThan(0);
+    expect(events[1]!.delivery_transferred_bytes).toBeGreaterThan(0);
+    expect(events[1]!.rendition_playing_time).toEqual([
       expect.objectContaining({ width: 256, height: 144, playing_time_ms: expect.any(Number) }),
     ]);
-    expect(events[1]!.metrics.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
+    expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
   }
-  expect(events[1]!.metrics.video_intrinsic_width_css_px).toBeGreaterThan(0);
-  expect(events[1]!.metrics.video_intrinsic_height_css_px).toBeGreaterThan(0);
-  expect(events[3]!.metrics.video_intrinsic_width_css_px).toBeGreaterThan(0);
-  expect(events[3]!.metrics.video_intrinsic_height_css_px).toBeGreaterThan(0);
+  expect(events[1]!.video_intrinsic_width_css_px).toBeGreaterThan(0);
+  expect(events[1]!.video_intrinsic_height_css_px).toBeGreaterThan(0);
+  expect(events[3]!.video_intrinsic_width_css_px).toBeGreaterThan(0);
+  expect(events[3]!.video_intrinsic_height_css_px).toBeGreaterThan(0);
 });
 
 test("an external hls.js instance enriches an ordinary video", async ({ page, browserName }) => {
@@ -238,13 +238,13 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
   ]);
   expect(events[1]).toMatchObject({
     connector_name: "hls.js",
-    metrics: { selected_rendition_width: 256, selected_rendition_height: 144 },
+    selected_rendition_width: 256, selected_rendition_height: 144,
   });
-  expect(events[1]!.metrics.delivery_request_count).toBeGreaterThan(0);
-  expect(events[1]!.metrics.rendition_playing_time).toEqual([
+  expect(events[1]!.delivery_request_count).toBeGreaterThan(0);
+  expect(events[1]!.rendition_playing_time).toEqual([
     expect.objectContaining({ width: 256, height: 144, playing_time_ms: expect.any(Number) }),
   ]);
-  expect(events[1]!.metrics.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
+  expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
 });
 
 test("the hls.js adapter follows media that was attached earlier or changes later", async ({ page, browserName }) => {
