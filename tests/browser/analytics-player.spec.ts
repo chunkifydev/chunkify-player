@@ -48,6 +48,33 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
   ]);
 });
 
+test("Chunkify Player analytics measure the host instead of its media element", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+
+  const result = await page.evaluate(async () => {
+    const { monitor } = await import("@chunkify/analytics");
+    const player: ChunkifyPlayer = document.createElement("chunkify-player");
+    player.preload = "none";
+    player.style.cssText = "width: 320px; height: 180px";
+    document.body.append(player);
+    const records: ChunkifyPlayerAnalyticsEvent[] = [];
+    const session = monitor(player, { videoId: "asset-host-size", send(event) { records.push(event); } });
+    player.media.style.width = "40px";
+    player.media.dispatchEvent(new Event("play"));
+    const mediaWidth = player.media.getBoundingClientRect().width;
+    session.destroy();
+    player.remove();
+    return {
+      hostWidth: records[0]?.player_width_css_px,
+      mediaWidth,
+      hostHeight: records[0]?.player_height_css_px,
+    };
+  });
+
+  expect(result).toEqual({ hostWidth: 320, mediaWidth: 40, hostHeight: 180 });
+});
+
 test("the standalone adapter follows Chunkify Player media replacements", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
@@ -177,6 +204,10 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     expect(events[1]!.metrics.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
   }
+  expect(events[1]!.metrics.video_intrinsic_width_css_px).toBeGreaterThan(0);
+  expect(events[1]!.metrics.video_intrinsic_height_css_px).toBeGreaterThan(0);
+  expect(events[3]!.metrics.video_intrinsic_width_css_px).toBeGreaterThan(0);
+  expect(events[3]!.metrics.video_intrinsic_height_css_px).toBeGreaterThan(0);
 });
 
 test("an external hls.js instance enriches an ordinary video", async ({ page, browserName }) => {

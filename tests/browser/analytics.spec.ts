@@ -40,6 +40,44 @@ test("attachment stays idle and one playback attempt emits ordered start and end
   expect(events.map((event) => event.startup_outcome)).toEqual([null, "started"]);
 });
 
+test("records the displayed player size and intrinsic video size as they become available", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.style.cssText = "display: block; width: 320px; height: 180px";
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-size", send(event) { f.events.push(event); } });
+    f.video.dispatchEvent(new Event("play"));
+    Object.defineProperties(f.video, {
+      videoWidth: { configurable: true, value: 1920 },
+      videoHeight: { configurable: true, value: 1080 },
+    });
+    f.video.style.width = "640px";
+    f.video.style.height = "360px";
+    f.video.dispatchEvent(new Event("ended"));
+    f.session.destroy();
+    return f.events;
+  });
+  expect(events[0]).toMatchObject({
+    schema_version: 3, player_width_css_px: 320, player_height_css_px: 180,
+    metrics: { video_intrinsic_width_css_px: null, video_intrinsic_height_css_px: null },
+  });
+  expect(events[1]).toMatchObject({
+    player_width_css_px: 640, player_height_css_px: 360,
+    metrics: { video_intrinsic_width_css_px: 1920, video_intrinsic_height_css_px: 1080 },
+  });
+});
+
+test("unlaid-out player dimensions remain unavailable", async ({ page }) => {
+  const event = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.style.display = "none";
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-hidden", send(record) { f.events.push(record); } });
+    f.session.startAttempt();
+    f.session.destroy();
+    return f.events[0];
+  });
+  expect(event).toMatchObject({ player_width_css_px: null, player_height_css_px: null });
+});
+
 test("startup and playing time exclude loading, buffering, pauses and seeks", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -253,7 +291,7 @@ test("rendition playing time follows playback, switches and view boundaries", as
   expect(replay.metrics.rendition_playing_time).toEqual([{ ...low, playing_time_ms: 1000 }]);
 });
 
-test("final records contain cumulative buffering, seeking and completion measurements", async ({ page }) => {
+test("final records contain cumulative buffering, seeking and furthest progress measurements", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
@@ -295,8 +333,9 @@ test("final records contain cumulative buffering, seeking and completion measure
     seek_count: 1,
     seek_duration_ms: 3000,
     maximum_playhead_seconds: 85,
-    completion_ratio: 0.85,
+    furthest_progress_ratio: 0.85,
   } });
+  expect(events[1]!.metrics).not.toHaveProperty("completion_ratio");
 });
 
 test("snapshots report cumulative metrics every 30 seconds of active playing time", async ({ page }) => {
@@ -846,7 +885,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   expect(events).toHaveLength(2);
   for (const event of events) {
     expect(event).toMatchObject({
-      schema_version: 2, video_id: "asset-private", delivery_hostname: "media.example.test",
+      schema_version: 3, video_id: "asset-private", delivery_hostname: "media.example.test",
       sdk_name: "@chunkify/analytics", sdk_version: "0.0.0",
       connector_name: "html-media", connector_version: "0.0.0",
       player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",

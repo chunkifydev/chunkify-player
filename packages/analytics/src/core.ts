@@ -28,7 +28,9 @@ export interface ViewMetrics {
   seek_count: number;
   seek_duration_ms: number;
   maximum_playhead_seconds: number;
-  completion_ratio: number | null;
+  furthest_progress_ratio: number | null;
+  video_intrinsic_width_css_px: number | null;
+  video_intrinsic_height_css_px: number | null;
   dropped_video_frames: number | null;
   total_video_frames: number | null;
   selected_rendition_width: number | null;
@@ -42,7 +44,7 @@ export interface ViewMetrics {
   delivery_throughput_bps: number | null;
 }
 export interface ChunkifyPlayerAnalyticsEvent {
-  schema_version: 2;
+  schema_version: 3;
   event_name: `chunkify.video.${AnalyticsEventType}`;
   event_id: string;
   sequence: number;
@@ -55,6 +57,8 @@ export interface ChunkifyPlayerAnalyticsEvent {
   connector_version: string | null;
   player_name: string | null;
   player_version: string | null;
+  player_width_css_px: number | null;
+  player_height_css_px: number | null;
   delivery_hostname: string | null;
   environment: string | null;
   viewer_id: string | null;
@@ -133,6 +137,8 @@ interface View {
   maximumPlayhead: number;
   nextSnapshotAt: number;
   duration: number | null;
+  intrinsicVideoWidth: number | null;
+  intrinsicVideoHeight: number | null;
   hostname: string | null;
   source: string;
   resourceStarted: boolean;
@@ -163,6 +169,34 @@ interface NormalizedError {
 
 function finiteNonNegative(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function finitePositive(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function playerSize(element: Element): { width: number | null; height: number | null } {
+  try {
+    const rect = element.getBoundingClientRect();
+    const width = finitePositive(rect.width);
+    const height = finitePositive(rect.height);
+    return width !== null && height !== null ? { width, height } : { width: null, height: null };
+  } catch {
+    return { width: null, height: null };
+  }
+}
+
+function intrinsicVideoSize(media: HTMLMediaElement): { width: number | null; height: number | null } {
+  try {
+    const customMedia = media as HTMLMediaElement & { nativeEl?: Element | null };
+    const video = (customMedia.nativeEl?.localName === "video" ? customMedia.nativeEl : media) as
+      HTMLMediaElement & Partial<Pick<HTMLVideoElement, "videoWidth" | "videoHeight">>;
+    const width = finitePositive(video.videoWidth);
+    const height = finitePositive(video.videoHeight);
+    return width !== null && height !== null ? { width, height } : { width: null, height: null };
+  } catch {
+    return { width: null, height: null };
+  }
 }
 
 function normalizedRendition(rendition: AnalyticsRendition | null): AnalyticsRendition | null {
@@ -269,7 +303,7 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
   return { dropped: webkit.webkitDroppedFrameCount!, total: webkit.webkitDecodedFrameCount! };
 }
 
-export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions, playerElement: Element = media): AnalyticsSession {
   assertAnalyticsOptions(options);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
@@ -285,6 +319,13 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
   let selectedRendition: AnalyticsRendition | null = null;
+
+  function refreshIntrinsicVideoSize(current: View) {
+    const size = intrinsicVideoSize(media);
+    if (size.width === null || size.height === null) return;
+    current.intrinsicVideoWidth = size.width;
+    current.intrinsicVideoHeight = size.height;
+  }
 
   function cancelFirstVideoFrame(current: View) {
     if (current.frameCallbackId === null) return;
@@ -358,12 +399,15 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       else if (current.fatalErrorBeforeStart) startupOutcome = "failed_before_start";
       else startupOutcome = "ended_before_start";
     }
+    const displaySize = playerSize(playerElement);
+    refreshIntrinsicVideoSize(current);
     const event: ChunkifyPlayerAnalyticsEvent = {
-      schema_version: 2, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
+      schema_version: 3, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
+      player_width_css_px: displaySize.width, player_height_css_px: displaySize.height,
       delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
       startup_outcome: startupOutcome,
@@ -382,7 +426,9 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
         seek_count: current.seekCount,
         seek_duration_ms: seekDuration,
         maximum_playhead_seconds: current.maximumPlayhead,
-        completion_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
+        furthest_progress_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
+        video_intrinsic_width_css_px: current.intrinsicVideoWidth,
+        video_intrinsic_height_css_px: current.intrinsicVideoHeight,
         dropped_video_frames: viewFrames?.dropped ?? null,
         total_video_frames: viewFrames?.total ?? null,
         ...engineMetrics,
@@ -401,6 +447,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     wantsPlay = true;
     if (view) return;
     const initialFrames = frameCounts(media);
+    const initialVideoSize = intrinsicVideoSize(media);
     const sampled = sampleRate === 1 || (sampleRate > 0 && Math.random() < sampleRate);
     const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(),
       startup: null, firstVideoFrame: null, frameCallbackId: null,
@@ -409,7 +456,9 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       seekCount: 0, seekDuration: 0, seekSince: null,
       maximumPlayhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : 0,
       nextSnapshotAt: snapshotIntervalMs,
-      duration: duration(media), hostname: deliveryHostname(media), source: media.src || media.currentSrc,
+      duration: duration(media),
+      intrinsicVideoWidth: initialVideoSize.width, intrinsicVideoHeight: initialVideoSize.height,
+      hostname: deliveryHostname(media), source: media.src || media.currentSrc,
       // NETWORK_IDLE (1) and NETWORK_LOADING (2) already have a selected resource.
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
       errorEmitted: false, fatalErrorBeforeStart: false,
@@ -446,7 +495,9 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     view.seekSince = null;
   }
   function updatePlaybackPosition() {
-    if (!view || !Number.isFinite(media.currentTime)) return;
+    if (!view) return;
+    refreshIntrinsicVideoSize(view);
+    if (!Number.isFinite(media.currentTime)) return;
     view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
   }
   function reportMediaError() {
@@ -530,6 +581,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   }
   function playing() {
     if (!view || !wantsPlay || seeking) return;
+    refreshIntrinsicVideoSize(view);
     const now = performance.now();
     view.resourceStarted = true;
     view.startup ??= now - view.startedAt;
@@ -557,6 +609,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   function metadata() {
     if (!view) return;
     view.duration = duration(media);
+    refreshIntrinsicVideoSize(view);
     view.hostname = deliveryHostname(media);
   }
   const listeners: Record<string, () => void> = {

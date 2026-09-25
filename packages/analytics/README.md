@@ -35,7 +35,7 @@ const session = monitor(player, {
 session.destroy();
 ```
 
-`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use.
+`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use. `attachAnalytics(media, options, playerElement)` can optionally measure a separate visible player element; without it, the media element is measured.
 
 When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
 
@@ -58,11 +58,15 @@ hls.loadSource("https://example.com/video.m3u8");
 // When finished, call session.destroy() and hls.destroy().
 ```
 
-Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, completion, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
+Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
 The final `view_ended` record has `startup_outcome`: `started` after a `playing` event, `failed_before_start` after a fatal error before playback, or `ended_before_start` if the attempt ended without either. Other records have `startup_outcome: null`. Ending before start does not imply that the viewer chose to leave.
 
 `startup_time_ms` measures from the attempt to the first `playing` event. `first_video_frame_time_ms` measures from the attempt until `requestVideoFrameCallback()` reports a video frame sent for composition. A preloaded frame can make this earlier than `startup_time_ms`. It is `null` if the API is unavailable or no frame is observed before the view ends. The callback may run after composition, so this is not the exact display time or proof the viewer saw the frame.
+
+Schema version 3 names the former `completion_ratio` field `metrics.furthest_progress_ratio`. It is the highest playhead position divided by media duration, capped at 1. Seeking near the end raises this value even without watching that part of the video, so it is not a percentage watched.
+
+Each emitted record samples `player_width_css_px` and `player_height_css_px` from the displayed element's bounding box. For Chunkify Player this is the outer `<chunkify-player>`; for direct video and hls.js monitoring it is the media element. These fields are `null` when the player has no laid-out area and can change after resizing or fullscreen. `metrics.video_intrinsic_width_css_px` and `metrics.video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
 
 Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach `send`. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
 

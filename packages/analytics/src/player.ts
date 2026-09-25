@@ -13,7 +13,7 @@ export function attachPlayerAnalytics(
   options: AnalyticsOptions,
 ): Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   let media = player.media;
-  let session = attachAnalytics(media, options);
+  let session = attachAnalytics(media, options, player);
   let destroyed = false;
   let activeHls: Hls | null = null;
   let connector: HlsJsAnalyticsConnector | null = null;
@@ -76,7 +76,7 @@ export function attachPlayerAnalytics(
     session.destroy();
     detachConnector();
     media = next;
-    session = attachAnalytics(media, options);
+    session = attachAnalytics(media, options, player);
     bindMedia();
   };
   player.addEventListener("mediachange", onMediaChange);
