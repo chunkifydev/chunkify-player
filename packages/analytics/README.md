@@ -43,7 +43,7 @@ For a separate player that gives you its `Hls` instance, use the optional hls.js
 
 ```ts
 import Hls from "hls.js";
-import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
+import { monitorHlsJs } from "@chunkify/analytics";
 
 const video = document.querySelector("video")!;
 const hls = new Hls();
@@ -62,7 +62,7 @@ For Video.js, call `monitorVideoJs()` after the player is ready. It supports Vid
 
 ```ts
 import videojs from "video.js";
-import { monitorVideoJs } from "@chunkify/analytics/videojs";
+import { monitorVideoJs } from "@chunkify/analytics";
 
 const player = videojs("my-video");
 player.ready(() => {
@@ -78,7 +78,7 @@ For Shaka Player, attach the media element first, then call `monitorShaka()` bef
 
 ```ts
 import shaka from "shaka-player";
-import { monitorShaka } from "@chunkify/analytics/shaka";
+import { monitorShaka } from "@chunkify/analytics";
 
 const video = document.querySelector("video")!;
 const player = new shaka.Player();
