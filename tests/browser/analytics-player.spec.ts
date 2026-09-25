@@ -16,10 +16,10 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     document.body.append(video, player);
 
     const videoSession = monitor(video, {
-      videoId: "asset-video", send(event) { videoEvents.push(event); },
+      videoId: "asset-video", destinations: [{ send(event) { videoEvents.push(event); } }],
     });
     const playerSession = monitor(player, {
-      videoId: "asset-player", send(event) { playerEvents.push(event); },
+      videoId: "asset-player", destinations: [{ send(event) { playerEvents.push(event); } }],
     });
     video.dispatchEvent(new Event("play"));
     player.media.dispatchEvent(new Event("play"));
@@ -60,7 +60,7 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     document.body.append(player);
     const session = attachPlayerAnalytics(player, {
       videoId: "asset-adapter",
-      send(event) { events.push(event); },
+      destinations: [{ send(event) { events.push(event); } }],
     });
 
     const first = player.media;
@@ -108,7 +108,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     document.body.append(player);
     state.analyticsSession = attachPlayerAnalytics(player, {
       videoId: "asset-real-playback",
-      send(event) { state.analyticsEvents.push(event); },
+      destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
     });
   });
 
@@ -207,7 +207,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     state.externalEvents = [];
     state.externalSession = monitorHlsJs(state.externalHls, {
       videoId: "asset-external",
-      send(event) { state.externalEvents.push(event); },
+      destinations: [{ send(event) { state.externalEvents.push(event); } }],
     });
     state.externalSession.startAttempt();
     state.externalHls.attachMedia(state.externalVideo);
@@ -265,7 +265,7 @@ test("the hls.js adapter follows media that was attached earlier or changes late
     hls.attachMedia(first);
     const records: ChunkifyPlayerAnalyticsEvent[] = [];
     const session = monitorHlsJs(hls, {
-      videoId: "asset-reattach", send(event) { records.push(event); },
+      videoId: "asset-reattach", destinations: [{ send(event) { records.push(event); } }],
     });
     first.dispatchEvent(new Event("play"));
     hls.detachMedia();

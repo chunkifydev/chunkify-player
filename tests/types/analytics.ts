@@ -1,4 +1,6 @@
-import { attachAnalytics, createEventMapper, type CallbackAnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
+import { attachAnalytics, createEventMapper, type AnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
+import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+import { createHttpAdapter } from "@chunkify/analytics/http";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",
@@ -10,11 +12,11 @@ const mappedPlaytime: number = mapped.playtimeSeconds;
 void mappedVideoId; void mappedPlaytime;
 
 const video = document.createElement("video");
-const destination: CallbackAnalyticsConfig = {
+const config: AnalyticsConfig = {
   sampleRate: 1,
   snapshotIntervalMs: 10000,
   includeEvents: ["view_started", "view_ended"],
-  async send(event) {
+  destinations: [{ async send(event) {
     const record: ChunkifyPlayerAnalyticsEvent = event;
     const startup: number | null = record.startup_time_ms;
     const firstFrame: number | null = record.first_video_frame_time_ms;
@@ -31,20 +33,22 @@ const destination: CallbackAnalyticsConfig = {
     record.metrics;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;
-  },
+  } }],
 };
-const session = attachAnalytics(video, { ...destination, videoId: "asset-types" });
+const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } });
+const http = createHttpAdapter("/api/analytics", mapEvent);
+const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, http] });
 session.startAttempt();
 session.destroy();
 // @ts-expect-error A video identity is required.
-attachAnalytics(video, destination);
-// @ts-expect-error A send function is required.
+attachAnalytics(video, config);
+// @ts-expect-error At least one destination is required.
 attachAnalytics(video, { videoId: "asset-types" });
 // @ts-expect-error Transport secrets are not accepted.
-attachAnalytics(video, { ...destination, videoId: "asset-types", authorization: "secret" });
+attachAnalytics(video, { ...config, videoId: "asset-types", authorization: "secret" });
 // @ts-expect-error Sample rates are numeric.
-attachAnalytics(video, { ...destination, videoId: "asset-types", sampleRate: "0.5" });
+attachAnalytics(video, { ...config, videoId: "asset-types", sampleRate: "0.5" });
 // @ts-expect-error Snapshot intervals are numeric.
-attachAnalytics(video, { ...destination, videoId: "asset-types", snapshotIntervalMs: "10000" });
+attachAnalytics(video, { ...config, videoId: "asset-types", snapshotIntervalMs: "10000" });
 // @ts-expect-error Event names are from the supported set.
-attachAnalytics(video, { ...destination, videoId: "asset-types", includeEvents: ["unknown"] });
+attachAnalytics(video, { ...config, videoId: "asset-types", includeEvents: ["unknown"] });

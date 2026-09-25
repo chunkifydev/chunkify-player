@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 test("attachment stays idle and one playback attempt emits ordered start and end records", async ({ page }) => {
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-test", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-test", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("loadedmetadata"));
   });
   expect(await page.evaluate(() => window.analyticsFixture.events)).toEqual([]);
@@ -43,7 +43,7 @@ test("attachment stays idle and one playback attempt emits ordered start and end
 test("records intrinsic video size when it becomes available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-size", send(event) { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-size", destinations: [{ send(event) { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     Object.defineProperties(f.video, {
       videoWidth: { configurable: true, value: 1920 },
@@ -70,7 +70,7 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-timing", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-timing", destinations: [{ send: (event) => { f.events.push(event); } }] });
   });
   const dispatch = (event: string) => page.evaluate((event) => window.analyticsFixture.video.dispatchEvent(new Event(event)), event);
   await dispatch("play");
@@ -127,7 +127,7 @@ test("first video frame timing uses the callback clock without changing startup 
     (window as typeof window & { fireTestFrame: () => void }).fireTestFrame = () => {
       callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
     };
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame", send(event) { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame", destinations: [{ send(event) { f.events.push(event); } }] });
     f.session.startAttempt();
   });
   await page.clock.runFor(1000);
@@ -156,7 +156,7 @@ test("frame timing stays unavailable after source change or without the browser 
       },
       cancelVideoFrameCallback: { configurable: true, value(id: number) { canceledId = id; } },
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-cancel", send(event) { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-cancel", destinations: [{ send(event) { f.events.push(event); } }] });
     f.session.startAttempt();
     f.session.sourceChanged();
     callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
@@ -186,10 +186,10 @@ test("a fatal error during view_started cancels frame timing", async ({ page }) 
     });
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-frame-error",
-      send(event) {
+      destinations: [{ send(event) {
         f.events.push(event);
         if (event.event_name === "chunkify.video.view_started") f.video.dispatchEvent(new Event("error"));
-      },
+      } }],
     });
     f.session.startAttempt();
     callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
@@ -206,7 +206,7 @@ test("rendition playing time follows playback, switches and view boundaries", as
     const f = window.analyticsFixture;
     const state = window as typeof window & { changeRendition: (rendition: AnalyticsRendition | null) => void };
     f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-rendition-time", send: (event) => { f.events.push(event); },
+      videoId: "asset-rendition-time", destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.session.setConnector({
       name: "hls.js", version: "1", playerName: "hls.js", playerVersion: "1",
@@ -287,7 +287,7 @@ test("final records contain cumulative buffering, seeking and furthest progress 
       duration: { configurable: true, value: 100 },
       currentTime: { configurable: true, writable: true, value: 0 },
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-metrics", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-metrics", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -330,7 +330,7 @@ test("snapshots report cumulative metrics every 30 seconds of active playing tim
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-snapshot", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-snapshot", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -366,7 +366,7 @@ test("snapshot interval and event selection apply without losing final metrics",
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-custom-snapshots", snapshotIntervalMs: 10000,
       includeEvents: ["view_snapshot", "view_ended"],
-      send: (event) => { f.events.push(event); },
+      destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
@@ -396,7 +396,7 @@ test("excluding snapshots retains a final view", async ({ page }) => {
     const f = window.analyticsFixture;
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-final-only", snapshotIntervalMs: 1000, includeEvents: ["view_ended"],
-      send: (event) => { f.events.push(event); },
+      destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
@@ -420,7 +420,7 @@ test("sampling keeps a complete selected view and makes a fresh decision for rep
     Math.random = () => decisions.shift() ?? 1;
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-sampled", sampleRate: 0.5,
-      send: (event) => { f.events.push(event); },
+      destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
@@ -463,7 +463,7 @@ test("sample rates zero and one do not require a random decision", async ({ page
     Math.random = () => { throw new Error("sampling should not need randomness"); };
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-none", sampleRate: 0,
-      send: (event) => { f.events.push(event); },
+      destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
@@ -477,7 +477,7 @@ test("sample rates zero and one do not require a random decision", async ({ page
     const excludedCount = f.events.length;
     f.session = f.attachAnalytics(f.video, {
       videoId: "asset-all", sampleRate: 1,
-      send: (event) => { f.events.push(event); },
+      destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.session.startAttempt();
     f.session.destroy();
@@ -495,7 +495,7 @@ test("a media error stops an unfinished seek measurement", async ({ page }) => {
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-seek-error", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-seek-error", destinations: [{ send: (event) => { f.events.push(event); } }] });
     for (const event of ["play", "playing", "seeking"]) f.video.dispatchEvent(new Event(event));
   });
   await page.clock.runFor(2000);
@@ -516,7 +516,7 @@ test("media failures emit one normalized error record without raw error text", a
         currentTime: { configurable: true, writable: true, value: 12.5 },
         error: { configurable: true, value: { code, message: "https://private.example/video.m3u8?token=secret" } },
       });
-      f.session = f.attachAnalytics(f.video, { videoId: "asset-error", send: (event) => { f.events.push(event); } });
+      f.session = f.attachAnalytics(f.video, { videoId: "asset-error", destinations: [{ send: (event) => { f.events.push(event); } }] });
       f.session.startAttempt();
       f.video.dispatchEvent(new Event("error"));
       f.video.dispatchEvent(new Event("error"));
@@ -552,7 +552,7 @@ test("browser playback quality reports frame totals for the current view", async
       configurable: true,
       value: () => quality,
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-frames", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frames", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     quality.totalVideoFrames = 220;
     quality.droppedVideoFrames = 11;
@@ -594,7 +594,7 @@ test("an engine connector enriches a view with normalized rendition and delivery
       },
     };
     f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-engine", send: (event) => { f.events.push(event); },
+      videoId: "asset-engine", destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.session.setConnector(connector);
     f.session.startAttempt();
@@ -650,7 +650,7 @@ test("a fatal connector error stops active timing before its error and final rec
     const f = window.analyticsFixture;
     let emitError = (_error: { category: "decode"; code: string; fatal: boolean }) => {};
     f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-fatal-engine", send: (event) => { f.events.push(event); },
+      videoId: "asset-fatal-engine", destinations: [{ send: (event) => { f.events.push(event); } }],
     });
     f.session.setConnector({
       name: "test-engine", version: "1", playerName: "test-engine", playerVersion: "1",
@@ -694,14 +694,14 @@ test("connector subscriptions cannot outlive a destroyed or reentrantly destroye
       subscribeToErrors() { subscribed++; return () => { cleaned++; }; },
     };
     f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-destroyed-connector", send() {},
+      videoId: "asset-destroyed-connector", destinations: [{ send() {} }],
     });
     f.session.destroy();
     f.session.setConnector(connector);
     const afterDestroyed = { subscribed, cleaned };
 
     f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-reentrant-connector", send() {},
+      videoId: "asset-reentrant-connector", destinations: [{ send() {} }],
     });
     f.session.setConnector({
       ...connector,
@@ -725,7 +725,7 @@ test("WebKit frame counters are supported and unavailable counters remain null",
       webkitDecodedFrameCount: { configurable: true, writable: true, value: 40 },
       webkitDroppedFrameCount: { configurable: true, writable: true, value: 2 },
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-webkit-frames", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-webkit-frames", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     Reflect.set(f.video, "webkitDecodedFrameCount", 70);
     Reflect.set(f.video, "webkitDroppedFrameCount", 5);
@@ -736,7 +736,7 @@ test("WebKit frame counters are supported and unavailable counters remain null",
       webkitDecodedFrameCount: { configurable: true, value: undefined },
       webkitDroppedFrameCount: { configurable: true, value: undefined },
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-no-frames", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-no-frames", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     f.session.destroy();
     return { supported, unavailable: f.events };
@@ -753,7 +753,7 @@ test("a failing browser frame API does not interrupt analytics or expose its err
       webkitDecodedFrameCount: { configurable: true, value: undefined },
       webkitDroppedFrameCount: { configurable: true, value: undefined },
     });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-failure", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-failure", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     f.session.destroy();
     return f.events;
@@ -768,7 +768,7 @@ test("frame metrics remain unavailable after counters reset above their baseline
     const f = window.analyticsFixture;
     const quality = { totalVideoFrames: 100, droppedVideoFrames: 5 };
     Object.defineProperty(f.video, "getVideoPlaybackQuality", { configurable: true, value: () => quality });
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-reset", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-reset", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     quality.totalVideoFrames = 300;
     quality.droppedVideoFrames = 10;
@@ -787,7 +787,7 @@ test("frame metrics remain unavailable after counters reset above their baseline
 test("the first attempt reports a media error that happened during preload", async ({ page }) => {
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-preload-error", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-preload-error", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.preload = "metadata";
     f.video.src = "/tests/fixtures/media/does-not-exist.mp4?private=secret";
   });
@@ -828,7 +828,7 @@ test("a delayed snapshot timer emits once and schedules the next future interval
       state.snapshotCallback = () => { if (typeof handler === "function") handler(); };
       return 1;
     }) as typeof window.setTimeout;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-delayed", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-delayed", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -858,7 +858,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
       videoId: "asset-private",
       environment: "test", viewerId: "viewer-pseudonym",
       authorization: "must-not-leak", rawError: "must-not-leak",
-      send: (event: import("../../packages/analytics/src/index.js").ChunkifyPlayerAnalyticsEvent) => { f.events.push(event); },
+      destinations: [{ send: (event: import("../../packages/analytics/src/index.js").ChunkifyPlayerAnalyticsEvent) => { f.events.push(event); } }],
     };
     f.session = f.attachAnalytics(f.video, options);
     f.session.startAttempt();
@@ -888,7 +888,7 @@ test("source resets and page exit end separate views, and destroy removes observ
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-reset", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-reset", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("playing"));
   });
@@ -930,12 +930,12 @@ test("callback failures and reentrant cleanup cannot escape or duplicate final r
       f.events = [];
       f.session = f.attachAnalytics(f.video, {
         videoId: "asset-callback",
-        send(event) {
+        destinations: [{ send(event) {
           f.events.push(event);
           if (mode === "throw") throw new Error("destination unavailable");
           if (mode === "reject") return Promise.reject(new Error("destination unavailable"));
           if (event.event_name === "chunkify.video.view_ended") f.session!.destroy();
-        },
+        } }],
       });
       f.session.startAttempt();
       f.video.dispatchEvent(new Event("ended"));
@@ -953,7 +953,8 @@ test("invalid configuration fails before installing listeners or calling a desti
   const result = await page.evaluate(() => {
     const f = window.analyticsFixture;
     const failures: boolean[] = [];
-    for (const invalid of [{ videoId: "" }, { videoId: "  " }, { send: null },
+    for (const invalid of [{ videoId: "" }, { videoId: "  " }, { destinations: null },
+      { destinations: [] }, { destinations: [null] }, { destinations: [{ send: null }] },
       { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } },
       { sampleRate: -0.1 }, { sampleRate: 1.1 }, { sampleRate: NaN }, { sampleRate: "1" }, { sampleRate: Infinity },
       { snapshotIntervalMs: 0 }, { snapshotIntervalMs: 999 }, { snapshotIntervalMs: 1500.5 },
@@ -962,7 +963,7 @@ test("invalid configuration fails before installing listeners or calling a desti
       { includeEvents: "view_started" }, { includeEvents: ["view_started", "unknown"] }]) {
       try {
         Reflect.apply(f.attachAnalytics, null, [f.video, {
-          videoId: "asset-valid", send: (event: ChunkifyPlayerAnalyticsEvent) => { f.events.push(event); }, ...invalid,
+          videoId: "asset-valid", destinations: [{ send: (event: ChunkifyPlayerAnalyticsEvent) => { f.events.push(event); } }], ...invalid,
         }]);
         failures.push(false);
       } catch (error) { failures.push(error instanceof TypeError); }
@@ -970,7 +971,7 @@ test("invalid configuration fails before installing listeners or calling a desti
     f.video.dispatchEvent(new Event("play"));
     return { failures, events: f.events };
   });
-  expect(result).toEqual({ failures: Array(18).fill(true), events: [] });
+  expect(result).toEqual({ failures: Array(21).fill(true), events: [] });
 });
 
 test("real video playback records source replacement, replay and cleanup without loading an engine or transport", async ({ page }) => {
@@ -978,7 +979,7 @@ test("real video playback records source replacement, replay and cleanup without
   page.on("request", (request) => requests.push(new URL(request.url()).pathname));
   await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-real", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-real", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.src = "/tests/fixtures/media/video.mp4";
   });
   await expect.poll(() => page.evaluate(() => window.analyticsFixture.video.readyState)).toBeGreaterThanOrEqual(2);
@@ -1028,7 +1029,7 @@ test("an immediate attempt with a source child remains one view while its URL is
     const source = document.createElement("source");
     source.src = "/tests/fixtures/media/video.mp4";
     f.video.append(source);
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-source", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-source", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
     await f.video.play();
     f.session.destroy();
@@ -1043,7 +1044,7 @@ test("an immediate attempt after replacing an idle source ignores the previous s
   await expect.poll(() => page.evaluate(() => window.analyticsFixture.video.readyState)).toBeGreaterThanOrEqual(2);
   await page.evaluate(async () => {
     const f = window.analyticsFixture;
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-replacement", send: (event) => { f.events.push(event); } });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-replacement", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.video.src = "/tests/fixtures/media/video.mp4?immediate";
     f.session.startAttempt();
     await f.video.play();

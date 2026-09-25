@@ -75,7 +75,7 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
 test("hls.js analytics validates options before an engine attaches media", () => {
   const hls = new FakeHls();
   assert.throws(() => monitorHlsJs(hls, {
-    videoId: "", send() {},
+    videoId: "", destinations: [{ send() {} }],
   }), /non-empty videoId/);
   assert.equal(hls.listeners.size, 0);
 });

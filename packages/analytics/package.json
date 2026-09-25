@@ -8,6 +8,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./datadog": { "types": "./dist/datadog.d.ts", "import": "./dist/datadog.js" },
+    "./http": { "types": "./dist/http.d.ts", "import": "./dist/http.js" },
     "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" },
     "./hlsjs": { "types": "./dist/hlsjs.d.ts", "import": "./dist/hlsjs.js" }
   },

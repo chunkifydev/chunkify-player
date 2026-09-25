@@ -9,7 +9,7 @@ test("analytics imports without a DOM and reports its package version", async ()
   // explicitly started attempt without constructing a browser DOM in Node.
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const events = [];
-  const session = attachAnalytics(media, { videoId: "asset-node", send: (event) => { events.push(event); } });
+  const session = attachAnalytics(media, { videoId: "asset-node", destinations: [{ send: (event) => { events.push(event); } }] });
   assert.equal(events.length, 0);
   session.startAttempt();
   session.destroy();
@@ -22,7 +22,7 @@ test("event mapper selects, renames, and calculates fields without changing the 
   const { attachAnalytics, createEventMapper } = await import("@chunkify/analytics");
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const events = [];
-  const session = attachAnalytics(media, { videoId: "asset-map", send: (event) => { events.push(event); } });
+  const session = attachAnalytics(media, { videoId: "asset-map", destinations: [{ send: (event) => { events.push(event); } }] });
   session.startAttempt();
   session.destroy();
 
@@ -43,4 +43,21 @@ test("event mapper selects, renames, and calculates fields without changing the 
   assert.equal(event.video_id, "asset-map");
   assert.equal(Object.hasOwn(event, "videoId"), false);
   assert.notEqual(mapped, event);
+});
+
+test("one failing destination does not prevent other destinations receiving the view", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
+  const delivered = [];
+  const session = attachAnalytics(media, {
+    videoId: "asset-fanout",
+    destinations: [
+      { send() { throw new Error("first destination failed"); } },
+      { send(event) { delivered.push(event.event_name); } },
+      { send() { return Promise.reject(new Error("third destination failed")); } },
+    ],
+  });
+  session.startAttempt();
+  session.destroy();
+  assert.deepEqual(delivered, ["chunkify.video.view_started", "chunkify.video.view_ended"]);
 });

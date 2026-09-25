@@ -67,17 +67,20 @@ export interface ChunkifyPlayerAnalyticsEvent extends ViewMetrics {
   error_fatal: boolean | null;
   error_playhead_seconds: number | null;
 }
-export interface CallbackAnalyticsConfig {
-  send: (event: ChunkifyPlayerAnalyticsEvent) => void | Promise<void>;
+export interface AnalyticsDestination {
+  send(event: ChunkifyPlayerAnalyticsEvent): void | Promise<void>;
+}
+export interface AnalyticsConfig {
+  destinations: readonly AnalyticsDestination[];
   environment?: string | undefined;
   viewerId?: string | undefined;
   sampleRate?: number | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
-  /** Event types passed to send(). Defaults to all four types. */
+  /** Event types passed to destinations. Defaults to all four types. */
   includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
-export interface AnalyticsOptions extends CallbackAnalyticsConfig {
+export interface AnalyticsOptions extends AnalyticsConfig {
   videoId: string;
 }
 export interface AnalyticsConnectorSnapshot {
@@ -293,7 +296,8 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   assertAnalyticsOptions(options);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
-  const { videoId, send, environment = null, viewerId = null, sampleRate = 1, snapshotIntervalMs = 30000 } = options;
+  const { videoId, environment = null, viewerId = null, sampleRate = 1, snapshotIntervalMs = 30000 } = options;
+  const destinations = [...options.destinations];
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
     .map((event) => `chunkify.video.${event}`));
   let view: View | null = null;
@@ -417,11 +421,13 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       ...engineMetrics,
       rendition_playing_time: renditionPlayingTime(current, now),
     };
-    try {
-      // A customer destination must not interrupt playback or analytics cleanup.
-      void Promise.resolve(send(event)).catch(() => {});
-    } catch {
-      // Synchronous callback failures are isolated for the same reason.
+    for (const destination of destinations) {
+      try {
+        // A failing destination must not interrupt playback or another destination.
+        void Promise.resolve(destination.send(event)).catch(() => {});
+      } catch {
+        // Synchronous delivery failures are isolated for the same reason.
+      }
     }
   }
   function startAttempt() {

@@ -8,8 +8,9 @@ export function assertAnalyticsOptions(options: AnalyticsOptions): void {
   if (typeof options.videoId !== "string" || !options.videoId.trim()) {
     throw new TypeError("Analytics requires a non-empty videoId.");
   }
-  if (typeof options.send !== "function") {
-    throw new TypeError("Analytics requires a send function.");
+  if (!Array.isArray(options.destinations) || options.destinations.length === 0 ||
+      !Array.from(options.destinations).every((destination) => destination && typeof destination.send === "function")) {
+    throw new TypeError("Analytics requires a non-empty destinations array with send functions.");
   }
   if ((options.environment !== undefined && typeof options.environment !== "string") ||
       (options.viewerId !== undefined && typeof options.viewerId !== "string")) {

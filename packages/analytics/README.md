@@ -1,6 +1,6 @@
 # @chunkify/analytics
 
-Standalone playback analytics for a `<video>` element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player`, does not send network requests, and does not store viewer data. Each event goes to the callback supplied by the application.
+Standalone playback analytics for a `<video>` element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player` and does not store viewer data. Each event goes to the destinations supplied by the application.
 
 ```ts
 import { monitor } from "@chunkify/analytics";
@@ -8,7 +8,7 @@ import { monitor } from "@chunkify/analytics";
 const video = document.querySelector("video")!;
 const session = monitor(video, {
   videoId: "video_123",
-  send: (event) => console.log(event),
+  destinations: [{ send: (event) => console.log(event) }],
 });
 
 // Call before programmatic play() to count attempts that reject without a play event.
@@ -28,7 +28,7 @@ import { monitor } from "@chunkify/analytics";
 const player = document.querySelector("chunkify-player")!;
 const session = monitor(player, {
   videoId: "video_123",
-  send: (event) => console.log(event),
+  destinations: [{ send: (event) => console.log(event) }],
 });
 
 // Call when the application removes the player or disables analytics.
@@ -49,7 +49,7 @@ const video = document.querySelector("video")!;
 const hls = new Hls();
 const session = monitorHlsJs(hls, {
   videoId: "video_123",
-  send: (event) => console.log(event),
+  destinations: [{ send: (event) => console.log(event) }],
 });
 hls.attachMedia(video);
 hls.loadSource("https://example.com/video.m3u8");
@@ -68,24 +68,24 @@ Schema version 4 puts measurements directly on each event, alongside `video_id`,
 
 `video_intrinsic_width_css_px` and `video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
 
-Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach `send`. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
+Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
 
 ```ts
 monitor(video, {
   videoId: "video_123",
   snapshotIntervalMs: 10000,
   includeEvents: ["view_snapshot", "view_ended"],
-  send: (event) => console.log(event),
+  destinations: [{ send: (event) => console.log(event) }],
 });
 ```
 
-Event selection does not change collection of the final view's metrics. Excluding `view_snapshot` also skips the snapshot timer. An empty `includeEvents` array sends no records.
+Event selection does not change collection of the final view's metrics. Excluding `view_snapshot` also skips the snapshot timer. An empty `includeEvents` array sends no records. `destinations` must contain at least one object with a `send(event)` method. The collector delivers each sampled event to every destination and isolates delivery failures.
 
 For hls.js playback, `rendition_playing_time` contains cumulative wall-clock milliseconds for each rendition played in the view, grouped by width, height, codec, manifest bitrate, and frame rate. It excludes pauses, buffering, and seeks; playback speed does not change the elapsed time counted. Time before the first known rendition is omitted, so the sum can be less than `playing_time_ms`. The field is `null` without a rendition-aware connector and an empty array when hls.js has not identified a rendition yet. Snapshots repeat cumulative totals; consumers should use the final view record or differences between snapshots rather than summing entire snapshots. The package does not aggregate results across viewers.
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
 
-The callback keeps collection separate from delivery. It can inspect or store events now; a future destination adapter can consume the same versioned events without changing the player integration. The package does not retry, queue, or guarantee delivery of asynchronous callbacks on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog and HTTP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
 
 Use `createEventMapper()` when a destination needs different field names or values. Each output field names a source event field or calculates a value from the event. The mapper returns a new object and leaves the original event unchanged:
 
@@ -101,10 +101,36 @@ const mapForEndpoint = createEventMapper({
 
 monitor(video, {
   videoId: "video_123",
-  send: (event) => myClient.send(mapForEndpoint(event)),
+  destinations: [{ send: (event) => myClient.send(mapForEndpoint(event)) }],
 });
 ```
 
-The mapping runs for each event passed to `send`. For destinations that accept the Chunkify event directly, pass `event` without a mapper. Mapping does not alter collection, event selection, or snapshot timing.
+The mapping runs for each event passed to the destination. For destinations that accept the Chunkify event directly, pass `event` without a mapper. Mapping does not alter collection, event selection, or snapshot timing.
+
+An initialized Datadog RUM client can be passed to the Datadog adapter. The adapter adds one custom action per analytics event. On `view_ended`, it also adds one action per rendition with known resolution and positive playing time, matching the test dashboard's per-resolution totals. Datadog setup and sampling remain the application's responsibility:
+
+```ts
+import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [createDatadogAdapter(datadogRum)],
+});
+```
+
+The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
+
+```ts
+import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+import { createHttpAdapter } from "@chunkify/analytics/http";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [
+    createDatadogAdapter(datadogRum),
+    createHttpAdapter("/api/video-analytics", mapForEndpoint),
+  ],
+});
+```
 
 The application should call `destroy()` when it no longer needs the session. The hls.js adapter removes its listeners but does not destroy the application's HLS engine.
