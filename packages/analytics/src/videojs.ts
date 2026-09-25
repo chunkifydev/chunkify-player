@@ -12,8 +12,8 @@ interface VideoJsQualityLevel {
 interface VideoJsQualityLevels {
   readonly selectedIndex: number;
   readonly [index: number]: VideoJsQualityLevel;
-  on(type: "change", listener: () => void): void;
-  off(type: "change", listener: () => void): void;
+  on(type: "change" | "removequalitylevel", listener: () => void): void;
+  off(type: "change" | "removequalitylevel", listener: () => void): void;
 }
 
 /** The Video.js APIs used by analytics. Quality levels are optional. */
@@ -26,6 +26,7 @@ export interface VideoJsPlayer {
 }
 
 export interface VideoJsAnalyticsConnector extends AnalyticsConnector {
+  reset(): void;
   destroy(): void;
 }
 
@@ -40,6 +41,15 @@ export function createVideoJsConnector(player: VideoJsPlayer): VideoJsAnalyticsC
   const errorListeners = new Set<(error: AnalyticsConnectorError) => void>();
   let selectedIndex: number | null = null;
   let destroyed = false;
+
+  const reset = () => {
+    selectedIndex = null;
+    snapshot.renditionWidth = null;
+    snapshot.renditionHeight = null;
+    snapshot.renditionCodec = null;
+    snapshot.renditionBitrate = null;
+    snapshot.renditionSwitchCount = qualityLevels ? 0 : null;
+  };
 
   const onQualityChange = () => {
     const index = qualityLevels?.selectedIndex ?? -1;
@@ -69,6 +79,8 @@ export function createVideoJsConnector(player: VideoJsPlayer): VideoJsAnalyticsC
   };
   onQualityChange();
   qualityLevels?.on("change", onQualityChange);
+  qualityLevels?.on("removequalitylevel", onQualityChange);
+  player.on("loadstart", reset);
   player.on("error", onError);
 
   return {
@@ -79,10 +91,13 @@ export function createVideoJsConnector(player: VideoJsPlayer): VideoJsAnalyticsC
       errorListeners.add(listener);
       return () => { errorListeners.delete(listener); };
     },
+    reset,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       qualityLevels?.off("change", onQualityChange);
+      qualityLevels?.off("removequalitylevel", onQualityChange);
+      player.off("loadstart", reset);
       player.off("error", onError);
       errorListeners.clear();
     },
@@ -117,7 +132,11 @@ export function monitorVideoJs(player: VideoJsPlayer, options: AnalyticsOptions)
   player.on("dispose", destroy);
   return {
     startAttempt() { if (!destroyed) session.startAttempt(); },
-    sourceChanged() { if (!destroyed) session.sourceChanged(); },
+    sourceChanged() {
+      if (destroyed) return;
+      session.sourceChanged();
+      connector.reset();
+    },
     destroy,
   };
 }

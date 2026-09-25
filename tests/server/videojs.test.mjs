@@ -41,6 +41,15 @@ test("Video.js connector reads optional quality levels and player errors without
     renditionSwitchCount: 1,
     deliveryRequestCount: null, deliveryTransferredBytes: null, deliveryDurationMs: null,
   });
+  levels.selectedIndex = -1;
+  levels.emit("removequalitylevel");
+  assert.equal(connector.snapshot().renditionWidth, null);
+  assert.equal(connector.snapshot().renditionSwitchCount, 1);
+  levels.selectedIndex = 0;
+  levels.emit("change");
+  player.emit("loadstart");
+  assert.equal(connector.snapshot().renditionWidth, null);
+  assert.equal(connector.snapshot().renditionSwitchCount, 0);
   assert.deepEqual(errors, [{ category: "network", code: 2, fatal: true }]);
   assert.equal(connector.subscribeToRenditions, undefined);
   unsubscribe();

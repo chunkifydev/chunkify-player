@@ -1,4 +1,4 @@
-import { attachAnalytics, type AnalyticsConnector, type AnalyticsConnectorError,
+import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
   type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
 import { assertAnalyticsOptions } from "./options.js";
@@ -69,8 +69,7 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
     const detail = (event as ShakaEvent).detail;
     if (detail?.severity !== 2) return;
     const category = detail.category === 1 ? "network"
-      : detail.category === 2 || detail.category === 3 ? "decode"
-      : detail.category === 4 || detail.category === 6 ? "unsupported" : "unknown";
+      : detail.category === 3 ? "decode" : "unknown";
     for (const listener of errorListeners) listener({
       category, code: Number.isFinite(detail.code) ? detail.code! : null, fatal: true,
     });
@@ -146,10 +145,12 @@ export function monitorShaka(player: ShakaPlayer, options: AnalyticsOptions):
     throw new TypeError("Shaka analytics requires a player attached to an HTML media element.");
   }
   // Shaka only emits quality changes at the playhead when this observer is enabled.
-  if (!player.getConfiguration().streaming.observeQualityChanges) {
+  const observerWasEnabled = player.getConfiguration().streaming.observeQualityChanges;
+  if (!observerWasEnabled) {
     player.configure({ streaming: { observeQualityChanges: true } });
   }
-  const session = attachAnalytics(media, options);
+  const restoreObserver = !observerWasEnabled && player.getConfiguration().streaming.observeQualityChanges;
+  const session = attachAnalyticsWithManagedSource(media, options);
   const connector = createShakaConnector(player);
   session.setConnector(connector);
   let destroyed = false;
@@ -158,7 +159,9 @@ export function monitorShaka(player: ShakaPlayer, options: AnalyticsOptions):
     session.sourceChanged();
     connector.reset();
   };
+  const onLoading = () => { if (!destroyed) session.startAttempt(); };
   const onUnloading = () => sourceChanged();
+  player.addEventListener("loading", onLoading);
   player.addEventListener("unloading", onUnloading);
   return {
     startAttempt() { if (!destroyed) session.startAttempt(); },
@@ -166,9 +169,13 @@ export function monitorShaka(player: ShakaPlayer, options: AnalyticsOptions):
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      player.removeEventListener("loading", onLoading);
       player.removeEventListener("unloading", onUnloading);
       session.destroy();
       connector.destroy();
+      if (restoreObserver) {
+        try { player.configure({ streaming: { observeQualityChanges: false } }); } catch {}
+      }
     },
   };
 }

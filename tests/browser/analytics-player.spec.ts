@@ -283,3 +283,57 @@ test("the hls.js adapter follows media that was attached earlier or changes late
     ["chunkify.video.view_ended", "destroyed"],
   ]);
 });
+
+test("Shaka load boundaries keep one view per attempt and restore quality observation", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  const result = await page.evaluate(async () => {
+    const { monitorShaka } = await import("@chunkify/analytics/shaka");
+    const video = document.createElement("video");
+    document.body.append(video);
+    class ShakaFixture extends EventTarget {
+      observingQuality = false;
+      getMediaElement() { return video; }
+      getConfiguration() { return { streaming: { observeQualityChanges: this.observingQuality } }; }
+      configure(config: { streaming: { observeQualityChanges: boolean } }) {
+        this.observingQuality = config.streaming.observeQualityChanges;
+        return true;
+      }
+    }
+    const shaka = new ShakaFixture();
+    const records: ChunkifyPlayerAnalyticsEvent[] = [];
+    const session = monitorShaka(shaka, {
+      videoId: "shaka-loads", destinations: [{ send(event) { records.push(event); } }],
+    });
+    const enabled = shaka.observingQuality;
+    shaka.dispatchEvent(new Event("loading"));
+    video.dispatchEvent(new Event("emptied"));
+    video.dispatchEvent(new Event("loadstart"));
+    shaka.dispatchEvent(Object.assign(new Event("downloadcompleted"), {
+      response: { data: new Uint8Array(4), timeMs: 2 },
+    }));
+    video.dispatchEvent(new Event("playing"));
+    shaka.dispatchEvent(new Event("unloading"));
+    shaka.dispatchEvent(new Event("loading"));
+    video.dispatchEvent(new Event("emptied"));
+    shaka.dispatchEvent(Object.assign(new Event("error"), {
+      detail: { severity: 2, category: 1, code: 1002 },
+    }));
+    shaka.dispatchEvent(new Event("unloading"));
+    session.destroy();
+    return {
+      enabled, restored: shaka.observingQuality,
+      events: records.map((event) => ({ name: event.event_name, reason: event.reason,
+        outcome: event.startup_outcome, category: event.error_category,
+        requests: event.delivery_request_count, bytes: event.delivery_transferred_bytes })),
+    };
+  });
+  expect(result).toEqual({
+    enabled: true, restored: false, events: [
+      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0 },
+      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "started", category: null, requests: 1, bytes: 4 },
+      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0 },
+      { name: "chunkify.video.playback_error", reason: null, outcome: null, category: "network", requests: 0, bytes: 0 },
+      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "failed_before_start", category: null, requests: 0, bytes: 0 },
+    ],
+  });
+});

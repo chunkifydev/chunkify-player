@@ -297,6 +297,16 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
 }
 
 export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+  return createAnalyticsSession(media, options, false);
+}
+
+/** Engine adapters call this when they own source-change events. */
+export function attachAnalyticsWithManagedSource(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+  return createAnalyticsSession(media, options, true);
+}
+
+function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptions,
+  sourceManagedByEngine: boolean): AnalyticsSession {
   assertAnalyticsOptions(options);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
@@ -619,6 +629,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     },
     ended() { finish("ended"); },
     emptied() {
+      if (sourceManagedByEngine) return;
       if (!view) return;
       // A new attempt can begin after src changes but before the old resource's
       // queued emptied event arrives. That reset does not belong to the new view.
@@ -627,7 +638,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     loadstart() {
       if (!view) return;
       const source = media.src || media.currentSrc;
-      if (view.source && view.source !== source) { finish("source_changed"); return; }
+      if (!sourceManagedByEngine && view.source && view.source !== source) { finish("source_changed"); return; }
       // <source> selection can first expose the URL after the initial attempt.
       view.source = source;
       view.resourceStarted = true;

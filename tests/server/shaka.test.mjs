@@ -35,12 +35,16 @@ test("Shaka connector tracks video quality at the playhead and only critical err
   } });
   shaka.emit("error", { detail: { severity: 1, category: 1, code: 1001 } });
   shaka.emit("error", { detail: { severity: 2, category: 1, code: 1002, message: "secret URL" } });
+  shaka.emit("error", { detail: { severity: 2, category: 6, code: 6001 } });
 
   assert.deepEqual(renditions, [null,
     { width: 640, height: 360, codec: "avc1.42e01e", bitrate_bps: 800000, frame_rate: 30 },
     { width: 1280, height: 720, codec: "avc1.4d401f", bitrate_bps: 2400000, frame_rate: 30 },
   ]);
-  assert.deepEqual(errors, [{ category: "network", code: 1002, fatal: true }]);
+  assert.deepEqual(errors, [
+    { category: "network", code: 1002, fatal: true },
+    { category: "unknown", code: 6001, fatal: true },
+  ]);
   assert.deepEqual(connector.snapshot(), {
     renditionWidth: 1280, renditionHeight: 720, renditionCodec: "avc1.4d401f",
     renditionBitrate: 2400000, renditionSwitchCount: 1,

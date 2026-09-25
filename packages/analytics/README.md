@@ -74,7 +74,7 @@ player.ready(() => {
 });
 ```
 
-For Shaka Player, attach the media element first, then call `monitorShaka()` before `load()`. The connector enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
+For Shaka Player, attach the media element first, then call `monitorShaka()` before `load()`. The connector starts each view on Shaka's `loading` event and enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
 
 ```ts
 import shaka from "shaka-player";
@@ -87,14 +87,14 @@ const session = monitorShaka(player, {
   videoId: "video_123",
   destinations: [{ send: (event) => console.log(event) }],
 });
-session.startAttempt();
 await player.load("https://example.com/video.m3u8");
 await video.play();
 
 // Call session.destroy() before player.destroy().
 ```
 
-Shaka's `unloading` event ends the current view on a source change. The next view starts when the new media plays. For that view, downloads completed before playback begins are not included in delivery totals. Call `session.sourceChanged()` yourself if you replace the source outside Shaka. The quality observer must be enabled before Shaka loads content; creating the session after `load()` may leave rendition playing time unavailable until the next load.
+Shaka's `unloading` event ends the current view on a source change; its next `loading` event starts a fresh view. Call `session.sourceChanged()` yourself if you replace the source outside Shaka. The quality observer must be enabled before Shaka loads content; creating the session after `load()` may leave rendition playing time unavailable until the next load. `session.destroy()` restores the prior quality-observer setting if monitoring enabled it.
+Shaka may reject `player.load()` without dispatching an `error` event. Handle that promise rejection in your application; only Shaka's emitted critical errors become `playback_error` records.
 
 Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
