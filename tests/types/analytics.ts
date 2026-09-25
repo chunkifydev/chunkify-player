@@ -11,13 +11,12 @@ const destination: CallbackAnalyticsConfig = {
     const firstFrame: number | null = record.metrics.first_video_frame_time_ms;
     const buffering: number = record.metrics.rebuffer_duration_ms;
     const progress: number | null = record.metrics.furthest_progress_ratio;
-    const playerWidth: number | null = record.player_width_css_px;
     const videoWidth: number | null = record.metrics.video_intrinsic_width_css_px;
     const snapshot: boolean = record.event_name === "chunkify.video.view_snapshot";
     const frames: number | null = record.metrics.total_video_frames;
     const category: AnalyticsErrorCategory | null = record.error_category;
     const outcome: AnalyticsStartupOutcome | null = record.startup_outcome;
-    void startup; void firstFrame; void buffering; void progress; void playerWidth; void videoWidth;
+    void startup; void firstFrame; void buffering; void progress; void videoWidth;
     void snapshot; void frames; void category; void outcome;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;

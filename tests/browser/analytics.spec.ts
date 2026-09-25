@@ -40,42 +40,28 @@ test("attachment stays idle and one playback attempt emits ordered start and end
   expect(events.map((event) => event.startup_outcome)).toEqual([null, "started"]);
 });
 
-test("records the displayed player size and intrinsic video size as they become available", async ({ page }) => {
+test("records intrinsic video size when it becomes available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;
-    f.video.style.cssText = "display: block; width: 320px; height: 180px";
     f.session = f.attachAnalytics(f.video, { videoId: "asset-size", send(event) { f.events.push(event); } });
     f.video.dispatchEvent(new Event("play"));
     Object.defineProperties(f.video, {
       videoWidth: { configurable: true, value: 1920 },
       videoHeight: { configurable: true, value: 1080 },
     });
-    f.video.style.width = "640px";
-    f.video.style.height = "360px";
     f.video.dispatchEvent(new Event("ended"));
     f.session.destroy();
     return f.events;
   });
   expect(events[0]).toMatchObject({
-    schema_version: 3, player_width_css_px: 320, player_height_css_px: 180,
+    schema_version: 3,
     metrics: { video_intrinsic_width_css_px: null, video_intrinsic_height_css_px: null },
   });
   expect(events[1]).toMatchObject({
-    player_width_css_px: 640, player_height_css_px: 360,
     metrics: { video_intrinsic_width_css_px: 1920, video_intrinsic_height_css_px: 1080 },
   });
-});
-
-test("unlaid-out player dimensions remain unavailable", async ({ page }) => {
-  const event = await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    f.video.style.display = "none";
-    f.session = f.attachAnalytics(f.video, { videoId: "asset-hidden", send(record) { f.events.push(record); } });
-    f.session.startAttempt();
-    f.session.destroy();
-    return f.events[0];
-  });
-  expect(event).toMatchObject({ player_width_css_px: null, player_height_css_px: null });
+  expect(events[1]).not.toHaveProperty("player_width_css_px");
+  expect(events[1]).not.toHaveProperty("player_height_css_px");
 });
 
 test("startup and playing time exclude loading, buffering, pauses and seeks", async ({ page }) => {

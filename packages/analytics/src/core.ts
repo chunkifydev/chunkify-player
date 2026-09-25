@@ -57,8 +57,6 @@ export interface ChunkifyPlayerAnalyticsEvent {
   connector_version: string | null;
   player_name: string | null;
   player_version: string | null;
-  player_width_css_px: number | null;
-  player_height_css_px: number | null;
   delivery_hostname: string | null;
   environment: string | null;
   viewer_id: string | null;
@@ -173,17 +171,6 @@ function finiteNonNegative(value: number | null): number | null {
 
 function finitePositive(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function playerSize(element: Element): { width: number | null; height: number | null } {
-  try {
-    const rect = element.getBoundingClientRect();
-    const width = finitePositive(rect.width);
-    const height = finitePositive(rect.height);
-    return width !== null && height !== null ? { width, height } : { width: null, height: null };
-  } catch {
-    return { width: null, height: null };
-  }
 }
 
 function intrinsicVideoSize(media: HTMLMediaElement): { width: number | null; height: number | null } {
@@ -303,7 +290,7 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
   return { dropped: webkit.webkitDroppedFrameCount!, total: webkit.webkitDecodedFrameCount! };
 }
 
-export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions, playerElement: Element = media): AnalyticsSession {
+export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
   assertAnalyticsOptions(options);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
@@ -399,7 +386,6 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       else if (current.fatalErrorBeforeStart) startupOutcome = "failed_before_start";
       else startupOutcome = "ended_before_start";
     }
-    const displaySize = playerSize(playerElement);
     refreshIntrinsicVideoSize(current);
     const event: ChunkifyPlayerAnalyticsEvent = {
       schema_version: 3, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
@@ -407,7 +393,6 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
-      player_width_css_px: displaySize.width, player_height_css_px: displaySize.height,
       delivery_hostname: current.hostname,
       environment, viewer_id: viewerId, reason,
       startup_outcome: startupOutcome,

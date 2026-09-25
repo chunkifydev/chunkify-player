@@ -35,7 +35,7 @@ const session = monitor(player, {
 session.destroy();
 ```
 
-`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use. `attachAnalytics(media, options, playerElement)` can optionally measure a separate visible player element; without it, the media element is measured.
+`monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use.
 
 When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
 
@@ -66,7 +66,7 @@ The final `view_ended` record has `startup_outcome`: `started` after a `playing`
 
 Schema version 3 names the former `completion_ratio` field `metrics.furthest_progress_ratio`. It is the highest playhead position divided by media duration, capped at 1. Seeking near the end raises this value even without watching that part of the video, so it is not a percentage watched.
 
-Each emitted record samples `player_width_css_px` and `player_height_css_px` from the displayed element's bounding box. For Chunkify Player this is the outer `<chunkify-player>`; for direct video and hls.js monitoring it is the media element. These fields are `null` when the player has no laid-out area and can change after resizing or fullscreen. `metrics.video_intrinsic_width_css_px` and `metrics.video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
+`metrics.video_intrinsic_width_css_px` and `metrics.video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. The selected HLS rendition dimensions remain separate and require the hls.js connector.
 
 Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach `send`. Both options work with `monitor()`, `monitorHlsJs()`, and the explicit attach functions. By default, all four event types are sent. For example:
 
