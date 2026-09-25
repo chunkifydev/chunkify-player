@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createOtlpAdapter } from "@chunkify/analytics/otlp";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 
 test("Datadog adapter sends one action per event with optional context mapping", () => {
@@ -80,4 +81,66 @@ test("HTTP adapter rejects secret-bearing and nonlocal insecure endpoints", () =
   }
   assert.doesNotThrow(() => createHttpAdapter("http://127.0.0.1:8888/collect"));
   assert.throws(() => createHttpAdapter("/collect", null), TypeError);
+});
+
+test("OTLP adapter sends typed log attributes without unavailable values", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url, init });
+      return { ok: true, status: 200 };
+    };
+    const event = {
+      event_name: "chunkify.video.view_ended",
+      event_id: "event-1",
+      occurred_at: "2026-09-25T12:34:56.789Z",
+      sdk_version: "0.0.0",
+      video_id: "video-1",
+      view_id: "view-1",
+      sequence: 3,
+      playing_time_ms: 12500,
+      rebuffer_ratio: 0.125,
+      error_fatal: false,
+      selected_rendition_width: null,
+      rendition_playing_time: [
+        { width: 640, height: 360, playing_time_ms: 10000 },
+        { width: null, height: 720, playing_time_ms: 2500 },
+      ],
+    };
+    await createOtlpAdapter("https://collector.example.com/v1/logs").send(event);
+    assert.equal(requests[0].url, "https://collector.example.com/v1/logs");
+    assert.equal(requests[0].init.headers["Content-Type"], "application/json");
+    assert.equal(requests[0].init.credentials, "omit");
+    assert.equal(requests[0].init.referrerPolicy, "no-referrer");
+    assert.equal(requests[0].init.keepalive, true);
+
+    const request = JSON.parse(requests[0].init.body);
+    const scopeLogs = request.resourceLogs[0].scopeLogs[0];
+    assert.deepEqual(scopeLogs.scope, { name: "@chunkify/analytics", version: "0.0.0" });
+    const log = scopeLogs.logRecords[0];
+    assert.equal(log.timeUnixNano, String(BigInt(Date.parse(event.occurred_at)) * 1_000_000n));
+    assert.equal(log.eventName, event.event_name);
+    const attributes = Object.fromEntries(log.attributes.map(({ key, value }) => [key, value]));
+    assert.deepEqual(attributes.video_id, { stringValue: "video-1" });
+    assert.deepEqual(attributes.sequence, { intValue: "3" });
+    assert.deepEqual(attributes.rebuffer_ratio, { doubleValue: 0.125 });
+    assert.deepEqual(attributes.error_fatal, { boolValue: false });
+    assert.equal("selected_rendition_width" in attributes, false);
+    assert.deepEqual(attributes.rendition_playing_time, { arrayValue: { values: [
+      { kvlistValue: { values: [
+        { key: "width", value: { intValue: "640" } },
+        { key: "height", value: { intValue: "360" } },
+        { key: "playing_time_ms", value: { intValue: "10000" } },
+      ] } },
+      { kvlistValue: { values: [
+        { key: "height", value: { intValue: "720" } },
+        { key: "playing_time_ms", value: { intValue: "2500" } },
+      ] } },
+    ] } });
+    assert.throws(() => createOtlpAdapter("https://collector.example.com/v1/logs?api_key=secret"), TypeError);
+    await assert.rejects(createOtlpAdapter("/v1/logs").send({ ...event, occurred_at: "invalid" }), TypeError);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

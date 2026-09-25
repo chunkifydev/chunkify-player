@@ -85,7 +85,7 @@ For hls.js playback, `rendition_playing_time` contains cumulative wall-clock mil
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
 
-Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog, PostHog, and HTTP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog, PostHog, HTTP, and OTLP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
 
 Use `createEventMapper()` when a destination needs different field names or values. Each output field names a source event field or calculates a value from the event. The mapper returns a new object and leaves the original event unchanged:
 
@@ -153,3 +153,14 @@ monitor(video, {
 ```
 
 The application should call `destroy()` when it no longer needs the session. The hls.js adapter removes its listeners but does not destroy the application's HLS engine.
+
+The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter sends no cookies or authorization headers. Event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
+
+```ts
+import { createOtlpAdapter } from "@chunkify/analytics/otlp";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs")],
+});
+```

@@ -11,6 +11,7 @@
     "./datadog": { "types": "./dist/datadog.d.ts", "import": "./dist/datadog.js" },
     "./posthog": { "types": "./dist/posthog.d.ts", "import": "./dist/posthog.js" },
     "./http": { "types": "./dist/http.d.ts", "import": "./dist/http.js" },
+    "./otlp": { "types": "./dist/otlp.d.ts", "import": "./dist/otlp.js" },
     "./player": { "types": "./dist/player.d.ts", "import": "./dist/player.js" },
     "./hlsjs": { "types": "./dist/hlsjs.d.ts", "import": "./dist/hlsjs.js" }
   },

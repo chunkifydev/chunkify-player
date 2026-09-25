@@ -1,6 +1,7 @@
 import { attachAnalytics, createEventMapper, type AnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createOtlpAdapter } from "@chunkify/analytics/otlp";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 
 const mapEvent = createEventMapper({
@@ -39,7 +40,8 @@ const config: AnalyticsConfig = {
 const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } }, mapEvent);
 const posthog = createPostHogAdapter({ capture(name, properties) { void name; void properties; } }, mapEvent);
 const http = createHttpAdapter("/api/analytics", mapEvent);
-const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http] });
+const otlp = createOtlpAdapter("https://collector.example.com/v1/logs");
+const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp] });
 session.startAttempt();
 session.destroy();
 // @ts-expect-error A video identity is required.
