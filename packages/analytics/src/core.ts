@@ -20,6 +20,7 @@ export type AnalyticsRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
 export interface ViewMetrics {
   media_duration_seconds: number | null;
   startup_time_ms: number | null;
+  first_video_frame_time_ms: number | null;
   playing_time_ms: number;
   rebuffer_count: number;
   rebuffer_duration_ms: number;
@@ -119,6 +120,8 @@ interface View {
   sequence: number;
   startedAt: number;
   startup: number | null;
+  firstVideoFrame: number | null;
+  frameCallbackId: number | null;
   playing: number;
   playingSince: number | null;
   rebufferCount: number;
@@ -268,6 +271,8 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
 
 export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
   assertAnalyticsOptions(options);
+  const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
+    "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
   const { videoId, send, environment = null, viewerId = null, sampleRate = 1, snapshotIntervalMs = 30000 } = options;
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
     .map((event) => `chunkify.video.${event}`));
@@ -280,6 +285,30 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
   let selectedRendition: AnalyticsRendition | null = null;
+
+  function cancelFirstVideoFrame(current: View) {
+    if (current.frameCallbackId === null) return;
+    const callbackId = current.frameCallbackId;
+    current.frameCallbackId = null;
+    try { frameVideo.cancelVideoFrameCallback?.(callbackId); } catch {}
+  }
+
+  function observeFirstVideoFrame(current: View) {
+    if (typeof frameVideo.requestVideoFrameCallback !== "function" ||
+        typeof frameVideo.cancelVideoFrameCallback !== "function") return;
+    try {
+      current.frameCallbackId = frameVideo.requestVideoFrameCallback((observedAt) => {
+        if (current.frameCallbackId === null) return;
+        current.frameCallbackId = null;
+        if (view !== current) return;
+        // WebKit can report a presentationTime outside performance.now()'s clock.
+        if (!Number.isFinite(observedAt) || observedAt < current.startedAt) return;
+        current.firstVideoFrame = observedAt - current.startedAt;
+      });
+    } catch {
+      // Frame timing is optional; an inaccessible browser API leaves it unavailable.
+    }
+  }
 
   function closeActiveRendition(now: number) {
     if (!view || !view.activeRendition || view.activeRenditionSince === null) return;
@@ -345,6 +374,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       metrics: {
         media_duration_seconds: current.duration,
         startup_time_ms: current.startup,
+        first_video_frame_time_ms: current.firstVideoFrame,
         playing_time_ms: playingTime,
         rebuffer_count: current.rebufferCount,
         rebuffer_duration_ms: rebufferDuration,
@@ -372,7 +402,8 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
     if (view) return;
     const initialFrames = frameCounts(media);
     const sampled = sampleRate === 1 || (sampleRate > 0 && Math.random() < sampleRate);
-    view = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(), startup: null,
+    const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(),
+      startup: null, firstVideoFrame: null, frameCallbackId: null,
       playing: 0, playingSince: null,
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
       seekCount: 0, seekDuration: 0, seekSince: null,
@@ -387,7 +418,10 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
       renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null };
-    emit(view, "chunkify.video.view_started");
+    view = current;
+    if (sampled && includedEvents.size > 0) observeFirstVideoFrame(current);
+    emit(current, "chunkify.video.view_started");
+    if (view !== current) return;
     if (media.error) reportMediaError();
   }
   function stopPlaying() {
@@ -417,6 +451,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   }
   function reportMediaError() {
     if (!view) return;
+    cancelFirstVideoFrame(view);
     if (view.startup === null) view.fatalErrorBeforeStart = true;
     if (view.errorEmitted) return;
     updatePlaybackPosition();
@@ -429,6 +464,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   }
   function reportConnectorError(error: AnalyticsConnectorError) {
     if (!view) return;
+    if (error.fatal) cancelFirstVideoFrame(view);
     if (error.fatal && view.startup === null) view.fatalErrorBeforeStart = true;
     if (view.errorEmitted) return;
     if (error.fatal) {
@@ -508,6 +544,7 @@ export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptio
   function finish(reason: AnalyticsEndReason) {
     if (!view) return;
     const current = view;
+    cancelFirstVideoFrame(current);
     stopPlaying();
     stopRebuffering();
     stopSeeking();

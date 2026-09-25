@@ -89,6 +89,91 @@ test("startup and playing time exclude loading, buffering, pauses and seeks", as
   }
 });
 
+test("first video frame timing uses the callback clock without changing startup time", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    const callbacks: VideoFrameRequestCallback[] = [];
+    Object.defineProperty(f.video, "requestVideoFrameCallback", {
+      configurable: true,
+      value(callback: VideoFrameRequestCallback) { callbacks.push(callback); return callbacks.length; },
+    });
+    (window as typeof window & { fireTestFrame: () => void }).fireTestFrame = () => {
+      callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
+    };
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame", send(event) { f.events.push(event); } });
+    f.session.startAttempt();
+  });
+  await page.clock.runFor(1000);
+  await page.evaluate(() => window.analyticsFixture.video.dispatchEvent(new Event("playing")));
+  await page.clock.runFor(400);
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    (window as typeof window & { fireTestFrame: () => void }).fireTestFrame();
+    f.video.dispatchEvent(new Event("ended"));
+    f.session!.destroy();
+  });
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  expect(events[0]!.metrics.first_video_frame_time_ms).toBeNull();
+  expect(events[1]!.metrics).toMatchObject({ startup_time_ms: 1000, first_video_frame_time_ms: 1400 });
+});
+
+test("frame timing stays unavailable after source change or without the browser API", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    const callbacks: VideoFrameRequestCallback[] = [];
+    let canceledId: number | null = null;
+    Object.defineProperties(f.video, {
+      requestVideoFrameCallback: {
+        configurable: true,
+        value(callback: VideoFrameRequestCallback) { callbacks.push(callback); return callbacks.length; },
+      },
+      cancelVideoFrameCallback: { configurable: true, value(id: number) { canceledId = id; } },
+    });
+    f.session = f.attachAnalytics(f.video, { videoId: "asset-frame-cancel", send(event) { f.events.push(event); } });
+    f.session.startAttempt();
+    f.session.sourceChanged();
+    callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
+    Object.defineProperty(f.video, "requestVideoFrameCallback", { configurable: true, value: undefined });
+    f.session.startAttempt();
+    f.session.destroy();
+    return {
+      canceledId,
+      frameTimes: f.events.filter((event) => event.event_name === "chunkify.video.view_ended")
+        .map((event) => event.metrics.first_video_frame_time_ms),
+    };
+  });
+  expect(result).toEqual({ canceledId: 1, frameTimes: [null, null] });
+});
+
+test("a fatal error during view_started cancels frame timing", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    const callbacks: VideoFrameRequestCallback[] = [];
+    let canceledId: number | null = null;
+    Object.defineProperties(f.video, {
+      requestVideoFrameCallback: {
+        configurable: true,
+        value(callback: VideoFrameRequestCallback) { callbacks.push(callback); return callbacks.length; },
+      },
+      cancelVideoFrameCallback: { configurable: true, value(id: number) { canceledId = id; } },
+    });
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "asset-frame-error",
+      send(event) {
+        f.events.push(event);
+        if (event.event_name === "chunkify.video.view_started") f.video.dispatchEvent(new Event("error"));
+      },
+    });
+    f.session.startAttempt();
+    callbacks[0]?.(performance.now(), {} as VideoFrameCallbackMetadata);
+    f.session.destroy();
+    return { canceledId, frameTime: f.events.at(-1)?.metrics.first_video_frame_time_ms };
+  });
+  expect(result).toEqual({ canceledId: 1, frameTime: null });
+});
+
 test("rendition playing time follows playback, switches and view boundaries", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -422,6 +507,7 @@ test("media failures emit one normalized error record without raw error text", a
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
     expect(events.map((event) => event.startup_outcome)).toEqual([null, null, "failed_before_start"]);
+    expect(events[2]!.metrics.first_video_frame_time_ms).toBeNull();
     expect(events[1]).toMatchObject({
       error_code: [1, 2, 3, 4, 99][index],
       error_fatal: true,

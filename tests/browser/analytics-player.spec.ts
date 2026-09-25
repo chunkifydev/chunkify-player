@@ -121,6 +121,13 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
+  const hlsFrameCallbacksAvailable = await player.evaluate((element: ChunkifyPlayer) =>
+    typeof (element.media as HTMLVideoElement).requestVideoFrameCallback === "function");
+  if (hlsFrameCallbacksAvailable) {
+    await player.evaluate((element: ChunkifyPlayer) => new Promise<void>((resolve) => {
+      (element.media as HTMLVideoElement).requestVideoFrameCallback(() => resolve());
+    }));
+  }
 
   await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
@@ -128,6 +135,14 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.filter((event) => event.event_name === "chunkify.video.view_started").length)).toBe(2);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
+  const mp4FrameCallbacksAvailable = await player.evaluate((element: ChunkifyPlayer) =>
+    typeof (element.media as HTMLVideoElement).requestVideoFrameCallback === "function");
+  if (mp4FrameCallbacksAvailable) {
+    await player.evaluate((element: ChunkifyPlayer) => new Promise<void>((resolve) => {
+      (element.media as HTMLVideoElement).requestVideoFrameCallback(() => resolve());
+    }));
+  }
 
   const events = await page.evaluate(() => {
     const state = window as typeof window & {
@@ -143,6 +158,12 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "destroyed"],
   ]);
+  if (hlsFrameCallbacksAvailable) {
+    expect(events[1]!.metrics.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
+  }
+  if (mp4FrameCallbacksAvailable) {
+    expect(events[3]!.metrics.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
+  }
   if (hlsJsActive) {
     expect(events[1]).toMatchObject({
       connector_name: "hls.js",
