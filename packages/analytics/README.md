@@ -85,7 +85,7 @@ For hls.js playback, `rendition_playing_time` contains cumulative wall-clock mil
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
 
-Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog and HTTP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog, PostHog, and HTTP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
 
 Use `createEventMapper()` when a destination needs different field names or values. Each output field names a source event field or calculates a value from the event. The mapper returns a new object and leaves the original event unchanged:
 
@@ -123,6 +123,19 @@ monitor(video, {
 ```
 
 Without a mapper, use `createDatadogAdapter(datadogRum)`. The mapper creates the payload for each action from the current event; it is not a fixed payload supplied at setup time. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
+
+The PostHog adapter accepts an initialized `posthog-js` client. It captures one event per analytics record, with the event's fields as flat PostHog properties. As with Datadog, its optional second argument maps the properties for each event:
+
+```ts
+import { createPostHogAdapter } from "@chunkify/analytics/posthog";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [createPostHogAdapter(posthog)],
+});
+```
+
+The application initializes PostHog and controls its automatic collection and persistence settings. PostHog may add its own event properties, including page context, beyond the fields sent by this adapter; configure the PostHog SDK separately to meet your privacy requirements.
 
 The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 
 test("Datadog adapter sends one action per event with optional context mapping", () => {
   const actions = [];
@@ -27,6 +28,20 @@ test("Datadog adapter sends one action per event with optional context mapping",
     name: "chunkify.video.view_snapshot", context: { video_id: "asset-1", rendition_count: 2 },
   });
   assert.throws(() => createDatadogAdapter({ addAction() {} }, null), TypeError);
+});
+
+test("PostHog adapter captures one event with flat or mapped properties", () => {
+  const captured = [];
+  const client = { capture(name, properties) { captured.push({ name, properties }); } };
+  const event = { event_name: "chunkify.video.view_ended", video_id: "asset-1", playing_time_ms: 12000 };
+  createPostHogAdapter(client).send(event);
+  createPostHogAdapter(client, (record) => ({ video_id: record.video_id, playtime_seconds: record.playing_time_ms / 1000 })).send(event);
+  assert.deepEqual(captured, [
+    { name: event.event_name, properties: event },
+    { name: event.event_name, properties: { video_id: "asset-1", playtime_seconds: 12 } },
+  ]);
+  assert.throws(() => createPostHogAdapter(null), TypeError);
+  assert.throws(() => createPostHogAdapter(client, null), TypeError);
 });
 
 test("HTTP adapter posts JSON without browser credentials and checks delivery status", async () => {

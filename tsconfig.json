@@ -7,6 +7,7 @@
       "@chunkify/player": ["./packages/player/src/index.ts"],
       "@chunkify/analytics": ["./packages/analytics/src/index.ts"],
       "@chunkify/analytics/datadog": ["./packages/analytics/src/datadog.ts"],
+      "@chunkify/analytics/posthog": ["./packages/analytics/src/posthog.ts"],
       "@chunkify/analytics/http": ["./packages/analytics/src/http.ts"],
       "@chunkify/analytics/player": ["./packages/analytics/src/player.ts"],
       "@chunkify/analytics/hlsjs": ["./packages/analytics/src/hlsjs.ts"],
