@@ -192,13 +192,21 @@ monitor(video, {
 
 The application should call `destroy()` when it no longer needs the session. The hls.js adapter removes its listeners but does not destroy the application's HLS engine.
 
-The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter sends no cookies or authorization headers. Event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
+The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter sends no cookies or authorization headers. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Pass a mapper as the second argument to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
 
 ```ts
+import { createEventMapper } from "@chunkify/analytics";
 import { createOtlpAdapter } from "@chunkify/analytics/otlp";
+
+const attributes = createEventMapper({
+  video_id: "video_id",
+  view_id: "view_id",
+  event_id: "event_id",
+  playing_time_ms: "playing_time_ms",
+});
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs")],
+  destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs", attributes)],
 });
 ```

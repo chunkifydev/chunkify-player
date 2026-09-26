@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createEventMapper } from "@chunkify/analytics";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
 import { createOtlpAdapter } from "@chunkify/analytics/otlp";
@@ -138,7 +139,27 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
         { key: "playing_time_ms", value: { intValue: "2500" } },
       ] } },
     ] } });
+    const mapAttributes = createEventMapper({
+      video_id: "video_id",
+      view_id: "view_id",
+      event_id: "event_id",
+      playtime_seconds: (record) => record.playing_time_ms / 1000,
+      unavailable: () => null,
+    });
+    await createOtlpAdapter("https://collector.example.com/v1/logs", mapAttributes).send(event);
+    const mappedLog = JSON.parse(requests[1].init.body).resourceLogs[0].scopeLogs[0].logRecords[0];
+    assert.equal(mappedLog.timeUnixNano, log.timeUnixNano);
+    assert.equal(mappedLog.eventName, log.eventName);
+    assert.deepEqual(mappedLog.attributes, [
+      { key: "video_id", value: { stringValue: "video-1" } },
+      { key: "view_id", value: { stringValue: "view-1" } },
+      { key: "event_id", value: { stringValue: "event-1" } },
+      { key: "playtime_seconds", value: { doubleValue: 12.5 } },
+    ]);
+    assert.equal(event.playing_time_ms, 12500);
     assert.throws(() => createOtlpAdapter("https://collector.example.com/v1/logs?api_key=secret"), TypeError);
+    assert.throws(() => createOtlpAdapter("/v1/logs", null), TypeError);
+    await assert.rejects(createOtlpAdapter("/v1/logs", () => null).send(event), TypeError);
     await assert.rejects(createOtlpAdapter("/v1/logs").send({ ...event, occurred_at: "invalid" }), TypeError);
   } finally {
     globalThis.fetch = originalFetch;

@@ -36,7 +36,7 @@ function toOtlpAttributes(record: object): OtlpAttribute[] {
   });
 }
 
-function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent) {
+function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent, attributes: object) {
   const occurredAtMs = Date.parse(event.occurred_at);
   if (!Number.isFinite(occurredAtMs)) throw new TypeError("OTLP adapter requires a valid occurred_at timestamp.");
 
@@ -47,7 +47,7 @@ function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent) {
         logRecords: [{
           timeUnixNano: String(BigInt(occurredAtMs) * 1_000_000n),
           eventName: event.event_name,
-          attributes: toOtlpAttributes(event),
+          attributes: toOtlpAttributes(attributes),
         }],
       }],
     }],
@@ -55,6 +55,16 @@ function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent) {
 }
 
 /** Send each analytics event as an OTLP/HTTP JSON log record to a customer gateway. */
-export function createOtlpAdapter(endpoint: string): AnalyticsDestination {
-  return createHttpAdapter(endpoint, toOtlpLogRequest);
+export function createOtlpAdapter(
+  endpoint: string,
+  mapAttributes: (event: ChunkifyPlayerAnalyticsEvent) => object = (event) => event,
+): AnalyticsDestination {
+  if (typeof mapAttributes !== "function") throw new TypeError("OTLP attribute mapper must be a function.");
+  return createHttpAdapter(endpoint, (event) => {
+    const attributes = mapAttributes(event);
+    if (!attributes || typeof attributes !== "object" || Array.isArray(attributes)) {
+      throw new TypeError("OTLP attribute mapper must return an object.");
+    }
+    return toOtlpLogRequest(event, attributes);
+  });
 }

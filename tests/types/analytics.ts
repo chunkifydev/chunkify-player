@@ -41,7 +41,9 @@ const datadog = createDatadogAdapter({ addAction(name, context) { void name; voi
 const posthog = createPostHogAdapter({ capture(name, properties) { void name; void properties; } }, mapEvent);
 const http = createHttpAdapter("/api/analytics", mapEvent);
 const otlp = createOtlpAdapter("https://collector.example.com/v1/logs");
+const mappedOtlp = createOtlpAdapter("https://collector.example.com/v1/logs", mapEvent);
 const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp] });
+void mappedOtlp;
 session.startAttempt();
 session.destroy();
 const videoJsPlayer = {
