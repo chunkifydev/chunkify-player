@@ -14,6 +14,7 @@ class FakeMedia extends EventTarget {
     this.networkState = 0;
     this.error = null;
     this.engine = null;
+    this.adapter = {};
     this.ownerDocument = { defaultView: null };
   }
 
@@ -115,4 +116,8 @@ test("Video.js 8 player objects and the Video.js 10 container are not media targ
   const options = { videoId: "video-789", destinations: [{ send() {} }] };
   assert.throws(() => monitorVideoJs({ tech() {} }, options), /Video.js 10 analytics requires/);
   assert.throws(() => monitorVideoJs(new FakeMedia("video-player"), options), /Video.js 10 analytics requires/);
+  const muxHlsVideo = new FakeMedia("hls-video");
+  delete muxHlsVideo.adapter;
+  muxHlsVideo.api = new FakeHls();
+  assert.throws(() => monitorVideoJs(muxHlsVideo, options), /Video.js 10 analytics requires/);
 });

@@ -8,6 +8,7 @@ import { assertAnalyticsOptions } from "./options.js";
 export type VideoJsMediaElement = HTMLElement & {
   readonly src: string;
   readonly engine?: Hls | object | null;
+  readonly adapter?: object;
 };
 
 const videoJsMediaTags = new Set(["hls-video", "hlsjs-video", "native-hls-video"]);
@@ -37,8 +38,10 @@ function videoJsConnector(engine: Hls | null): AnalyticsConnector & { destroy():
 export function monitorVideoJs(media: VideoJsMediaElement, options: AnalyticsOptions):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   assertAnalyticsOptions(options);
-  if (!media || !videoJsMediaTags.has(media.localName) || typeof (media as { play?: unknown }).play !== "function") {
-    throw new TypeError("Video.js 10 analytics requires an hls-video, hlsjs-video, or native-hls-video media element.");
+  if (!media || !videoJsMediaTags.has(media.localName)
+    || typeof (media as { play?: unknown }).play !== "function"
+    || typeof media.adapter !== "object" || media.adapter === null) {
+    throw new TypeError("Video.js 10 analytics requires a registered hls-video, hlsjs-video, or native-hls-video element from @videojs/html.");
   }
 
   const session = attachAnalyticsWithManagedSource(media as unknown as HTMLMediaElement, options);
