@@ -46,13 +46,8 @@ const session = attachAnalytics(video, { ...config, videoId: "asset-types", dest
 void mappedOtlp;
 session.startAttempt();
 session.destroy();
-const videoJsPlayer = {
-  tech(_safety: true) { return { el: () => video }; },
-  on(_type: string, _listener: () => void) {},
-  off(_type: string, _listener: () => void) {},
-  error() { return null; },
-};
-const videoJsSession = monitorVideoJs(videoJsPlayer, { videoId: "videojs-types", destinations: [http] });
+const videoJsMedia = document.createElement("hlsjs-video") as HTMLElement & { readonly src: string };
+const videoJsSession = monitorVideoJs(videoJsMedia, { videoId: "videojs-types", destinations: [http] });
 videoJsSession.destroy();
 const shakaPlayer = {
   getMediaElement: () => video,

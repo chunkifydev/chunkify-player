@@ -1,71 +1,118 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createVideoJsConnector } from "@chunkify/analytics/videojs";
+import { monitorVideoJs } from "@chunkify/analytics/videojs";
 
-function emitter() {
-  const listeners = new Map();
-  return {
-    on(type, listener) {
-      const set = listeners.get(type) ?? new Set();
-      set.add(listener);
-      listeners.set(type, set);
-    },
-    off(type, listener) { listeners.get(type)?.delete(listener); },
-    emit(type) { for (const listener of listeners.get(type) ?? []) listener(); },
-    listenerCount() { return [...listeners.values()].reduce((count, set) => count + set.size, 0); },
-  };
+class FakeMedia extends EventTarget {
+  constructor(localName = "hlsjs-video") {
+    super();
+    this.localName = localName;
+    this.src = "https://cdn.example.com/first.m3u8";
+    this.currentSrc = this.src;
+    this.currentTime = 0;
+    this.duration = 60;
+    this.readyState = 0;
+    this.networkState = 0;
+    this.error = null;
+    this.engine = null;
+    this.ownerDocument = { defaultView: null };
+  }
+
+  play() { return Promise.resolve(); }
+  changeSource(src, engine) {
+    this.src = src;
+    this.currentSrc = src;
+    this.dispatchEvent(new Event("sourcechange"));
+    this.engine = engine;
+    this.dispatchEvent(new Event("loadstart"));
+  }
 }
 
-test("Video.js connector reads optional quality levels and player errors without guessing delivery data", () => {
-  const playerEvents = emitter();
-  const levelEvents = emitter();
-  const levels = Object.assign(levelEvents, {
-    selectedIndex: -1,
-    0: { width: 640, height: 360, bitrate: 700_000 },
-    1: { width: 1280, height: 720, bitrate: 2_000_000 },
-  });
-  let playerError = null;
-  const player = { ...playerEvents, error: () => playerError, qualityLevels: () => levels };
-  const connector = createVideoJsConnector(player);
-  const errors = [];
-  const unsubscribe = connector.subscribeToErrors((error) => errors.push(error));
-  levels.selectedIndex = 0;
-  levels.emit("change");
-  levels.selectedIndex = 1;
-  levels.emit("change");
-  playerError = { code: 2, message: "private URL must never appear in analytics" };
-  player.emit("error");
+class FakeHls {
+  static version = "1.7.3";
+  static Events = {
+    MANIFEST_LOADED: "manifest", LEVEL_LOADED: "level", AUDIO_TRACK_LOADED: "audio",
+    SUBTITLE_TRACK_LOADED: "subtitle", FRAG_LOADED: "fragment",
+    LEVEL_SWITCHED: "switched", ERROR: "error",
+  };
+  static ErrorTypes = {
+    NETWORK_ERROR: "networkError", MEDIA_ERROR: "mediaError",
+    MUX_ERROR: "muxError", KEY_SYSTEM_ERROR: "keySystemError",
+  };
 
-  assert.deepEqual(connector.snapshot(), {
-    renditionWidth: 1280, renditionHeight: 720, renditionCodec: null, renditionBitrate: 2_000_000,
-    renditionSwitchCount: 1,
-    deliveryRequestCount: null, deliveryTransferredBytes: null, deliveryDurationMs: null,
+  currentLevel = -1;
+  levels = [
+    { width: 640, height: 360, videoCodec: "avc1.4d401e", bitrate: 800_000, frameRate: 30 },
+    { width: 1280, height: 720, videoCodec: "avc1.64001f", bitrate: 2_500_000, frameRate: 30 },
+  ];
+  listeners = new Map();
+
+  on(type, listener) {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+  off(type, listener) { this.listeners.get(type)?.delete(listener); }
+  emit(type, data) { for (const listener of this.listeners.get(type) ?? []) listener(type, data); }
+  listenerCount() { return [...this.listeners.values()].reduce((count, listeners) => count + listeners.size, 0); }
+}
+
+test("Video.js 10 hlsjs-video adds engine metrics and resets on a new source", () => {
+  const media = new FakeMedia();
+  const events = [];
+  const firstEngine = new FakeHls();
+  media.engine = firstEngine;
+  const session = monitorVideoJs(media, {
+    videoId: "video-123", destinations: [{ send(event) { events.push(event); } }],
   });
-  levels.selectedIndex = -1;
-  levels.emit("removequalitylevel");
-  assert.equal(connector.snapshot().renditionWidth, null);
-  assert.equal(connector.snapshot().renditionSwitchCount, 1);
-  levels.selectedIndex = 0;
-  levels.emit("change");
-  player.emit("loadstart");
-  assert.equal(connector.snapshot().renditionWidth, null);
-  assert.equal(connector.snapshot().renditionSwitchCount, 0);
-  assert.deepEqual(errors, [{ category: "network", code: 2, fatal: true }]);
-  assert.equal(connector.subscribeToRenditions, undefined);
-  unsubscribe();
-  connector.destroy();
-  connector.destroy();
-  assert.equal(player.listenerCount(), 0);
-  assert.equal(levels.listenerCount(), 0);
+
+  media.dispatchEvent(new Event("play"));
+  media.dispatchEvent(new Event("playing"));
+  firstEngine.emit(FakeHls.Events.FRAG_LOADED, {
+    frag: { stats: { loaded: 4096, loading: { start: 10, end: 20 } } },
+  });
+  firstEngine.emit(FakeHls.Events.LEVEL_SWITCHED, { level: 0 });
+  firstEngine.emit(FakeHls.Events.LEVEL_SWITCHED, { level: 1 });
+  media.changeSource("https://cdn.example.com/second.m3u8", new FakeHls());
+
+  assert.equal(events[1].reason, "source_changed");
+  assert.equal(events[1].connector_name, "video.js/hls.js");
+  assert.equal(events[1].player_name, "video.js");
+  assert.equal(events[1].selected_rendition_height, 720);
+  assert.equal(events[1].rendition_switch_count, 1);
+  assert.equal(events[1].delivery_request_count, 1);
+  assert.equal(events[1].delivery_transferred_bytes, 4096);
+  assert.equal(firstEngine.listenerCount(), 0);
+
+  media.dispatchEvent(new Event("play"));
+  media.dispatchEvent(new Event("playing"));
+  media.dispatchEvent(new Event("ended"));
+  assert.notEqual(events[0].view_id, events[2].view_id);
+  assert.equal(events[3].delivery_request_count, 0);
+  assert.equal(events[3].rendition_switch_count, 0);
+  session.destroy();
+  assert.equal(media.engine.listenerCount(), 0);
 });
 
-test("Video.js connector leaves quality measurements unavailable without a quality-levels API", () => {
-  const player = { ...emitter(), error: () => null };
-  const connector = createVideoJsConnector(player);
-  assert.deepEqual(connector.snapshot(), {
-    renditionWidth: null, renditionHeight: null, renditionCodec: null, renditionBitrate: null,
-    renditionSwitchCount: null,
-    deliveryRequestCount: null, deliveryTransferredBytes: null, deliveryDurationMs: null,
-  });
-  connector.destroy();
+test("Video.js 10 native and lightweight HLS media retain core metrics without engine guesses", () => {
+  for (const localName of ["hls-video", "native-hls-video"]) {
+    const media = new FakeMedia(localName);
+    media.engine = { state: {}, context: {} };
+    const events = [];
+    const session = monitorVideoJs(media, {
+      videoId: "video-456", destinations: [{ send(event) { events.push(event); } }],
+    });
+    media.dispatchEvent(new Event("play"));
+    media.dispatchEvent(new Event("playing"));
+    media.dispatchEvent(new Event("ended"));
+    session.destroy();
+    assert.equal(events[1].player_name, "video.js");
+    assert.equal(events[1].selected_rendition_height, null);
+    assert.equal(events[1].delivery_request_count, null);
+  }
+});
+
+test("Video.js 8 player objects and the Video.js 10 container are not media targets", () => {
+  const options = { videoId: "video-789", destinations: [{ send() {} }] };
+  assert.throws(() => monitorVideoJs({ tech() {} }, options), /Video.js 10 analytics requires/);
+  assert.throws(() => monitorVideoJs(new FakeMedia("video-player"), options), /Video.js 10 analytics requires/);
 });

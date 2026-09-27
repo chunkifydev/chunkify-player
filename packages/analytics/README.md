@@ -58,20 +58,21 @@ hls.loadSource("https://example.com/video.m3u8");
 // When finished, call session.destroy() and hls.destroy().
 ```
 
-For Video.js, call `monitorVideoJs()` after the player is ready. It supports Video.js's HTML5 video Tech and cleans up when Video.js disposes the player. If the optional quality-levels API is present, the adapter records the selected quality and switch count. It does not infer rendition playing time from ABR selections or report network totals that Video.js does not expose through this API:
+For Video.js 10 HLS media (`<hls-video>`, `<hlsjs-video>`, or `<native-hls-video>`), pass the media element to `monitorVideoJs()`, not the outer `<video-player>`. The collector reads standard playback events from the element. With `<hlsjs-video>` using MSE, it also reads rendition and request metrics from the element's public hls.js `engine`. Native HLS and the lightweight `<hls-video>` expose fewer engine metrics, so those values remain null. For a plain `<video>` inside Video.js 10, use `monitor(video, options)`:
 
 ```ts
-import videojs from "video.js";
+import "@videojs/html/video/player";
+import "@videojs/html/ui/container";
+import "@videojs/html/media/hlsjs-video";
 import { monitorVideoJs } from "@chunkify/analytics";
 
-const player = videojs("my-video");
-player.ready(() => {
-  const session = monitorVideoJs(player, {
-    videoId: "video_123",
-    destinations: [{ send: (event) => console.log(event) }],
-  });
-  // Call session.destroy() if analytics stops before player.dispose().
+// HTML: <video-player><media-container><hlsjs-video id="media" src="video.m3u8"></hlsjs-video></media-container></video-player>
+const media = document.querySelector("hlsjs-video")!;
+const session = monitorVideoJs(media, {
+  videoId: "video_123",
+  destinations: [{ send: (event) => console.log(event) }],
 });
+// Call session.destroy() when the media element is removed.
 ```
 
 For Shaka Player, attach the media element first, then call `monitorShaka()` before `load()`. The connector starts each view on Shaka's `loading` event and enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
