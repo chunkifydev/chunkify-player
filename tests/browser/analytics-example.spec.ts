@@ -18,6 +18,6 @@ test("Video.js example keeps its controls separate from Chunkify Player", async 
 
   await page.getByRole("button", { name: "Play", exact: true }).first().click();
   await expect(play).toHaveAttribute("aria-label", "Pause");
-  await expect(page.locator("#event-count")).toHaveText("1");
+  await expect.poll(async () => Number(await page.locator("#event-count").textContent())).toBeGreaterThanOrEqual(1);
   await expect(page.locator("#events pre").first()).toContainText('"event_id"');
 });

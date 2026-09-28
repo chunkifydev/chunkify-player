@@ -7,6 +7,11 @@
       import { attachAnalytics } from "/packages/analytics/dist/index.js";
       window.analyticsFixture = {
         attachAnalytics,
+        // Existing metric tests select the original summary records explicitly.
+        attachSummaryAnalytics: (media, options) => attachAnalytics(media, {
+          ...options,
+          includeEvents: options.includeEvents ?? ["view_started", "view_snapshot", "playback_error", "view_ended"],
+        }),
         video: document.querySelector("video"),
         events: [],
         session: null,

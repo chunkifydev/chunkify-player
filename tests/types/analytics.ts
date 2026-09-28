@@ -6,11 +6,11 @@ import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",
-  playtimeSeconds: (event) => event.playing_time_ms / 1000,
+  playtimeSeconds: (event) => event.playing_time_ms === undefined ? undefined : event.playing_time_ms / 1000,
 });
 const mapped = mapEvent({} as ChunkifyPlayerAnalyticsEvent);
 const mappedVideoId: string = mapped.videoId;
-const mappedPlaytime: number = mapped.playtimeSeconds;
+const mappedPlaytime: number | undefined = mapped.playtimeSeconds;
 void mappedVideoId; void mappedPlaytime;
 
 const video = document.createElement("video");
@@ -19,6 +19,16 @@ const config: AnalyticsConfig = {
   includeEvents: ["view_started", "view_ended"],
   destinations: [{ async send(event) {
     const record: ChunkifyPlayerAnalyticsEvent = event;
+    if (record.event_name === "chunkify.video.playback_state_changed") {
+      const state: string = record.to_state;
+      void state;
+      return;
+    }
+    if (record.event_name === "chunkify.video.rendition_changed") {
+      const height: number | null = record.selected_rendition_height;
+      void height;
+      return;
+    }
     const startup: number | null = record.startup_time_ms;
     const firstFrame: number | null = record.first_video_frame_time_ms;
     const buffering: number = record.rebuffer_duration_ms;

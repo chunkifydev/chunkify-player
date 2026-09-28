@@ -16,10 +16,10 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     document.body.append(video, player);
 
     const videoSession = monitor(video, {
-      videoId: "asset-video", destinations: [{ send(event) { videoEvents.push(event); } }],
+      videoId: "asset-video", includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { videoEvents.push(event); } }],
     });
     const playerSession = monitor(player, {
-      videoId: "asset-player", destinations: [{ send(event) { playerEvents.push(event); } }],
+      videoId: "asset-player", includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { playerEvents.push(event); } }],
     });
     video.dispatchEvent(new Event("play"));
     player.media.dispatchEvent(new Event("play"));
@@ -60,7 +60,7 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     document.body.append(player);
     const session = attachPlayerAnalytics(player, {
       videoId: "asset-adapter",
-      destinations: [{ send(event) { events.push(event); } }],
+      includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { events.push(event); } }],
     });
 
     const first = player.media;
@@ -108,7 +108,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     document.body.append(player);
     state.analyticsSession = attachPlayerAnalytics(player, {
       videoId: "asset-real-playback",
-      destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
+      includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
     });
   });
 
@@ -207,7 +207,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     state.externalEvents = [];
     state.externalSession = monitorHlsJs(state.externalHls, {
       videoId: "asset-external",
-      destinations: [{ send(event) { state.externalEvents.push(event); } }],
+      includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { state.externalEvents.push(event); } }],
     });
     state.externalSession.startAttempt();
     state.externalHls.attachMedia(state.externalVideo);
@@ -269,7 +269,7 @@ test("the hls.js adapter follows media that was attached earlier or changes late
     hls.attachMedia(first);
     const records: ChunkifyPlayerAnalyticsEvent[] = [];
     const session = monitorHlsJs(hls, {
-      videoId: "asset-reattach", destinations: [{ send(event) { records.push(event); } }],
+      videoId: "asset-reattach", includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { records.push(event); } }],
     });
     first.dispatchEvent(new Event("play"));
     first.dispatchEvent(new Event("playing"));
@@ -307,7 +307,7 @@ test("hls.js recovery on the same video keeps one view", async ({ page, browserN
     const hls = new Hls();
     const records: ChunkifyPlayerAnalyticsEvent[] = [];
     const session = monitorHlsJs(hls, {
-      videoId: "asset-recovery", destinations: [{ send(event) { records.push(event); } }],
+      videoId: "asset-recovery", includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { records.push(event); } }],
     });
     session.startAttempt();
     hls.attachMedia(video);
@@ -342,7 +342,7 @@ test("Shaka load boundaries keep one view per attempt and restore quality observ
     const shaka = new ShakaFixture();
     const records: ChunkifyPlayerAnalyticsEvent[] = [];
     const session = monitorShaka(shaka, {
-      videoId: "shaka-loads", destinations: [{ send(event) { records.push(event); } }],
+      videoId: "shaka-loads", includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { records.push(event); } }],
     });
     const enabled = shaka.observingQuality;
     shaka.dispatchEvent(new Event("loading"));

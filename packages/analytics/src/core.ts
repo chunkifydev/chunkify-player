@@ -8,6 +8,8 @@ const sdkVersion = "0.0.0";
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
 export type AnalyticsErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
 export type AnalyticsStartupOutcome = "started" | "failed_before_start" | "ended_before_start";
+export type AnalyticsPlaybackState = "startup" | "resuming" | "playing" | "paused" | "buffering" |
+  "seeking" | "error" | "ended" | "stopped";
 export interface RenditionPlayingTime {
   width: number | null;
   height: number | null;
@@ -43,7 +45,7 @@ export interface ViewMetrics {
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
 }
-export interface ChunkifyPlayerAnalyticsEvent extends ViewMetrics {
+export interface AnalyticsEventEnvelope {
   schema_version: 1;
   event_name: `chunkify.video.${AnalyticsEventType}`;
   event_id: string;
@@ -67,6 +69,32 @@ export interface ChunkifyPlayerAnalyticsEvent extends ViewMetrics {
   error_fatal: boolean | null;
   error_playhead_seconds: number | null;
 }
+export interface AnalyticsViewEvent extends AnalyticsEventEnvelope, ViewMetrics {
+  event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" |
+    "chunkify.video.playback_error" | "chunkify.video.view_ended";
+}
+export interface AnalyticsPlaybackStateEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.playback_state_changed";
+  playhead_seconds: number | null;
+  from_state: AnalyticsPlaybackState;
+  to_state: AnalyticsPlaybackState;
+  previous_state_duration_ms: number;
+}
+export interface AnalyticsRenditionEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.rendition_changed";
+  playhead_seconds: number | null;
+  previous_rendition_width: number | null;
+  previous_rendition_height: number | null;
+  previous_rendition_codec: string | null;
+  previous_rendition_bitrate_bps: number | null;
+  previous_rendition_frame_rate: number | null;
+  selected_rendition_width: number | null;
+  selected_rendition_height: number | null;
+  selected_rendition_codec: string | null;
+  selected_rendition_bitrate_bps: number | null;
+  selected_rendition_frame_rate: number | null;
+}
+export type ChunkifyPlayerAnalyticsEvent = AnalyticsViewEvent | AnalyticsPlaybackStateEvent | AnalyticsRenditionEvent;
 export interface AnalyticsDestination {
   send(event: ChunkifyPlayerAnalyticsEvent): void | Promise<void>;
 }
@@ -76,7 +104,7 @@ export interface AnalyticsConfig {
   viewerId?: string | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
-  /** Event types passed to destinations. Defaults to all four types. */
+  /** Event types passed to destinations. Defaults to all six types. */
   includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
 export interface AnalyticsOptions extends AnalyticsConfig {
@@ -151,6 +179,8 @@ interface View {
   renditionTimes: Map<string, RenditionPlayingTime>;
   activeRendition: AnalyticsRendition | null;
   activeRenditionSince: number | null;
+  playbackState: AnalyticsPlaybackState;
+  playbackStateSince: number;
 }
 
 interface FrameCounts {
@@ -364,16 +394,75 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   }
 
   function onRenditionChanged(rendition: AnalyticsRendition | null) {
+    const next = normalizedRendition(rendition);
+    const previous = selectedRendition;
+    if (previous && next && renditionKey(previous) === renditionKey(next)) return;
     const now = performance.now();
     closeActiveRendition(now);
-    selectedRendition = normalizedRendition(rendition);
+    selectedRendition = next;
     if (view && view.playingSince !== null && selectedRendition) {
       view.activeRendition = selectedRendition;
       view.activeRenditionSince = now;
     }
+    if (view && previous && next) emitRenditionChange(view, previous, next);
   }
 
-  function emit(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"], reason: AnalyticsEndReason | null = null,
+  function playheadSeconds(): number | null {
+    return Number.isFinite(media.currentTime) && media.currentTime >= 0 ? media.currentTime : null;
+  }
+
+  function envelope(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"]): AnalyticsEventEnvelope {
+    return {
+      schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
+      occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
+      sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
+      connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
+      player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
+      delivery_hostname: current.hostname, environment, viewer_id: viewerId,
+      reason: null, startup_outcome: null, error_category: null, error_code: null,
+      error_fatal: null, error_playhead_seconds: null,
+    };
+  }
+
+  function deliver(event: ChunkifyPlayerAnalyticsEvent) {
+    for (const destination of destinations) {
+      try {
+        // A failing destination must not interrupt playback or another destination.
+        void Promise.resolve(destination.send(event)).catch(() => {});
+      } catch {
+        // Synchronous delivery failures are isolated for the same reason.
+      }
+    }
+  }
+
+  function changePlaybackState(next: AnalyticsPlaybackState, current = view) {
+    if (!current || current.playbackState === next) return;
+    if (current.playbackState === "ended" || current.playbackState === "stopped" ||
+        (current.playbackState === "error" && next !== "ended" && next !== "stopped")) return;
+    const now = performance.now();
+    const previous = current.playbackState;
+    const elapsed = Math.max(0, now - current.playbackStateSince);
+    current.playbackState = next;
+    current.playbackStateSince = now;
+    if (!includedEvents.has("chunkify.video.playback_state_changed")) return;
+    deliver({ ...envelope(current, "chunkify.video.playback_state_changed"),
+      event_name: "chunkify.video.playback_state_changed", playhead_seconds: playheadSeconds(),
+      from_state: previous, to_state: next, previous_state_duration_ms: elapsed });
+  }
+
+  function emitRenditionChange(current: View, previous: AnalyticsRendition, selected: AnalyticsRendition) {
+    if (!includedEvents.has("chunkify.video.rendition_changed")) return;
+    deliver({ ...envelope(current, "chunkify.video.rendition_changed"),
+      event_name: "chunkify.video.rendition_changed", playhead_seconds: playheadSeconds(),
+      previous_rendition_width: previous.width, previous_rendition_height: previous.height,
+      previous_rendition_codec: previous.codec, previous_rendition_bitrate_bps: previous.bitrate_bps,
+      previous_rendition_frame_rate: previous.frame_rate,
+      selected_rendition_width: selected.width, selected_rendition_height: selected.height,
+      selected_rendition_codec: selected.codec, selected_rendition_bitrate_bps: selected.bitrate_bps,
+      selected_rendition_frame_rate: selected.frame_rate });
+  }
+
+  function emit(current: View, event_name: AnalyticsViewEvent["event_name"], reason: AnalyticsEndReason | null = null,
     error: NormalizedError | null = null) {
     if (!includedEvents.has(event_name)) return;
     const now = performance.now();
@@ -402,15 +491,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       else startupOutcome = "ended_before_start";
     }
     refreshIntrinsicVideoSize(current);
-    const event: ChunkifyPlayerAnalyticsEvent = {
-      schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
-      occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
-      sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
-      connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
-      player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
-      delivery_hostname: current.hostname,
-      environment, viewer_id: viewerId, reason,
-      startup_outcome: startupOutcome,
+    const event: AnalyticsViewEvent = {
+      ...envelope(current, event_name), event_name, reason, startup_outcome: startupOutcome,
       error_category: error?.category ?? null,
       error_code: error?.code ?? null,
       error_fatal: error?.fatal ?? null,
@@ -433,22 +515,19 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       ...engineMetrics,
       rendition_playing_time: renditionPlayingTime(current, now),
     };
-    for (const destination of destinations) {
-      try {
-        // A failing destination must not interrupt playback or another destination.
-        void Promise.resolve(destination.send(event)).catch(() => {});
-      } catch {
-        // Synchronous delivery failures are isolated for the same reason.
-      }
-    }
+    deliver(event);
   }
   function startAttempt() {
     if (destroyed) return;
     wantsPlay = true;
-    if (view) return;
+    if (view) {
+      if (view.playbackState === "paused") changePlaybackState("resuming");
+      return;
+    }
     const initialFrames = frameCounts(media);
     const initialVideoSize = intrinsicVideoSize(media);
-    const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(),
+    const startedAt = performance.now();
+    const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt,
       startup: null, firstVideoFrame: null, frameCallbackId: null,
       playing: 0, playingSince: null,
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
@@ -465,7 +544,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       frameMetricsValid: initialFrames !== null,
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
-      renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null };
+      renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null,
+      playbackState: "startup", playbackStateSince: startedAt };
     view = current;
     if (includedEvents.size > 0) observeFirstVideoFrame(current);
     emit(current, "chunkify.video.view_started");
@@ -501,22 +581,25 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   }
   function reportMediaError() {
     if (!view) return;
-    cancelFirstVideoFrame(view);
-    if (view.startup === null) view.fatalErrorBeforeStart = true;
-    if (view.errorEmitted) return;
+    const current = view;
+    cancelFirstVideoFrame(current);
+    if (current.startup === null) current.fatalErrorBeforeStart = true;
+    if (current.errorEmitted) return;
     updatePlaybackPosition();
-    view.errorEmitted = true;
+    current.errorEmitted = true;
     const code = media.error && Number.isFinite(media.error.code) ? media.error.code : null;
-    emit(view, "chunkify.video.playback_error", null, {
+    emit(current, "chunkify.video.playback_error", null, {
       category: mediaErrorCategory(code), code, fatal: true,
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
+    if (view === current) changePlaybackState("error");
   }
   function reportConnectorError(error: AnalyticsConnectorError) {
     if (!view) return;
-    if (error.fatal) cancelFirstVideoFrame(view);
-    if (error.fatal && view.startup === null) view.fatalErrorBeforeStart = true;
-    if (view.errorEmitted) return;
+    const current = view;
+    if (error.fatal) cancelFirstVideoFrame(current);
+    if (error.fatal && current.startup === null) current.fatalErrorBeforeStart = true;
+    if (current.errorEmitted) return;
     if (error.fatal) {
       stopPlaying();
       stopRebuffering();
@@ -525,13 +608,14 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       wantsPlay = false;
     }
     updatePlaybackPosition();
-    view.errorEmitted = true;
-    emit(view, "chunkify.video.playback_error", null, {
+    current.errorEmitted = true;
+    emit(current, "chunkify.video.playback_error", null, {
       category: error.category,
       code: typeof error.code === "string" || typeof error.code === "number" ? error.code : null,
       fatal: Boolean(error.fatal),
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
+    if (error.fatal && view === current) changePlaybackState("error");
   }
   function setConnector(next: AnalyticsConnector | null) {
     if (destroyed) return;
@@ -590,6 +674,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.activeRendition = selectedRendition;
       view.activeRenditionSince = now;
     }
+    changePlaybackState("playing");
     scheduleSnapshot();
   }
   function finish(reason: AnalyticsEndReason) {
@@ -603,6 +688,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     view = null;
     wantsPlay = false;
     seeking = false;
+    changePlaybackState(reason === "ended" ? "ended" : "stopped", current);
     emit(current, "chunkify.video.view_ended", reason);
   }
   function metadata() {
@@ -618,6 +704,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (view && view.startup !== null && wantsPlay && !seeking && view.rebufferSince === null) {
         view.rebufferCount++;
         view.rebufferSince = performance.now();
+        changePlaybackState("buffering");
       }
     },
     error() {
@@ -640,15 +727,22 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.source = source;
       view.resourceStarted = true;
     },
-    pause() { stopPlaying(); stopRebuffering(); wantsPlay = false; },
+    pause() {
+      stopPlaying(); stopRebuffering(); wantsPlay = false;
+      if (view && !media.ended) changePlaybackState("paused");
+    },
     seeking() {
       stopPlaying();
       stopRebuffering();
       updatePlaybackPosition();
       if (view && !seeking) { view.seekCount++; view.seekSince = performance.now(); }
       seeking = true;
+      changePlaybackState("seeking");
     },
-    seeked() { updatePlaybackPosition(); stopSeeking(); seeking = false; },
+    seeked() {
+      updatePlaybackPosition(); stopSeeking(); seeking = false;
+      changePlaybackState(wantsPlay ? "resuming" : "paused");
+    },
     timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,
   };

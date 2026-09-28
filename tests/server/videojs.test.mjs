@@ -75,21 +75,24 @@ test("Video.js 10 hlsjs-video adds engine metrics and resets on a new source", (
   firstEngine.emit(FakeHls.Events.LEVEL_SWITCHED, { level: 1 });
   media.changeSource("https://cdn.example.com/second.m3u8", new FakeHls());
 
-  assert.equal(events[1].reason, "source_changed");
-  assert.equal(events[1].connector_name, "video.js/hls.js");
-  assert.equal(events[1].player_name, "video.js");
-  assert.equal(events[1].selected_rendition_height, 720);
-  assert.equal(events[1].rendition_switch_count, 1);
-  assert.equal(events[1].delivery_request_count, 1);
-  assert.equal(events[1].delivery_transferred_bytes, 4096);
+  const firstViewEnd = events.find((event) => event.event_name === "chunkify.video.view_ended");
+  assert.equal(firstViewEnd.reason, "source_changed");
+  assert.equal(firstViewEnd.connector_name, "video.js/hls.js");
+  assert.equal(firstViewEnd.player_name, "video.js");
+  assert.equal(firstViewEnd.selected_rendition_height, 720);
+  assert.equal(firstViewEnd.rendition_switch_count, 1);
+  assert.equal(firstViewEnd.delivery_request_count, 1);
+  assert.equal(firstViewEnd.delivery_transferred_bytes, 4096);
   assert.equal(firstEngine.listenerCount(), 0);
 
   media.dispatchEvent(new Event("play"));
   media.dispatchEvent(new Event("playing"));
   media.dispatchEvent(new Event("ended"));
-  assert.notEqual(events[0].view_id, events[2].view_id);
-  assert.equal(events[3].delivery_request_count, 0);
-  assert.equal(events[3].rendition_switch_count, 0);
+  const viewStarts = events.filter((event) => event.event_name === "chunkify.video.view_started");
+  const viewEnds = events.filter((event) => event.event_name === "chunkify.video.view_ended");
+  assert.notEqual(viewStarts[0].view_id, viewStarts[1].view_id);
+  assert.equal(viewEnds[1].delivery_request_count, 0);
+  assert.equal(viewEnds[1].rendition_switch_count, 0);
   session.destroy();
   assert.equal(media.engine.listenerCount(), 0);
 });
@@ -106,9 +109,10 @@ test("Video.js 10 native and lightweight HLS media retain core metrics without e
     media.dispatchEvent(new Event("playing"));
     media.dispatchEvent(new Event("ended"));
     session.destroy();
-    assert.equal(events[1].player_name, "video.js");
-    assert.equal(events[1].selected_rendition_height, null);
-    assert.equal(events[1].delivery_request_count, null);
+    const viewEnd = events.find((event) => event.event_name === "chunkify.video.view_ended");
+    assert.equal(viewEnd.player_name, "video.js");
+    assert.equal(viewEnd.selected_rendition_height, null);
+    assert.equal(viewEnd.delivery_request_count, null);
   }
 });
 

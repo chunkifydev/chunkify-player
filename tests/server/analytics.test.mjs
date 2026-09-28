@@ -13,7 +13,7 @@ test("analytics imports without a DOM and reports its package version", async ()
   assert.equal(events.length, 0);
   session.startAttempt();
   session.destroy();
-  assert.equal(events.length, 2);
+  assert.equal(events.length, 3);
   assert.equal(events[0].sdk_version, pkg.version);
   assert.equal(events[0].connector_version, pkg.version);
 });
@@ -29,10 +29,10 @@ test("event mapper selects, renames, and calculates fields without changing the 
   const mapEvent = createEventMapper({
     videoId: "video_id",
     eventName: "event_name",
-    playtimeSeconds: (event) => event.playing_time_ms / 1000,
+    playtimeSeconds: (event) => event.playing_time_ms === undefined ? undefined : event.playing_time_ms / 1000,
     unavailable: "media_duration_seconds",
   });
-  const event = events[1];
+  const event = events.find((record) => record.event_name === "chunkify.video.view_ended");
   const mapped = mapEvent(event);
   assert.deepEqual(mapped, {
     videoId: "asset-map",
@@ -43,6 +43,17 @@ test("event mapper selects, renames, and calculates fields without changing the 
   assert.equal(event.video_id, "asset-map");
   assert.equal(Object.hasOwn(event, "videoId"), false);
   assert.notEqual(mapped, event);
+
+  const stateSession = attachAnalytics(media, { videoId: "asset-map",
+    destinations: [{ send(record) { events.push(record); } }] });
+  media.dispatchEvent(new Event("play"));
+  media.dispatchEvent(new Event("playing"));
+  const stateChange = events.find((record) => record.event_name === "chunkify.video.playback_state_changed");
+  assert.deepEqual(mapEvent(stateChange), {
+    videoId: "asset-map",
+    eventName: "chunkify.video.playback_state_changed",
+  });
+  stateSession.destroy();
 });
 
 test("one failing destination does not prevent other destinations receiving the view", async () => {
@@ -59,5 +70,6 @@ test("one failing destination does not prevent other destinations receiving the 
   });
   session.startAttempt();
   session.destroy();
-  assert.deepEqual(delivered, ["chunkify.video.view_started", "chunkify.video.view_ended"]);
+  assert.deepEqual(delivered, ["chunkify.video.view_started", "chunkify.video.playback_state_changed",
+    "chunkify.video.view_ended"]);
 });
