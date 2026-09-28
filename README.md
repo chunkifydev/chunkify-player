@@ -234,8 +234,8 @@ on the server and loads the Web Component after mounting in the browser.
 ## Analytics development
 
 The separate, unpublished `@chunkify/analytics` workspace can monitor
-a plain `<video>` or `<chunkify-player>`. It emits playback records to an
-application callback; it does not send data to Chunkify or a destination service.
+`<video>`, `<chunkify-player>`, and supported third-party players. It sends
+playback records to destinations chosen by the application, not to Chunkify.
 See [the analytics package README](packages/analytics/README.md) for the
 current API and limits.
 

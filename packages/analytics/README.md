@@ -1,6 +1,8 @@
 # @chunkify/analytics
 
-Standalone playback analytics for a `<video>` element or Chunkify Player. The package is not published yet. It has no runtime dependency on `@chunkify/player` and does not store viewer data. Each event goes to the destinations supplied by the application.
+Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. The package is not published yet. It has no runtime dependency on `@chunkify/player` and does not send data to Chunkify. Each event goes to the destinations supplied by the application.
+
+## Monitor a video element or Chunkify Player
 
 ```ts
 import { monitor } from "@chunkify/analytics";
@@ -39,6 +41,12 @@ session.destroy();
 
 When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
 
+## Monitor third-party players
+
+Use the connector for the player's public media API. All connectors take the same analytics options and return a session with `destroy()`.
+
+### hls.js
+
 For a separate player that gives you its `Hls` instance, use the optional hls.js adapter. This example assumes the page has a `<video controls>` element. The adapter follows that element once hls.js attaches it:
 
 ```ts
@@ -58,15 +66,24 @@ hls.loadSource("https://example.com/video.m3u8");
 // When finished, call session.destroy() and hls.destroy().
 ```
 
+### Video.js 10
+
 For Video.js 10 HLS media (`<hls-video>`, `<hlsjs-video>`, or `<native-hls-video>`), pass the media element to `monitorVideoJs()`, not the outer `<video-player>`. The collector reads standard playback events from the element. With `<hlsjs-video>` using MSE, it also reads rendition and request metrics from the element's public hls.js `engine`. Native HLS and the lightweight `<hls-video>` expose fewer engine metrics, so those values remain null. For a plain `<video>` inside Video.js 10, use `monitor(video, options)`:
+
+```html
+<video-player>
+  <video-skin style="display: block; width: 100%; aspect-ratio: 16 / 9">
+    <hlsjs-video src="/video.m3u8"></hlsjs-video>
+  </video-skin>
+</video-player>
+```
 
 ```ts
 import "@videojs/html/video/player";
-import "@videojs/html/ui/container";
+import "@videojs/html/video/skin";
 import "@videojs/html/media/hlsjs-video";
 import { monitorVideoJs } from "@chunkify/analytics";
 
-// HTML: <video-player><media-container><hlsjs-video id="media" src="video.m3u8"></hlsjs-video></media-container></video-player>
 const media = document.querySelector("hlsjs-video")!;
 const session = monitorVideoJs(media, {
   videoId: "video_123",
@@ -75,12 +92,17 @@ const session = monitorVideoJs(media, {
 // Call session.destroy() when the media element is removed.
 ```
 
-For Shaka Player, attach the media element first, then call `monitorShaka()` before `load()`. The connector starts each view on Shaka's `loading` event and enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
+This integration targets the [Video.js 10 HTML API](https://videojs.org/docs/framework/html/guides/architecture), which is currently a release candidate. It does not target Video.js 8. Video.js also defines an `<hls-video>` tag; that is different from the `hls-video-element` used by Chunkify Player. Use `monitor()` for `<chunkify-player>`.
+
+### Shaka Player
+
+For Shaka Player, use a page with `<video controls>`, attach Shaka to it, then call `monitorShaka()` before `load()`. The connector starts each view on Shaka's `loading` event and enables Shaka's quality observer so it can measure playing time by video rendition at the playhead. It also counts completed network downloads, response bytes, download time, and critical error codes. It discards request URLs and response bodies. Cached responses are excluded from the delivery totals:
 
 ```ts
 import shaka from "shaka-player";
 import { monitorShaka } from "@chunkify/analytics";
 
+shaka.polyfill.installAll();
 const video = document.querySelector("video")!;
 const player = new shaka.Player();
 await player.attach(video);
@@ -89,13 +111,22 @@ const session = monitorShaka(player, {
   destinations: [{ send: (event) => console.log(event) }],
 });
 await player.load("https://example.com/video.m3u8");
-await video.play();
+// The viewer can now use the video's controls.
 
 // Call session.destroy() before player.destroy().
 ```
 
 Shaka's `unloading` event ends the current view on a source change; its next `loading` event starts a fresh view. Call `session.sourceChanged()` yourself if you replace the source outside Shaka. The quality observer must be enabled before Shaka loads content; creating the session after `load()` may leave rendition playing time unavailable until the next load. `session.destroy()` restores the prior quality-observer setting if monitoring enabled it.
 Shaka may reject `player.load()` without dispatching an `error` event. Handle that promise rejection in your application; only Shaka's emitted critical errors become `playback_error` records.
+See [Shaka's setup guide](https://github.com/shaka-project/shaka-player/blob/main/docs/tutorials/basic-usage.md) for browser support, polyfills, and player setup.
+
+### Check Video.js and Shaka locally
+
+Run `npm run build` and `npm run serve` in this repository, then use `http://127.0.0.1:4173/tests/fixtures/media/master.m3u8` as the HLS source in either example above. Serve your test page from the same `127.0.0.1:4173` origin, or configure CORS if it runs on another origin. Do not open it as a `file://` URL. The test page also needs Video.js 10 with its hls.js media package, or `shaka-player`, installed and loaded.
+
+Keep the console destination in the examples, play the video, seek, then stop or destroy the session. Look for `chunkify.video.view_started` and `chunkify.video.view_ended` with the same `view_id` and increasing `sequence`. Set `snapshotIntervalMs: 1000` to see snapshots after one second of active playback. For Video.js `<hlsjs-video>` and Shaka, inspect `selected_rendition_height`, `rendition_playing_time`, and `delivery_request_count` in a later snapshot or final event. The fixture has only one rendition, so test rendition switches with a multi-rendition manifest. An unavailable engine measurement is `null`.
+
+## Events and metrics
 
 Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
 
@@ -124,12 +155,13 @@ For hls.js or Shaka playback, `rendition_playing_time` contains cumulative wall-
 
 `videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
 
-Destinations keep collection separate from delivery. You can provide a custom destination, or use the included Datadog, PostHog, HTTP, and OTLP adapters. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+## Map event fields
 
 Use `createEventMapper()` when a destination needs different field names or values. Each output field names a source event field or calculates a value from the event. The mapper returns a new object and leaves the original event unchanged:
 
 ```ts
 import { createEventMapper, monitor } from "@chunkify/analytics";
+import { createHttpAdapter } from "@chunkify/analytics/http";
 
 const mapForEndpoint = createEventMapper({
   videoId: "video_id",
@@ -140,11 +172,17 @@ const mapForEndpoint = createEventMapper({
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [{ send: (event) => myClient.send(mapForEndpoint(event)) }],
+  destinations: [createHttpAdapter("/api/video-analytics", mapForEndpoint)],
 });
 ```
 
-The mapping runs for each event passed to the destination. For destinations that accept the Chunkify event directly, pass `event` without a mapper. Mapping does not alter collection, event selection, or snapshot timing.
+The mapping runs for each event passed to the destination. For destinations that accept the Chunkify event directly, omit the mapper. Mapping does not alter collection, event selection, or snapshot timing. Use `includeEvents` to select event types and `snapshotIntervalMs` to set snapshot cadence.
+
+## Send events to a destination
+
+Destinations keep collection separate from delivery. You can use an included adapter or supply any object with `send(event)`. Every sampled event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+
+### Datadog RUM
 
 An initialized Datadog RUM client can be passed to the Datadog adapter. It adds one custom action per analytics event, with the full event in its `chunkify` context by default. Pass a mapper as the second argument to choose the action's context; it runs once for each event. For example, this puts two fields directly in the Datadog context:
 
@@ -163,6 +201,8 @@ monitor(video, {
 
 Without a mapper, use `createDatadogAdapter(datadogRum)`. The mapper creates the payload for each action from the current event; it is not a fixed payload supplied at setup time. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
 
+### PostHog
+
 The PostHog adapter accepts an initialized `posthog-js` client. It captures one event per analytics record, with the event's fields as flat PostHog properties. As with Datadog, its optional second argument maps the properties for each event:
 
 ```ts
@@ -176,22 +216,7 @@ monitor(video, {
 
 The application initializes PostHog and controls its automatic collection and persistence settings. PostHog may add its own event properties, including page context, beyond the fields sent by this adapter; configure the PostHog SDK separately to meet your privacy requirements.
 
-The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
-
-```ts
-import { createDatadogAdapter } from "@chunkify/analytics/datadog";
-import { createHttpAdapter } from "@chunkify/analytics/http";
-
-monitor(video, {
-  videoId: "video_123",
-  destinations: [
-    createDatadogAdapter(datadogRum),
-    createHttpAdapter("/api/video-analytics", mapForEndpoint),
-  ],
-});
-```
-
-The application should call `destroy()` when it no longer needs the session. The hls.js adapter removes its listeners but does not destroy the application's HLS engine.
+### OTLP/HTTP logs
 
 The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter sends no cookies or authorization headers. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Pass a mapper as the second argument to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
 
@@ -209,5 +234,31 @@ const attributes = createEventMapper({
 monitor(video, {
   videoId: "video_123",
   destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs", attributes)],
+});
+```
+
+This adapter emits OTLP **logs**, not OTLP metrics. Your gateway or provider handles storage and aggregation.
+
+### HTTP endpoint
+
+The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
+
+```ts
+import { createHttpAdapter } from "@chunkify/analytics/http";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [createHttpAdapter("/api/video-analytics")],
+});
+```
+
+### Custom destination
+
+No adapter is needed when you want the normalized event as-is. A destination can inspect it, map it, or pass it to your own client:
+
+```ts
+monitor(video, {
+  videoId: "video_123",
+  destinations: [{ send(event) { console.log(event); } }],
 });
 ```
