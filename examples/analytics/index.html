@@ -55,11 +55,20 @@
       </label>
       <label>Playback analytics destination
         <select name="destination">
+          <option value="local">This page only</option>
           <option value="posthog">PostHog</option>
           <option value="datadog">Datadog RUM</option>
-          <option value="local">This page only</option>
         </select>
       </label>
+      <div id="posthog-config" hidden>
+        <label>PostHog project key <input name="posthogKey" autocomplete="off" /></label>
+        <label>PostHog host <input name="posthogHost" value="https://us.i.posthog.com" /></label>
+      </div>
+      <div id="datadog-config" hidden>
+        <label>Datadog application ID <input name="datadogApplicationId" autocomplete="off" /></label>
+        <label>Datadog client token <input name="datadogClientToken" autocomplete="off" /></label>
+        <label>Datadog site <input name="datadogSite" value="datadoghq.eu" /></label>
+      </div>
       <div class="actions">
         <button type="submit">Load and monitor</button>
         <button id="play" type="button" disabled>Play</button>
@@ -75,7 +84,7 @@
       import "@chunkify/player";
       import Hls from "hls.js";
       import posthog from "posthog-js";
-      import { monitor, monitorShaka, createEventMapper } from "@chunkify/analytics";
+      import { monitor, monitorShaka } from "@chunkify/analytics";
       import { createDatadogAdapter } from "@chunkify/analytics/datadog";
       import { createPostHogAdapter } from "@chunkify/analytics/posthog";
       import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
@@ -88,6 +97,11 @@
       const destinationStatus = document.querySelector("#destination-status");
       const playButton = document.querySelector("#play");
       const stopButton = document.querySelector("#stop");
+      const destinationSelect = form.elements.destination;
+      destinationSelect.addEventListener("change", () => {
+        document.querySelector("#posthog-config").hidden = destinationSelect.value !== "posthog";
+        document.querySelector("#datadog-config").hidden = destinationSelect.value !== "datadog";
+      });
       let datadog = null;
       let session = null;
       let hls = null;
@@ -121,8 +135,9 @@
         return frame.contentWindow.startVideoJs(new URL(source, location.href).href, options);
       }
 
-      async function startDatadog() {
+      async function startDatadog({ datadogApplicationId, datadogClientToken, datadogSite }) {
         if (datadogReady) return;
+        if (!datadogApplicationId || !datadogClientToken) throw new Error("Enter the Datadog application ID and client token.");
         if (!window.DD_RUM) {
           await new Promise((resolve, reject) => {
             const script = document.createElement("script");
@@ -135,9 +150,9 @@
         datadog = window.DD_RUM;
         if (!datadog) throw new Error("Datadog RUM script is unavailable.");
         datadog.init({
-          applicationId: "b65dca89-f22d-4f25-95f1-bf6f62b646dd",
-          clientToken: "pubf0a504fd2017ccdf38e3255effa3efc6",
-          site: "datadoghq.eu",
+          applicationId: datadogApplicationId,
+          clientToken: datadogClientToken,
+          site: datadogSite,
           service: "chunkify-player-analytics-test",
           env: "local",
           version: "0.0.0",
@@ -150,10 +165,11 @@
         datadogReady = true;
       }
 
-      function startPostHog() {
+      function startPostHog({ posthogKey, posthogHost }) {
         if (posthogReady) return;
-        posthog.init("phc_yokjUQmESwbrqG45fFHRApy8VXr65YZjX5ABKEyZf9Qg", {
-          api_host: "https://us.i.posthog.com",
+        if (!posthogKey) throw new Error("Enter the PostHog project key.");
+        posthog.init(posthogKey, {
+          api_host: posthogHost,
           defaults: "2026-05-30",
           autocapture: false,
           capture_pageview: false,
@@ -190,13 +206,6 @@
         await oldShakaPlayer?.destroy();
       }
 
-      const mapEvent = createEventMapper({
-        videoId: "video_id",
-        eventType: "event_name",
-        viewId: "view_id",
-        playingTimeMs: "playing_time_ms",
-      });
-
       function record(event) {
         count++;
         eventCount.textContent = String(count);
@@ -204,7 +213,7 @@
         const title = document.createElement("summary");
         title.textContent = `${count}. ${event.event_name} (${event.video_id})`;
         const payload = document.createElement("pre");
-        payload.textContent = JSON.stringify(mapEvent(event), null, 2);
+        payload.textContent = JSON.stringify(event, null, 2);
         item.append(title, payload);
         eventList.prepend(item);
       }
@@ -222,15 +231,15 @@
         }
       }
 
-      async function destinationsFor(choice) {
+      async function destinationsFor(choice, config) {
         if (choice === "posthog") {
-          startPostHog();
+          startPostHog(config);
           destinationStatus.textContent = "Sending playback events to PostHog.";
-          return [{ send: record }, createPostHogAdapter(posthog, mapEvent)];
+          return [{ send: record }, createPostHogAdapter(posthog)];
         }
         if (choice === "datadog") {
           destinationStatus.textContent = "Loading Datadog RUM...";
-          await startDatadog();
+          await startDatadog(config);
           destinationStatus.textContent = "Sending playback events to Datadog RUM.";
           return [{ send: record }, createDatadogAdapter(datadog), { send: sendRenditions }];
         }
@@ -245,10 +254,11 @@
         count = 0;
         eventCount.textContent = "0";
 
-        const { videoId, source, mode, destination } = Object.fromEntries(new FormData(form));
+        const config = Object.fromEntries(new FormData(form));
+        const { videoId, source, mode, destination } = config;
         const sourceUrl = source.trim();
         try {
-          const options = { videoId: videoId.trim(), destinations: await destinationsFor(destination) };
+          const options = { videoId: videoId.trim(), destinations: await destinationsFor(destination, config) };
           if (mode === "player") {
             const player = document.createElement("chunkify-player");
             player.setAttribute("controls", "");
