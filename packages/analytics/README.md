@@ -142,12 +142,6 @@ Shaka's `unloading` event ends the current view on a source change; its next `lo
 Shaka may reject `player.load()` without dispatching an `error` event. Handle that promise rejection in your application; only Shaka's emitted critical errors become `playback_error` records.
 See [Shaka's setup guide](https://github.com/shaka-project/shaka-player/blob/main/docs/tutorials/basic-usage.md) for browser support, polyfills, and player setup.
 
-### Check Video.js and Shaka locally
-
-Run `npm run build` and `npm run serve` in this repository, then use `http://127.0.0.1:4173/tests/fixtures/media/master.m3u8` as the HLS source in either example above. Serve your test page from the same `127.0.0.1:4173` origin, or configure CORS if it runs on another origin. Do not open it as a `file://` URL. The test page also needs Video.js 10 with its hls.js media package, or `shaka-player`, installed and loaded.
-
-Keep the console destination in the examples, play the video, seek, then stop or destroy the session. Look for `chunkify.video.view_started` and `chunkify.video.view_ended` with the same `view_id` and increasing `sequence`. Set `snapshotIntervalMs: 1000` to see snapshots after one second of active playback. For Video.js `<hlsjs-video>` and Shaka, inspect `selected_rendition_height`, `rendition_playing_time`, and `delivery_request_count` in a later snapshot or final event. The fixture has only one rendition, so test rendition switches with a multi-rendition manifest. An unavailable engine measurement is `null`.
-
 ## Events and metrics
 
 Every raw event has the same fields. The four event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, and `chunkify.video.view_ended`. Snapshots contain cumulative measurements for one `view_id`, normally after each 30 seconds of active playing time. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
