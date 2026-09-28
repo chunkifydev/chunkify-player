@@ -128,17 +128,99 @@ Keep the console destination in the examples, play the video, seek, then stop or
 
 ## Events and metrics
 
-Attach before playback begins. The collector listens for media events and emits `view_started`, cumulative `view_snapshot` records after each 30 seconds of playing time, `playback_error`, and `view_ended`. Records include startup time, playing and buffering time, seeks, furthest playhead progress, and browser frame counters when available. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional.
+Every raw event has the same fields. The four event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, and `chunkify.video.view_ended`. Snapshots contain cumulative measurements for one `view_id`, normally after each 30 seconds of active playing time. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
 
-The final `view_ended` record has `startup_outcome`: `started` after a `playing` event, `failed_before_start` after a fatal error before playback, or `ended_before_start` if the attempt ended without either. Other records have `startup_outcome: null`. Ending before start does not imply that the viewer chose to leave.
+### Complete event example
 
-`startup_time_ms` measures from the attempt to the first `playing` event. `first_video_frame_time_ms` measures from the attempt until `requestVideoFrameCallback()` reports a video frame sent for composition. A preloaded frame can make this earlier than `startup_time_ms`. It is `null` if the API is unavailable or no frame is observed before the view ends. The callback may run after composition, so this is not the exact display time or proof the viewer saw the frame.
+This complete `view_ended` event is based on local Shaka HLS playback. The video ID and timings are illustrative. It is the **raw Chunkify event** passed to `send(event)`; an adapter or mapper can reshape it for a destination.
 
-Schema version 4 puts measurements directly on each event, alongside `video_id`, `view_id`, and the other event fields. For example, read `event.startup_time_ms` and `event.rebuffer_count`; there is no `event.metrics` object. The former `completion_ratio` field is now `furthest_progress_ratio`: the highest playhead position divided by media duration, capped at 1. Seeking near the end raises this value even without watching that part of the video, so it is not a percentage watched.
+```json
+{
+  "schema_version": 4,
+  "event_name": "chunkify.video.view_ended",
+  "event_id": "e306e4f5-14ee-4c62-aaa9-8a89f8544c53",
+  "sequence": 8,
+  "occurred_at": "2026-09-28T07:30:03.784Z",
+  "view_id": "eae1c766-3c69-4aaa-9cee-b5be62f05437",
+  "video_id": "video_123",
+  "sdk_name": "@chunkify/analytics",
+  "sdk_version": "0.0.0",
+  "connector_name": "shaka-player",
+  "connector_version": "v5.2.12",
+  "player_name": "shaka-player",
+  "player_version": "v5.2.12",
+  "delivery_hostname": null,
+  "environment": null,
+  "viewer_id": null,
+  "reason": "ended",
+  "startup_outcome": "started",
+  "error_category": null,
+  "error_code": null,
+  "error_fatal": null,
+  "error_playhead_seconds": null,
+  "media_duration_seconds": 6.021333,
+  "startup_time_ms": 192,
+  "first_video_frame_time_ms": 208,
+  "playing_time_ms": 6089,
+  "rebuffer_count": 0,
+  "rebuffer_duration_ms": 0,
+  "rebuffer_ratio": 0,
+  "seek_count": 0,
+  "seek_duration_ms": 0,
+  "maximum_playhead_seconds": 6.021333,
+  "furthest_progress_ratio": 1,
+  "video_intrinsic_width_css_px": 256,
+  "video_intrinsic_height_css_px": 144,
+  "dropped_video_frames": 0,
+  "total_video_frames": 72,
+  "selected_rendition_width": 256,
+  "selected_rendition_height": 144,
+  "selected_rendition_codec": "avc1.42E01E,mp4a.40.2",
+  "selected_rendition_bitrate_bps": 250000,
+  "rendition_switch_count": 0,
+  "delivery_request_count": 7,
+  "delivery_transferred_bytes": 190278,
+  "delivery_throughput_bps": 76111200,
+  "rendition_playing_time": [
+    {
+      "width": 256,
+      "height": 144,
+      "codec": "avc1.42E01E,mp4a.40.2",
+      "bitrate_bps": 250000,
+      "frame_rate": 12,
+      "playing_time_ms": 6089
+    }
+  ]
+}
+```
 
-`video_intrinsic_width_css_px` and `video_intrinsic_height_css_px` come from the underlying video's `videoWidth` and `videoHeight`, including for ordinary MP4 and native HLS when available. They are intrinsic display dimensions, not necessarily the raw encoded frame size. They remain `null` until available; the collector retains the latest valid size in a view if the browser clears it while the source is replaced. Selected rendition dimensions remain separate and require an engine connector such as hls.js or Shaka.
+### Field guide
 
-Set `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1000 to 2147483647 ms). Set `includeEvents` to choose which event types reach destinations. Both options work with `monitor()`, `monitorHlsJs()`, `monitorVideoJs()`, `monitorShaka()`, and the explicit attach functions. By default, all four event types are sent. For example:
+| Fields | Meaning |
+| --- | --- |
+| `schema_version`, `event_name`, `event_id`, `sequence`, `occurred_at` | Contract version, event type, unique event ID, sequence within this view, and UTC event time. |
+| `view_id`, `video_id` | Ephemeral playback-attempt ID and the `videoId` supplied by your application. A new attempt gets a new `view_id`. |
+| `sdk_name`, `sdk_version`, `connector_name`, `connector_version`, `player_name`, `player_version` | The collector, connector, and player that produced the record. Player fields can be `null`. |
+| `delivery_hostname`, `environment`, `viewer_id` | Delivery host when available, optional application environment, and optional pseudonymous `viewerId` supplied by the application. No complete URL or viewer identity is generated. |
+| `reason`, `startup_outcome` | End reason and startup result on `view_ended`; `null` on other events. Ending before startup does not establish why the viewer left. |
+| `error_category`, `error_code`, `error_fatal`, `error_playhead_seconds` | Normalized error details on `playback_error`; otherwise `null`. Raw error messages and URLs are not included. |
+| `media_duration_seconds`, `startup_time_ms`, `first_video_frame_time_ms`, `playing_time_ms` | Media duration; time from attempt to first `playing`; time to the first frame callback; cumulative actual playing time. The two startup measurements can differ. |
+| `rebuffer_count`, `rebuffer_duration_ms`, `rebuffer_ratio`, `seek_count`, `seek_duration_ms` | Counts, cumulative durations, and rebuffer time divided by playing plus rebuffer time. The ratio is `null` until its denominator is positive. |
+| `maximum_playhead_seconds`, `furthest_progress_ratio` | Furthest playhead reached and that position divided by duration, capped at 1. Seeking near the end raises the ratio without watching the intervening video. |
+| `video_intrinsic_width_css_px`, `video_intrinsic_height_css_px`, `dropped_video_frames`, `total_video_frames` | Intrinsic display dimensions and browser frame counters when exposed. The dimensions are not necessarily encoded frame dimensions. |
+| `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
+| `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
+| `delivery_request_count`, `delivery_transferred_bytes`, `delivery_throughput_bps` | Aggregate requests, response bytes, and throughput where the engine exposes them. Throughput is in bits per second. |
+
+`videoId` can be a Chunkify asset ID or your own video ID. It appears as `video_id` in every event.
+
+`reason` can be `ended`, `destroyed`, `source_changed`, or `page_exit`. `startup_outcome` can be `started`, `failed_before_start`, or `ended_before_start`. Error categories are `aborted`, `network`, `decode`, `unsupported`, or `unknown`.
+
+`first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
+
+### Collection options
+
+All monitor functions accept `snapshotIntervalMs` to change the active playing time between snapshots (integer from 1,000 to 2,147,483,647 ms) and `includeEvents` to select which records reach destinations. All four event types are included by default:
 
 ```ts
 monitor(video, {
@@ -149,11 +231,7 @@ monitor(video, {
 });
 ```
 
-Event selection does not change collection of the final view's metrics. Excluding `view_snapshot` also skips the snapshot timer. An empty `includeEvents` array sends no records. `destinations` must contain at least one object with a `send(event)` method. The collector delivers each sampled event to every destination and isolates delivery failures.
-
-For hls.js or Shaka playback, `rendition_playing_time` contains cumulative wall-clock milliseconds for each rendition played in the view, grouped by width, height, codec, bitrate, and frame rate. It excludes pauses, buffering, and seeks; playback speed does not change the elapsed time counted. Time before the first known rendition is omitted, so the sum can be less than `playing_time_ms`. The field is `null` without a rendition-aware connector and an empty array when the connector has not identified a rendition yet. Snapshots repeat cumulative totals; consumers should use the final view record or differences between snapshots rather than summing entire snapshots. The package does not aggregate results across viewers.
-
-`videoId` identifies the video in your application. You can pass a Chunkify asset ID or your own ID. Events expose this value as `video_id`.
+Excluding `view_snapshot` stops its timer but does not stop collection of the final view's metrics. An empty `includeEvents` array sends no records. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional; if omitted, their event fields are `null`. No persistent viewer identity is created by default.
 
 ## Map event fields
 
@@ -180,7 +258,7 @@ The mapping runs for each event passed to the destination. For destinations that
 
 ## Send events to a destination
 
-Destinations keep collection separate from delivery. You can use an included adapter or supply any object with `send(event)`. Every sampled event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+Destinations keep collection separate from delivery. Provide at least one included adapter or object with `send(event)`. Every sampled event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
 
 ### Datadog RUM
 
