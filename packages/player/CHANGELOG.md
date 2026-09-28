@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.0.1...player-v1.1.0) (2026-09-28)
+
+
+### Features
+
+* add standalone telemetry integration for player media ([e4f5184](https://github.com/chunkifydev/chunkify-player/commit/e4f5184aac13a2c52a1b50a74206700c980fe27f))
+
 ## [1.0.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.0.0...player-v1.0.1) (2026-09-22)
 
 
