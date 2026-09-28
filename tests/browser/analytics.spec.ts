@@ -54,7 +54,7 @@ test("records intrinsic video size when it becomes available", async ({ page }) 
     return f.events;
   });
   expect(events[0]).toMatchObject({
-    schema_version: 4,
+    schema_version: 1,
     video_intrinsic_width_css_px: null, video_intrinsic_height_css_px: null,
   });
   expect(events[1]).toMatchObject({
@@ -868,7 +868,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   expect(events).toHaveLength(2);
   for (const event of events) {
     expect(event).toMatchObject({
-      schema_version: 4, video_id: "asset-private", delivery_hostname: "media.example.test",
+      schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test",
       sdk_name: "@chunkify/analytics", sdk_version: "0.0.0",
       connector_name: "html-media", connector_version: "0.0.0",
       player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",

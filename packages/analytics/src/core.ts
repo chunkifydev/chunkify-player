@@ -44,7 +44,7 @@ export interface ViewMetrics {
   delivery_throughput_bps: number | null;
 }
 export interface ChunkifyPlayerAnalyticsEvent extends ViewMetrics {
-  schema_version: 4;
+  schema_version: 1;
   event_name: `chunkify.video.${AnalyticsEventType}`;
   event_id: string;
   sequence: number;
@@ -405,7 +405,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     }
     refreshIntrinsicVideoSize(current);
     const event: ChunkifyPlayerAnalyticsEvent = {
-      schema_version: 4, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
+      schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,

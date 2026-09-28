@@ -142,7 +142,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 1,
   "event_name": "chunkify.video.view_ended",
   "event_id": "06581e06-96d7-421c-b77b-22a6e615c97e",
   "sequence": 2,

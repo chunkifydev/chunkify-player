@@ -31,7 +31,7 @@ const config: AnalyticsConfig = {
     const outcome: AnalyticsStartupOutcome | null = record.startup_outcome;
     void startup; void firstFrame; void buffering; void progress; void videoWidth;
     void snapshot; void frames; void category; void outcome;
-    // @ts-expect-error Measurements are top-level in schema version 4.
+    // @ts-expect-error Measurements are top-level in the event contract.
     record.metrics;
     // @ts-expect-error Payloads do not contain raw URLs.
     record.src;
