@@ -1023,7 +1023,7 @@ test("real video playback records source replacement, replay and cleanup without
 });
 
 test("an immediate attempt with a source child remains one view while its URL is selected", async ({ page }) => {
-  await page.evaluate(async () => {
+  await page.evaluate(() => {
     const f = window.analyticsFixture;
     f.video.preload = "none";
     const source = document.createElement("source");
@@ -1031,7 +1031,10 @@ test("an immediate attempt with a source child remains one view while its URL is
     f.video.append(source);
     f.session = f.attachAnalytics(f.video, { videoId: "asset-source", destinations: [{ send: (event) => { f.events.push(event); } }] });
     f.session.startAttempt();
-    await f.video.play();
+    // Select the child source without waiting for browser-specific media decoding.
+    Object.defineProperty(f.video, "currentSrc", { configurable: true, value: source.src });
+    f.video.dispatchEvent(new Event("loadstart"));
+    f.video.dispatchEvent(new Event("playing"));
     f.session.destroy();
   });
   const events = await page.evaluate(() => window.analyticsFixture.events);
