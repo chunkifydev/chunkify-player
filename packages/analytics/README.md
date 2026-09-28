@@ -2,40 +2,46 @@
 
 Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. The package is not published yet. It has no runtime dependency on `@chunkify/player` and does not send data to Chunkify. Each event goes to the destinations supplied by the application.
 
-## Monitor a video element or Chunkify Player
+## Monitor Chunkify Player or a video element
 
-```ts
-import { monitor } from "@chunkify/analytics";
+Add the player to your page:
 
-const video = document.querySelector("video")!;
-const session = monitor(video, {
-  videoId: "video_123",
-  destinations: [{ send: (event) => console.log(event) }],
-});
-
-// Call before programmatic play() to count attempts that reject without a play event.
-session.startAttempt();
-await video.play();
-
-// Call when removing the video or disabling analytics.
-session.destroy();
+```html
+<chunkify-player id="player" controls src="https://example.com/video.m3u8"></chunkify-player>
 ```
 
-The same function accepts Chunkify Player. Import the player first so its custom element is registered:
+Replace the example URL with your playback URL. In your application JavaScript, register the component and start monitoring it:
 
-```ts
+```js
 import "@chunkify/player";
 import { monitor } from "@chunkify/analytics";
 
-const player = document.querySelector("chunkify-player")!;
+const player = document.querySelector("#player");
 const session = monitor(player, {
   videoId: "video_123",
   destinations: [{ send: (event) => console.log(event) }],
 });
-
-// Call when the application removes the player or disables analytics.
-session.destroy();
 ```
+
+Call `session.destroy()` when the application removes the player or stops monitoring it.
+
+The same function also accepts a native video element without importing `@chunkify/player`:
+
+```html
+<video id="video" controls src="https://example.com/video.mp4"></video>
+```
+
+```js
+import { monitor } from "@chunkify/analytics";
+
+const video = document.querySelector("#video");
+const session = monitor(video, {
+  videoId: "video_123",
+  destinations: [{ send: (event) => console.log(event) }],
+});
+```
+
+Call `session.startAttempt()` before an application-initiated `video.play()` to count attempts that reject without a play event. Call `session.destroy()` when removing the video or disabling analytics.
 
 `monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use.
 
@@ -272,13 +278,14 @@ The mapping runs for each event passed to the destination. For destinations that
 
 ## Send events to a destination
 
-Destinations keep collection separate from delivery. Provide at least one included adapter or object with `send(event)`. Every sampled event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages.
+Destinations keep collection separate from delivery. Provide at least one included adapter or object with `send(event)`. Every sampled event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
 
 ### Datadog RUM
 
 Install `@datadog/browser-rum` in your application. Initialize it with your RUM application ID and **client token** (not a Datadog API key), then pass the client to the adapter. The adapter adds one custom action per analytics event, with the event fields directly in the action context by default:
 
-```ts
+```js
+import "@chunkify/player";
 import { datadogRum } from "@datadog/browser-rum";
 import { monitor } from "@chunkify/analytics";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
@@ -289,7 +296,7 @@ datadogRum.init({
   site: "datadoghq.com", // Use your organization's Datadog site.
 });
 
-monitor(document.querySelector("video")!, {
+monitor(document.querySelector("#player"), {
   videoId: "video_123",
   destinations: [createDatadogAdapter(datadogRum)],
 });
@@ -301,7 +308,8 @@ Pass a mapper as the second argument to choose or rename context fields; it runs
 
 Install `posthog-js` in your application. Initialize it with your project token and ingestion host, then pass it to the adapter. The adapter captures one event per analytics record, with the event's fields as flat PostHog properties. Its optional second argument maps the properties for each event:
 
-```ts
+```js
+import "@chunkify/player";
 import posthog from "posthog-js";
 import { monitor } from "@chunkify/analytics";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
@@ -310,7 +318,7 @@ posthog.init("YOUR_POSTHOG_PROJECT_TOKEN", {
   api_host: "https://us.i.posthog.com", // Use your project's ingestion host.
 });
 
-monitor(document.querySelector("video")!, {
+monitor(document.querySelector("#player"), {
   videoId: "video_123",
   destinations: [createPostHogAdapter(posthog)],
 });
