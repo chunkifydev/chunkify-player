@@ -408,88 +408,6 @@ test("excluding snapshots retains a final view", async ({ page }) => {
   expect(events[0]).toMatchObject({ sequence: 1, playing_time_ms: 3000 });
 });
 
-test("sampling keeps a complete selected view and makes a fresh decision for replay", async ({ page }) => {
-  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
-  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
-  await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    const state = window as typeof window & { restoreRandom: () => void };
-    const decisions = [0.25, 0.75];
-    const originalRandom = Math.random;
-    state.restoreRandom = () => { Math.random = originalRandom; };
-    Math.random = () => decisions.shift() ?? 1;
-    f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-sampled", sampleRate: 0.5,
-      destinations: [{ send: (event) => { f.events.push(event); } }],
-    });
-    f.video.dispatchEvent(new Event("play"));
-    f.video.dispatchEvent(new Event("playing"));
-  });
-  await page.clock.runFor(30000);
-  await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    f.video.dispatchEvent(new Event("error"));
-    f.video.dispatchEvent(new Event("ended"));
-    f.video.dispatchEvent(new Event("play"));
-    f.video.dispatchEvent(new Event("playing"));
-  });
-  await page.clock.runFor(60000);
-  const events = await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    f.video.dispatchEvent(new Event("error"));
-    f.video.dispatchEvent(new Event("ended"));
-    f.session!.destroy();
-    (window as typeof window & { restoreRandom: () => void }).restoreRandom();
-    return f.events;
-  });
-  expect(events.map((event) => event.event_name)).toEqual([
-    "chunkify.video.view_started",
-    "chunkify.video.view_snapshot",
-    "chunkify.video.playback_error",
-    "chunkify.video.view_ended",
-  ]);
-  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
-  expect(new Set(events.map((event) => event.view_id)).size).toBe(1);
-});
-
-test("sample rates zero and one do not require a random decision", async ({ page }) => {
-  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
-  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
-  await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    const state = window as typeof window & { restoreRandom: () => void };
-    const originalRandom = Math.random;
-    state.restoreRandom = () => { Math.random = originalRandom; };
-    Math.random = () => { throw new Error("sampling should not need randomness"); };
-    f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-none", sampleRate: 0,
-      destinations: [{ send: (event) => { f.events.push(event); } }],
-    });
-    f.video.dispatchEvent(new Event("play"));
-    f.video.dispatchEvent(new Event("playing"));
-  });
-  await page.clock.runFor(60000);
-  const result = await page.evaluate(() => {
-    const f = window.analyticsFixture;
-    f.video.dispatchEvent(new Event("error"));
-    f.video.dispatchEvent(new Event("ended"));
-    f.session!.destroy();
-    const excludedCount = f.events.length;
-    f.session = f.attachAnalytics(f.video, {
-      videoId: "asset-all", sampleRate: 1,
-      destinations: [{ send: (event) => { f.events.push(event); } }],
-    });
-    f.session.startAttempt();
-    f.session.destroy();
-    (window as typeof window & { restoreRandom: () => void }).restoreRandom();
-    return { excludedCount, events: f.events };
-  });
-  expect(result.excludedCount).toBe(0);
-  expect(result.events.map((event) => event.event_name)).toEqual([
-    "chunkify.video.view_started", "chunkify.video.view_ended",
-  ]);
-});
-
 test("a media error stops an unfinished seek measurement", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -956,7 +874,6 @@ test("invalid configuration fails before installing listeners or calling a desti
     for (const invalid of [{ videoId: "" }, { videoId: "  " }, { destinations: null },
       { destinations: [] }, { destinations: [null] }, { destinations: [{ send: null }] },
       { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } },
-      { sampleRate: -0.1 }, { sampleRate: 1.1 }, { sampleRate: NaN }, { sampleRate: "1" }, { sampleRate: Infinity },
       { snapshotIntervalMs: 0 }, { snapshotIntervalMs: 999 }, { snapshotIntervalMs: 1500.5 },
       { snapshotIntervalMs: Infinity }, { snapshotIntervalMs: Number.MAX_SAFE_INTEGER },
       { snapshotIntervalMs: "10000" },
@@ -971,7 +888,7 @@ test("invalid configuration fails before installing listeners or calling a desti
     f.video.dispatchEvent(new Event("play"));
     return { failures, events: f.events };
   });
-  expect(result).toEqual({ failures: Array(21).fill(true), events: [] });
+  expect(result).toEqual({ failures: Array(16).fill(true), events: [] });
 });
 
 test("real video playback records source replacement, replay and cleanup without loading an engine or transport", async ({ page }) => {

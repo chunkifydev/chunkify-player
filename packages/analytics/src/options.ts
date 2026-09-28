@@ -16,10 +16,6 @@ export function assertAnalyticsOptions(options: AnalyticsOptions): void {
       (options.viewerId !== undefined && typeof options.viewerId !== "string")) {
     throw new TypeError("Analytics environment and viewerId must be strings when provided.");
   }
-  if (options.sampleRate !== undefined &&
-      (!Number.isFinite(options.sampleRate) || options.sampleRate < 0 || options.sampleRate > 1)) {
-    throw new TypeError("Analytics sampleRate must be a finite number from 0 to 1.");
-  }
   if (options.snapshotIntervalMs !== undefined &&
       (!Number.isSafeInteger(options.snapshotIntervalMs) || options.snapshotIntervalMs < 1000 ||
        options.snapshotIntervalMs > 2_147_483_647)) {

@@ -74,7 +74,6 @@ export interface AnalyticsConfig {
   destinations: readonly AnalyticsDestination[];
   environment?: string | undefined;
   viewerId?: string | undefined;
-  sampleRate?: number | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
   /** Event types passed to destinations. Defaults to all four types. */
@@ -147,7 +146,6 @@ interface View {
   frameBaseline: FrameCounts | null;
   framePrevious: FrameCounts | null;
   frameMetricsValid: boolean;
-  sampled: boolean;
   connectorBaseline: AnalyticsConnectorSnapshot | null;
   renditionTrackingAvailable: boolean;
   renditionTimes: Map<string, RenditionPlayingTime>;
@@ -310,7 +308,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   assertAnalyticsOptions(options);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
-  const { videoId, environment = null, viewerId = null, sampleRate = 1, snapshotIntervalMs = 30000 } = options;
+  const { videoId, environment = null, viewerId = null, snapshotIntervalMs = 30000 } = options;
   const destinations = [...options.destinations];
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
     .map((event) => `chunkify.video.${event}`));
@@ -377,7 +375,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
 
   function emit(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"], reason: AnalyticsEndReason | null = null,
     error: NormalizedError | null = null) {
-    if (!current.sampled || !includedEvents.has(event_name)) return;
+    if (!includedEvents.has(event_name)) return;
     const now = performance.now();
     const playingTime = current.playing + (current.playingSince === null ? 0 : now - current.playingSince);
     const rebufferDuration = current.rebufferDuration + (current.rebufferSince === null ? 0 : now - current.rebufferSince);
@@ -450,7 +448,6 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     if (view) return;
     const initialFrames = frameCounts(media);
     const initialVideoSize = intrinsicVideoSize(media);
-    const sampled = sampleRate === 1 || (sampleRate > 0 && Math.random() < sampleRate);
     const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt: performance.now(),
       startup: null, firstVideoFrame: null, frameCallbackId: null,
       playing: 0, playingSince: null,
@@ -465,12 +462,12 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       resourceStarted: media.readyState > 0 || media.networkState === 1 || media.networkState === 2,
       errorEmitted: false, fatalErrorBeforeStart: false,
       frameBaseline: initialFrames, framePrevious: initialFrames,
-      frameMetricsValid: initialFrames !== null, sampled,
+      frameMetricsValid: initialFrames !== null,
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
       renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null };
     view = current;
-    if (sampled && includedEvents.size > 0) observeFirstVideoFrame(current);
+    if (includedEvents.size > 0) observeFirstVideoFrame(current);
     emit(current, "chunkify.video.view_started");
     if (view !== current) return;
     if (media.error) reportMediaError();
@@ -564,7 +561,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     }
   }
   function scheduleSnapshot() {
-    if (!view || !view.sampled || !includedEvents.has("chunkify.video.view_snapshot") || snapshotTimer !== null) return;
+    if (!view || !includedEvents.has("chunkify.video.view_snapshot") || snapshotTimer !== null) return;
     const playingSince = view.playingSince;
     if (playingSince === null) return;
     const current = view;

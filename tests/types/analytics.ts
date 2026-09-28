@@ -15,7 +15,6 @@ void mappedVideoId; void mappedPlaytime;
 
 const video = document.createElement("video");
 const config: AnalyticsConfig = {
-  sampleRate: 1,
   snapshotIntervalMs: 10000,
   includeEvents: ["view_started", "view_ended"],
   destinations: [{ async send(event) {
@@ -64,8 +63,6 @@ attachAnalytics(video, config);
 attachAnalytics(video, { videoId: "asset-types" });
 // @ts-expect-error Transport secrets are not accepted.
 attachAnalytics(video, { ...config, videoId: "asset-types", authorization: "secret" });
-// @ts-expect-error Sample rates are numeric.
-attachAnalytics(video, { ...config, videoId: "asset-types", sampleRate: "0.5" });
 // @ts-expect-error Snapshot intervals are numeric.
 attachAnalytics(video, { ...config, videoId: "asset-types", snapshotIntervalMs: "10000" });
 // @ts-expect-error Event names are from the supported set.
