@@ -8,7 +8,7 @@ bundled default control theme.
 | --- | --- |
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
-| `@chunkify/analytics` | `packages/analytics` (unpublished) |
+| `@chunkify/analytics` | `packages/analytics` |
 
 Install the Web Component package:
 
@@ -231,9 +231,9 @@ also typed. The ref exposes the Web Component and its current `media` element.
 The React entry is safe to import during server rendering. It renders nothing
 on the server and loads the Web Component after mounting in the browser.
 
-## Analytics development
+## Playback analytics
 
-The separate, unpublished `@chunkify/analytics` workspace can monitor
+The separate `@chunkify/analytics` package can monitor
 `<video>`, `<chunkify-player>`, and supported third-party players. It sends
 playback records to destinations chosen by the application, not to Chunkify.
 See [the analytics package README](packages/analytics/README.md) for the

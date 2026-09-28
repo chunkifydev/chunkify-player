@@ -1,6 +1,10 @@
 # @chunkify/analytics
 
-Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. The package is not published yet. It has no runtime dependency on `@chunkify/player` and does not send data to Chunkify. Each event goes to the destinations supplied by the application.
+Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. It has no runtime dependency on `@chunkify/player` and does not send data to Chunkify. Each event goes to the destinations supplied by the application.
+
+```sh
+npm install @chunkify/analytics
+```
 
 ## Monitor Chunkify Player or a video element
 
@@ -159,7 +163,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "view_id": "8267fd81-ecf6-4fb1-83d9-4d1fba46b1b6",
   "video_id": "video_123",
   "sdk_name": "@chunkify/analytics",
-  "sdk_version": "0.0.0",
+  "sdk_version": "0.1.0",
   "connector_name": "hls.js",
   "connector_version": "1.7.3",
   "player_name": "hls.js",

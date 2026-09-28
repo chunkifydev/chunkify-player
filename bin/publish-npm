@@ -38,12 +38,19 @@ case "$RELEASE_TAG" in
   "")
     publish_workspace "packages/player"
     publish_workspace "packages/player-react"
+    # Manual runs can happen before analytics has its first Release Please version.
+    if [[ "$(node -p "require('./packages/analytics/package.json').version")" != "0.0.0" ]]; then
+      publish_workspace "packages/analytics"
+    fi
     ;;
   player-v*)
     publish_workspace "packages/player"
     ;;
   player-react-v*)
     publish_workspace "packages/player-react"
+    ;;
+  analytics-v*)
+    publish_workspace "packages/analytics"
     ;;
   *)
     echo "Unsupported release tag: ${RELEASE_TAG}"

@@ -9,17 +9,17 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publishScript = path.join(repositoryRoot, "bin/publish-npm");
 
-async function runPublish(releaseTag) {
+async function runPublish(releaseTag, analyticsVersion = "1.0.0") {
   const directory = await mkdtemp(path.join(tmpdir(), "chunkify-publish-test-"));
   const mockBin = path.join(directory, "bin");
   const npmLog = path.join(directory, "npm.log");
   await mkdir(mockBin);
-  for (const workspace of ["player", "player-react"]) {
+  for (const workspace of ["player", "player-react", "analytics"]) {
     const packageDirectory = path.join(directory, "packages", workspace);
     await mkdir(packageDirectory, { recursive: true });
     await writeFile(path.join(packageDirectory, "package.json"), JSON.stringify({
       name: `@chunkify/${workspace}`,
-      version: "1.0.0",
+      version: workspace === "analytics" ? analyticsVersion : "1.0.0",
     }));
   }
 
@@ -58,6 +58,7 @@ test("a player release publishes only the Web Component package", async () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(npmCalls, /@chunkify\/player@1\.0\.0/);
   assert.doesNotMatch(npmCalls, /@chunkify\/player-react/);
+  assert.doesNotMatch(npmCalls, /@chunkify\/analytics/);
 });
 
 test("a React release publishes only the React package", async () => {
@@ -66,14 +67,32 @@ test("a React release publishes only the React package", async () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(npmCalls, /@chunkify\/player-react@1\.0\.0/);
   assert.doesNotMatch(npmCalls, /@chunkify\/player@1\.0\.0/);
+  assert.doesNotMatch(npmCalls, /@chunkify\/analytics/);
 });
 
-test("a manual run publishes missing versions from both packages", async () => {
+test("an analytics release publishes only the analytics package", async () => {
+  const { result, npmCalls } = await runPublish("analytics-v1.0.0");
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(npmCalls, /@chunkify\/analytics@1\.0\.0/);
+  assert.doesNotMatch(npmCalls, /@chunkify\/player@1\.0\.0/);
+  assert.doesNotMatch(npmCalls, /@chunkify\/player-react@1\.0\.0/);
+});
+
+test("a manual run publishes missing versions from all released packages", async () => {
   const { result, npmCalls } = await runPublish("");
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(npmCalls, /@chunkify\/player@1\.0\.0/);
   assert.match(npmCalls, /@chunkify\/player-react@1\.0\.0/);
+  assert.match(npmCalls, /@chunkify\/analytics@1\.0\.0/);
+});
+
+test("a manual run skips analytics before its first release", async () => {
+  const { result, npmCalls } = await runPublish("", "0.0.0");
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(npmCalls, /@chunkify\/analytics/);
 });
 
 test("an unknown release tag does not publish a package", async () => {

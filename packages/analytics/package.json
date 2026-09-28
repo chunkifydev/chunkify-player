@@ -3,6 +3,15 @@
   "version": "0.0.0",
   "description": "Standalone playback analytics for HTML media and Chunkify Player",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chunkifydev/chunkify-player.git",
+    "directory": "packages/analytics"
+  },
+  "homepage": "https://github.com/chunkifydev/chunkify-player/tree/main/packages/analytics#readme",
+  "bugs": {
+    "url": "https://github.com/chunkifydev/chunkify-player/issues"
+  },
   "type": "module",
   "files": ["dist", "src"],
   "types": "./dist/index.d.ts",
