@@ -281,7 +281,7 @@ monitor(video, {
 });
 ```
 
-The mapping runs for each event passed to the destination. A field absent from an event-specific payload is omitted from the mapped result, including when a selector returns `undefined`. For example, `playtimeSeconds` above is omitted from a rendition-change event. For destinations that accept the Chunkify event directly, omit the mapper. Mapping does not alter collection, event selection, or snapshot timing. Use `includeEvents` to select event types and `snapshotIntervalMs` to set snapshot cadence.
+The mapping runs for each event passed to the destination. A field absent from an event-specific payload is omitted from the mapped result, including when a selector returns `undefined`. For example, `playtimeSeconds` above is omitted from a rendition-change event. For destinations that accept the Chunkify event directly, omit the mapper. Mapping does not alter collection, event selection, or snapshot timing. See [Monitor options](#monitor-options) for `includeEvents` and `snapshotIntervalMs`.
 
 To map event types differently, select a mapper in the adapter. This example assumes the Datadog RUM client has already been initialized. Other events keep their original fields:
 
