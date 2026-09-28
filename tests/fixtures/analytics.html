@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Standalone analytics fixture</title></head>
+  <body>
+    <video muted playsinline></video>
+    <script type="module">
+      import { attachAnalytics } from "/packages/analytics/dist/index.js";
+      window.analyticsFixture = {
+        attachAnalytics,
+        // Existing metric tests select the original summary records explicitly.
+        attachSummaryAnalytics: (media, options) => attachAnalytics(media, {
+          ...options,
+          includeEvents: options.includeEvents ?? ["view_started", "view_snapshot", "playback_error", "view_ended"],
+        }),
+        video: document.querySelector("video"),
+        events: [],
+        session: null,
+      };
+    </script>
+  </body>
+</html>

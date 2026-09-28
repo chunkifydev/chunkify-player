@@ -56,6 +56,11 @@
     },
     "packages/player-react": {
       "component": "player-react"
+    },
+    "packages/analytics": {
+      "component": "analytics",
+      "initial-version": "0.1.0",
+      "extra-files": ["src/core.ts"]
     }
   },
   "plugins": [

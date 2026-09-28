@@ -8,6 +8,7 @@ bundled default control theme.
 | --- | --- |
 | `@chunkify/player` | `packages/player` |
 | `@chunkify/player-react` | `packages/player-react` |
+| `@chunkify/analytics` | `packages/analytics` |
 
 Install the Web Component package:
 
@@ -72,7 +73,8 @@ attribute.
 The read-only `media` property returns the active media element. Read it again
 after switching between HLS and MP4 because that change replaces the element.
 The player forwards standard media events such as `play`, `pause`, `timeupdate`,
-`ended`, and `error`.
+`ended`, and `error`. It also emits `mediachange` when it replaces the active
+media element.
 
 ## Playback access
 
@@ -229,6 +231,14 @@ also typed. The ref exposes the Web Component and its current `media` element.
 The React entry is safe to import during server rendering. It renders nothing
 on the server and loads the Web Component after mounting in the browser.
 
+## Playback analytics
+
+The separate `@chunkify/analytics` package can monitor
+`<video>`, `<chunkify-player>`, and supported third-party players. It sends
+playback records to destinations chosen by the application, not to Chunkify.
+See [the analytics package README](packages/analytics/README.md) for the
+current API and limits.
+
 ## Development
 
 Use Node.js 24 and npm 11:
@@ -250,6 +260,7 @@ npm run serve
 - `http://127.0.0.1:4173/examples/basic/`
 - `http://127.0.0.1:4173/examples/theming/`
 - `http://127.0.0.1:4173/examples/react/`
+- `http://127.0.0.1:4173/examples/analytics/`
 
 The repository uses TypeScript without Vite. Plain HTML examples use import
 maps, and esbuild only prepares the React example and test fixture.

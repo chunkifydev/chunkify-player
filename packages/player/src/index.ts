@@ -514,6 +514,7 @@ export class ChunkifyPlayer extends HTMLElement {
     }
     if (replaced || changedAttribute === undefined || changedAttribute === "src"
       || changedAttribute === "thumbnails") this.#syncTracks();
+    if (replaced) this.dispatchEvent(new Event("mediachange"));
   }
 }
 

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Video.js analytics example</title>
+    <style>
+      html, body, video-skin { width: 100%; height: 100%; margin: 0; }
+      video-skin, hlsjs-video { display: block; }
+      hlsjs-video { width: 100%; height: 100%; }
+    </style>
+    <script type="module">
+      import "../../node_modules/@videojs/cdn/video.js";
+      import "../../node_modules/@videojs/cdn/media/hlsjs-video.js";
+      import { monitorVideoJs } from "../../packages/analytics/dist/index.js";
+
+      window.startVideoJs = (source, options) => {
+        const media = document.querySelector("hlsjs-video");
+        const monitorSession = monitorVideoJs(media, options);
+        media.src = source;
+        return { media, monitorSession };
+      };
+    </script>
+  </head>
+  <body>
+    <video-player>
+      <video-skin>
+        <hlsjs-video playsinline></hlsjs-video>
+      </video-skin>
+    </video-player>
+  </body>
+</html>
