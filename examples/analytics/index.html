@@ -12,6 +12,7 @@
       .actions { display: flex; gap: 0.5rem; }
       #player-container { margin: 1rem 0; }
       #player-container > * { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+      #player-container iframe { border: 0; }
       #events { display: grid; gap: 0.5rem; }
       #events details { border: 1px solid #ccc; border-radius: 0.25rem; padding: 0.5rem; }
       #events summary { cursor: pointer; }
@@ -22,7 +23,10 @@
         "imports": {
           "@chunkify/player": "../../packages/player/dist/index.js",
           "@chunkify/analytics": "../../packages/analytics/dist/index.js",
+          "@chunkify/analytics/datadog": "../../packages/analytics/dist/datadog.js",
+          "@chunkify/analytics/posthog": "../../packages/analytics/dist/posthog.js",
           "@chunkify/analytics/hlsjs": "../../packages/analytics/dist/hlsjs.js",
+          "posthog-js": "../../node_modules/posthog-js/dist/module.no-external.js",
           "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
           "hls.js/": "../../node_modules/hls.js/",
           "hls-video-element": "../../node_modules/hls-video-element/dist/hls-video-element.js",
@@ -36,7 +40,7 @@
   </head>
   <body>
     <h1>Playback analytics</h1>
-    <p>Enter a video ID and URL, load the player, then press play. Events appear below as the callback receives them. This page does not send or store events.</p>
+    <p>Enter a video ID and URL, choose where to send playback events, then load and play the video. Events also appear below.</p>
     <form id="setup">
       <label>Video ID <input name="videoId" value="video-demo" required /></label>
       <label>Video URL <input name="source" value="../../tests/fixtures/media/master.m3u8" required /></label>
@@ -45,6 +49,15 @@
           <option value="player">Chunkify Player</option>
           <option value="video">Plain video element</option>
           <option value="hlsjs">External hls.js instance</option>
+          <option value="shaka">Shaka Player (HLS or DASH)</option>
+          <option value="videojs">Video.js 10 (HLS)</option>
+        </select>
+      </label>
+      <label>Playback analytics destination
+        <select name="destination">
+          <option value="posthog">PostHog</option>
+          <option value="datadog">Datadog RUM</option>
+          <option value="local">This page only</option>
         </select>
       </label>
       <div class="actions">
@@ -54,13 +67,17 @@
       </div>
     </form>
     <p id="status" role="status">Loading packages...</p>
+    <p id="destination-status" role="status">No destination selected yet.</p>
     <div id="player-container"></div>
     <h2>Events (<span id="event-count">0</span>)</h2>
     <div id="events" aria-live="polite"></div>
     <script type="module">
       import "@chunkify/player";
       import Hls from "hls.js";
-      import { monitor } from "@chunkify/analytics";
+      import posthog from "posthog-js";
+      import { monitor, monitorShaka, createEventMapper } from "@chunkify/analytics";
+      import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+      import { createPostHogAdapter } from "@chunkify/analytics/posthog";
       import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
 
       const form = document.querySelector("#setup");
@@ -68,23 +85,117 @@
       const eventList = document.querySelector("#events");
       const eventCount = document.querySelector("#event-count");
       const status = document.querySelector("#status");
+      const destinationStatus = document.querySelector("#destination-status");
       const playButton = document.querySelector("#play");
       const stopButton = document.querySelector("#stop");
+      let datadog = null;
       let session = null;
       let hls = null;
+      let shakaPlayer = null;
       let playbackTarget = null;
       let count = 0;
+      let datadogReady = false;
+      let posthogReady = false;
 
-      function stop() {
+      async function loadShaka() {
+        await import("../../node_modules/shaka-player/dist/shaka-player.compiled-es2021.js");
+        const shaka = window.shaka;
+        shaka.polyfill.installAll();
+        if (!shaka.Player.isBrowserSupported()) throw new Error("Shaka Player is not supported in this browser.");
+        return shaka;
+      }
+
+      async function loadVideoJs(source, options) {
+        // Video.js and Media Chrome define some of the same custom-element names.
+        const frame = document.createElement("iframe");
+        frame.title = "Video.js player";
+        frame.allow = "autoplay; fullscreen; picture-in-picture";
+        frame.src = "./videojs-frame.html";
+        const loaded = new Promise((resolve, reject) => {
+          frame.addEventListener("load", resolve, { once: true });
+          frame.addEventListener("error", () => reject(new Error("Video.js example could not load.")), { once: true });
+        });
+        container.append(frame);
+        await loaded;
+        if (typeof frame.contentWindow?.startVideoJs !== "function") throw new Error("Video.js example could not start.");
+        return frame.contentWindow.startVideoJs(new URL(source, location.href).href, options);
+      }
+
+      async function startDatadog() {
+        if (datadogReady) return;
+        if (!window.DD_RUM) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "https://www.datadoghq-browser-agent.com/eu1/v7/datadog-rum.js";
+            script.onload = resolve;
+            script.onerror = () => reject(new Error("Datadog RUM script is unavailable."));
+            document.head.append(script);
+          });
+        }
+        datadog = window.DD_RUM;
+        if (!datadog) throw new Error("Datadog RUM script is unavailable.");
+        datadog.init({
+          applicationId: "b65dca89-f22d-4f25-95f1-bf6f62b646dd",
+          clientToken: "pubf0a504fd2017ccdf38e3255effa3efc6",
+          site: "datadoghq.eu",
+          service: "chunkify-player-analytics-test",
+          env: "local",
+          version: "0.0.0",
+          sessionSampleRate: 100,
+          sessionReplaySampleRate: 0,
+          trackResources: false,
+          trackUserInteractions: false,
+          trackLongTasks: false,
+        });
+        datadogReady = true;
+      }
+
+      function startPostHog() {
+        if (posthogReady) return;
+        posthog.init("phc_yokjUQmESwbrqG45fFHRApy8VXr65YZjX5ABKEyZf9Qg", {
+          api_host: "https://us.i.posthog.com",
+          defaults: "2026-05-30",
+          autocapture: false,
+          capture_pageview: false,
+          capture_pageleave: false,
+          disable_session_recording: true,
+          disable_external_dependency_loading: true,
+          advanced_disable_flags: true,
+          person_profiles: "never",
+          persistence: "memory",
+          save_referrer: false,
+          save_campaign_params: false,
+          before_send(captured) {
+            if (!captured?.event.startsWith("chunkify.video.")) return null;
+            for (const key of Object.keys(captured.properties ?? {})) {
+              if (key.startsWith("$") && /url|referrer|host|pathname/i.test(key)) delete captured.properties[key];
+            }
+            return captured;
+          },
+        });
+        posthogReady = true;
+      }
+
+      async function stop() {
         session?.destroy();
         hls?.destroy();
+        const oldShakaPlayer = shakaPlayer;
         session = null;
         hls = null;
+        shakaPlayer = null;
         playbackTarget = null;
         container.replaceChildren();
         playButton.disabled = true;
         stopButton.disabled = true;
+        await oldShakaPlayer?.destroy();
       }
+
+      const mapEvent = createEventMapper({
+        videoId: "video_id",
+        eventType: "event_name",
+        viewId: "view_id",
+        playingTimeMs: "playing_time_ms",
+      });
 
       function record(event) {
         count++;
@@ -93,21 +204,51 @@
         const title = document.createElement("summary");
         title.textContent = `${count}. ${event.event_name} (${event.video_id})`;
         const payload = document.createElement("pre");
-        payload.textContent = JSON.stringify(event, null, 2);
+        payload.textContent = JSON.stringify(mapEvent(event), null, 2);
         item.append(title, payload);
         eventList.prepend(item);
       }
 
-      form.addEventListener("submit", (submitEvent) => {
+      function sendRenditions(event) {
+        if (event.event_name !== "chunkify.video.view_ended") return;
+        for (const rendition of event.rendition_playing_time ?? []) {
+          if (!rendition.width || !rendition.height || rendition.playing_time_ms <= 0) continue;
+          datadog.addAction("chunkify.video.rendition_playing_time", { chunkify: {
+            video_id: event.video_id,
+            view_id: event.view_id,
+            resolution: `${rendition.width}x${rendition.height}`,
+            playing_time_ms: rendition.playing_time_ms,
+          } });
+        }
+      }
+
+      async function destinationsFor(choice) {
+        if (choice === "posthog") {
+          startPostHog();
+          destinationStatus.textContent = "Sending playback events to PostHog.";
+          return [{ send: record }, createPostHogAdapter(posthog, mapEvent)];
+        }
+        if (choice === "datadog") {
+          destinationStatus.textContent = "Loading Datadog RUM...";
+          await startDatadog();
+          destinationStatus.textContent = "Sending playback events to Datadog RUM.";
+          return [{ send: record }, createDatadogAdapter(datadog), { send: sendRenditions }];
+        }
+        destinationStatus.textContent = "Showing events on this page only.";
+        return [{ send: record }];
+      }
+
+      form.addEventListener("submit", async (submitEvent) => {
         submitEvent.preventDefault();
-        stop();
+        await stop();
         eventList.replaceChildren();
         count = 0;
         eventCount.textContent = "0";
 
-        const { videoId, source, mode } = Object.fromEntries(new FormData(form));
-        const options = { videoId: videoId.trim(), destinations: [{ send: record }] };
+        const { videoId, source, mode, destination } = Object.fromEntries(new FormData(form));
+        const sourceUrl = source.trim();
         try {
+          const options = { videoId: videoId.trim(), destinations: await destinationsFor(destination) };
           if (mode === "player") {
             const player = document.createElement("chunkify-player");
             player.setAttribute("controls", "");
@@ -115,31 +256,41 @@
             container.append(player);
             playbackTarget = player;
             session = monitor(player, options);
-            player.src = source.trim();
+            player.src = sourceUrl;
+          } else if (mode === "videojs") {
+            const { media, monitorSession } = await loadVideoJs(sourceUrl, options);
+            playbackTarget = media;
+            session = monitorSession;
           } else {
+            const shaka = mode === "shaka" ? await loadShaka() : null;
             const video = document.createElement("video");
             video.controls = true;
             video.playsInline = true;
             container.append(video);
             playbackTarget = video;
-            if (mode === "hlsjs") {
+            if (shaka) {
+              shakaPlayer = new shaka.Player();
+              await shakaPlayer.attach(video);
+              session = monitorShaka(shakaPlayer, options);
+              await shakaPlayer.load(sourceUrl);
+            } else if (mode === "hlsjs") {
               if (!Hls.isSupported()) throw new Error("hls.js is not supported in this browser.");
               hls = new Hls();
               session = monitorHlsJs(hls, options);
               hls.attachMedia(video);
-              hls.loadSource(source.trim());
+              hls.loadSource(sourceUrl);
             } else {
               session = monitor(video, options);
-              video.src = source.trim();
+              video.src = sourceUrl;
             }
           }
           playButton.disabled = false;
           stopButton.disabled = false;
-          status.textContent = mode === "video" && new URL(source.trim(), location.href).pathname.endsWith(".m3u8")
+          status.textContent = mode === "video" && new URL(sourceUrl, location.href).pathname.endsWith(".m3u8")
             ? "A plain video element needs native HLS support for this URL. Select Chunkify Player or external hls.js here, or enter an MP4 URL."
-            : "Ready. Press Play to start a analytics view. Stop monitoring to emit its final event.";
+            : "Ready. Press Play to play the video. Stop monitoring to emit the final event.";
         } catch (error) {
-          stop();
+          await stop();
           status.textContent = `Could not start: ${error.message}`;
         }
       });
@@ -156,8 +307,8 @@
         }
       });
 
-      stopButton.addEventListener("click", () => {
-        stop();
+      stopButton.addEventListener("click", async () => {
+        await stop();
         status.textContent = "Monitoring stopped.";
       });
       status.textContent = "Ready. The default URL is a local HLS test fixture.";
