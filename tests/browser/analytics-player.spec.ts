@@ -232,19 +232,23 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
     state.externalHls.destroy();
     return state.externalEvents;
   });
-  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
+  // WebKit may report a real hls.js playback error and recover. Recovery must
+  // not turn that error into a second view.
+  const viewEvents = events.filter((event) => event.event_name !== "chunkify.video.playback_error");
+  expect(viewEvents.map((event) => [event.event_name, event.reason])).toEqual([
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "destroyed"],
   ]);
-  expect(events[1]).toMatchObject({
+  expect(new Set(events.map((event) => event.view_id)).size).toBe(1);
+  expect(viewEvents[1]).toMatchObject({
     connector_name: "hls.js",
     selected_rendition_width: 256, selected_rendition_height: 144,
   });
-  expect(events[1]!.delivery_request_count).toBeGreaterThan(0);
-  expect(events[1]!.rendition_playing_time).toEqual([
+  expect(viewEvents[1]!.delivery_request_count).toBeGreaterThan(0);
+  expect(viewEvents[1]!.rendition_playing_time).toEqual([
     expect.objectContaining({ width: 256, height: 144, playing_time_ms: expect.any(Number) }),
   ]);
-  expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
+  expect(viewEvents[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
 });
 
 test("the hls.js adapter follows media that was attached earlier or changes later", async ({ page, browserName }) => {
@@ -282,6 +286,39 @@ test("the hls.js adapter follows media that was attached earlier or changes late
   expect(events.map((event) => [event.event_name, event.reason])).toEqual([
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "source_changed"],
+    ["chunkify.video.view_started", null],
+    ["chunkify.video.view_ended", "destroyed"],
+  ]);
+});
+
+test("hls.js recovery on the same video keeps one view", async ({ page, browserName }) => {
+  await page.goto("/tests/fixtures/player.html");
+  const supported = await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    return Hls.isSupported();
+  });
+  test.skip(!supported, `hls.js MediaSource playback is unavailable in ${browserName}`);
+
+  const events = await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
+    const video = document.createElement("video");
+    document.body.append(video);
+    const hls = new Hls();
+    const records: ChunkifyPlayerAnalyticsEvent[] = [];
+    const session = monitorHlsJs(hls, {
+      videoId: "asset-recovery", destinations: [{ send(event) { records.push(event); } }],
+    });
+    session.startAttempt();
+    hls.attachMedia(video);
+    video.dispatchEvent(new Event("playing"));
+    hls.recoverMediaError();
+    video.dispatchEvent(new Event("playing"));
+    session.destroy();
+    hls.destroy();
+    return records;
+  });
+  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "destroyed"],
   ]);

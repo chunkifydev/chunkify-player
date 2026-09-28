@@ -154,7 +154,13 @@ export function monitorHlsJs(hls: Hls, options: AnalyticsOptions):
     }
   };
   const onMediaAttaching = () => attachMedia();
-  const onMediaDetaching = () => releaseMedia(true);
+  const onMediaDetaching = () => {
+    // hls.js can detach and reattach the same media synchronously while
+    // recovering an error or recreating its MediaSource. That is one view.
+    queueMicrotask(() => {
+      if (!destroyed && !hls.media) releaseMedia(true);
+    });
+  };
   const onDestroying = () => destroy();
   function destroy() {
     if (destroyed) return;
