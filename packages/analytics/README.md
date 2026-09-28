@@ -276,22 +276,18 @@ Destinations keep collection separate from delivery. Provide at least one includ
 
 ### Datadog RUM
 
-An initialized Datadog RUM client can be passed to the Datadog adapter. It adds one custom action per analytics event, with the full event in its `chunkify` context by default. Pass a mapper as the second argument to choose the action's context; it runs once for each event. For example, this puts two fields directly in the Datadog context:
+Pass an initialized Datadog RUM client to the Datadog adapter. It adds one custom action per analytics event, with the event fields directly in the action context by default:
 
 ```ts
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
-import { createEventMapper } from "@chunkify/analytics";
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createDatadogAdapter(datadogRum, createEventMapper({
-    video_id: "video_id",
-    playing_time_ms: "playing_time_ms",
-  }))],
+  destinations: [createDatadogAdapter(datadogRum)],
 });
 ```
 
-Without a mapper, use `createDatadogAdapter(datadogRum)`. The mapper creates the payload for each action from the current event; it is not a fixed payload supplied at setup time. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
+Pass a mapper as the second argument to choose or rename context fields; it runs for each event. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
 
 ### PostHog
 

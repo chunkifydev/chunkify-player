@@ -19,8 +19,8 @@ test("Datadog adapter sends one action per event with optional context mapping",
   adapter.send(event);
   adapter.send({ ...event, event_name: "chunkify.video.view_ended" });
   assert.deepEqual(actions, [
-    { name: "chunkify.video.view_snapshot", context: { chunkify: event } },
-    { name: "chunkify.video.view_ended", context: { chunkify: { ...event, event_name: "chunkify.video.view_ended" } } },
+    { name: "chunkify.video.view_snapshot", context: event },
+    { name: "chunkify.video.view_ended", context: { ...event, event_name: "chunkify.video.view_ended" } },
   ]);
 
   const mapped = createDatadogAdapter({ addAction(name, context) { actions.push({ name, context }); } },
