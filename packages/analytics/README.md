@@ -276,33 +276,47 @@ Destinations keep collection separate from delivery. Provide at least one includ
 
 ### Datadog RUM
 
-Pass an initialized Datadog RUM client to the Datadog adapter. It adds one custom action per analytics event, with the event fields directly in the action context by default:
+Install `@datadog/browser-rum` in your application. Initialize it with your RUM application ID and **client token** (not a Datadog API key), then pass the client to the adapter. The adapter adds one custom action per analytics event, with the event fields directly in the action context by default:
 
 ```ts
+import { datadogRum } from "@datadog/browser-rum";
+import { monitor } from "@chunkify/analytics";
 import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 
-monitor(video, {
+datadogRum.init({
+  applicationId: "YOUR_DATADOG_APPLICATION_ID",
+  clientToken: "YOUR_DATADOG_RUM_CLIENT_TOKEN",
+  site: "datadoghq.com", // Use your organization's Datadog site.
+});
+
+monitor(document.querySelector("video")!, {
   videoId: "video_123",
   destinations: [createDatadogAdapter(datadogRum)],
 });
 ```
 
-Pass a mapper as the second argument to choose or rename context fields; it runs for each event. Datadog setup and sampling remain the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
+Pass a mapper as the second argument to choose or rename context fields; it runs for each event. Datadog sampling remains the application's responsibility. If a dashboard needs derived actions, such as one action per rendition, add a separate custom destination to create them from `view_ended`.
 
 ### PostHog
 
-The PostHog adapter accepts an initialized `posthog-js` client. It captures one event per analytics record, with the event's fields as flat PostHog properties. As with Datadog, its optional second argument maps the properties for each event:
+Install `posthog-js` in your application. Initialize it with your project token and ingestion host, then pass it to the adapter. The adapter captures one event per analytics record, with the event's fields as flat PostHog properties. Its optional second argument maps the properties for each event:
 
 ```ts
+import posthog from "posthog-js";
+import { monitor } from "@chunkify/analytics";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
 
-monitor(video, {
+posthog.init("YOUR_POSTHOG_PROJECT_TOKEN", {
+  api_host: "https://us.i.posthog.com", // Use your project's ingestion host.
+});
+
+monitor(document.querySelector("video")!, {
   videoId: "video_123",
   destinations: [createPostHogAdapter(posthog)],
 });
 ```
 
-The application initializes PostHog and controls its automatic collection and persistence settings. PostHog may add its own event properties, including page context, beyond the fields sent by this adapter; configure the PostHog SDK separately to meet your privacy requirements.
+The application controls PostHog's automatic collection and persistence settings. PostHog may add its own event properties, including page context, beyond the fields sent by this adapter; configure the PostHog SDK separately to meet your privacy requirements.
 
 ### OTLP/HTTP logs
 
