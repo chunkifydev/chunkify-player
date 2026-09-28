@@ -3,7 +3,7 @@ import type {
   AudioTrackLoadedData, ErrorData, FragLoadedData, LevelLoadedData,
   LevelSwitchedData, LoaderStats, ManifestLoadedData, SubtitleTrackLoadedData,
 } from "hls.js";
-import { attachAnalytics, type AnalyticsConnector, type AnalyticsConnectorError,
+import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
   type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
 import { assertAnalyticsOptions } from "./options.js";
@@ -139,7 +139,7 @@ export function monitorHlsJs(hls: Hls, options: AnalyticsOptions):
     const nextMedia = hls.media;
     if (destroyed || !nextMedia || nextMedia === media) return;
     if (media) releaseMedia(true);
-    const nextSession = attachAnalytics(nextMedia, options);
+    const nextSession = attachAnalyticsWithManagedSource(nextMedia, options);
     media = nextMedia;
     session = nextSession;
     try {

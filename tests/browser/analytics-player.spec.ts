@@ -268,6 +268,9 @@ test("the hls.js adapter follows media that was attached earlier or changes late
       videoId: "asset-reattach", destinations: [{ send(event) { records.push(event); } }],
     });
     first.dispatchEvent(new Event("play"));
+    first.dispatchEvent(new Event("playing"));
+    first.dispatchEvent(new Event("emptied"));
+    first.dispatchEvent(new Event("loadstart"));
     hls.detachMedia();
     hls.attachMedia(second);
     second.dispatchEvent(new Event("play"));
