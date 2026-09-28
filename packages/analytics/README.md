@@ -130,25 +130,25 @@ Keep the console destination in the examples, play the video, seek, then stop or
 
 Every raw event has the same fields. The four event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, and `chunkify.video.view_ended`. Snapshots contain cumulative measurements for one `view_id`, normally after each 30 seconds of active playing time. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
 
-### Complete event example
+### Complete Chunkify Player event example
 
-This complete `view_ended` event is based on local Shaka HLS playback. The video ID and timings are illustrative. It is the **raw Chunkify event** passed to `send(event)`; an adapter or mapper can reshape it for a destination.
+This complete `view_ended` event is based on `<chunkify-player>` playing a local HLS stream, with timing values rounded for readability. The component used hls.js for this stream, so `connector_name` and `player_name` report `hls.js`. It is the **raw Chunkify event** passed to `send(event)`; an adapter or mapper can reshape it for a destination.
 
 ```json
 {
   "schema_version": 4,
   "event_name": "chunkify.video.view_ended",
-  "event_id": "e306e4f5-14ee-4c62-aaa9-8a89f8544c53",
-  "sequence": 8,
-  "occurred_at": "2026-09-28T07:30:03.784Z",
-  "view_id": "eae1c766-3c69-4aaa-9cee-b5be62f05437",
+  "event_id": "06581e06-96d7-421c-b77b-22a6e615c97e",
+  "sequence": 2,
+  "occurred_at": "2026-09-28T07:35:10.879Z",
+  "view_id": "8267fd81-ecf6-4fb1-83d9-4d1fba46b1b6",
   "video_id": "video_123",
   "sdk_name": "@chunkify/analytics",
   "sdk_version": "0.0.0",
-  "connector_name": "shaka-player",
-  "connector_version": "v5.2.12",
-  "player_name": "shaka-player",
-  "player_version": "v5.2.12",
+  "connector_name": "hls.js",
+  "connector_version": "1.7.3",
+  "player_name": "hls.js",
+  "player_version": "1.7.3",
   "delivery_hostname": null,
   "environment": null,
   "viewer_id": null,
@@ -159,9 +159,9 @@ This complete `view_ended` event is based on local Shaka HLS playback. The video
   "error_fatal": null,
   "error_playhead_seconds": null,
   "media_duration_seconds": 6.021333,
-  "startup_time_ms": 192,
-  "first_video_frame_time_ms": 208,
-  "playing_time_ms": 6089,
+  "startup_time_ms": 2,
+  "first_video_frame_time_ms": 114,
+  "playing_time_ms": 6086,
   "rebuffer_count": 0,
   "rebuffer_duration_ms": 0,
   "rebuffer_ratio": 0,
@@ -172,23 +172,23 @@ This complete `view_ended` event is based on local Shaka HLS playback. The video
   "video_intrinsic_width_css_px": 256,
   "video_intrinsic_height_css_px": 144,
   "dropped_video_frames": 0,
-  "total_video_frames": 72,
+  "total_video_frames": 68,
   "selected_rendition_width": 256,
   "selected_rendition_height": 144,
-  "selected_rendition_codec": "avc1.42E01E,mp4a.40.2",
+  "selected_rendition_codec": null,
   "selected_rendition_bitrate_bps": 250000,
   "rendition_switch_count": 0,
-  "delivery_request_count": 7,
-  "delivery_transferred_bytes": 190278,
-  "delivery_throughput_bps": 76111200,
+  "delivery_request_count": 2,
+  "delivery_transferred_bytes": 96329,
+  "delivery_throughput_bps": 175143637,
   "rendition_playing_time": [
     {
       "width": 256,
       "height": 144,
-      "codec": "avc1.42E01E,mp4a.40.2",
+      "codec": null,
       "bitrate_bps": 250000,
-      "frame_rate": 12,
-      "playing_time_ms": 6089
+      "frame_rate": null,
+      "playing_time_ms": 6085
     }
   ]
 }
