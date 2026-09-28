@@ -231,7 +231,21 @@ monitor(video, {
 });
 ```
 
-Excluding `view_snapshot` stops its timer but does not stop collection of the final view's metrics. An empty `includeEvents` array sends no records. `sampleRate` can select a fraction of complete views. `environment` and a customer-supplied pseudonymous `viewerId` are optional; if omitted, their event fields are `null`. No persistent viewer identity is created by default.
+Excluding `view_snapshot` stops its timer but does not stop collection of the final view's metrics. An empty `includeEvents` array sends no records.
+
+`sampleRate` is a probability from 0 to 1, checked once when each playback attempt starts; it defaults to 1. A value of `0` samples no attempts, and `1` samples every attempt. For example:
+
+```ts
+monitor(player, {
+  videoId: "video_123",
+  sampleRate: 0.1,
+  destinations: [{ send: (event) => console.log(event) }],
+});
+```
+
+This selects roughly 10% of playback attempts. A selected attempt sends the events that occur and are allowed by `includeEvents`; an unselected attempt sends none. Each new attempt is sampled independently, so this is not an exact count or a per-viewer decision. Counts from a sampled destination are not total view counts.
+
+`environment` and a customer-supplied pseudonymous `viewerId` are optional; if omitted, their event fields are `null`. No persistent viewer identity is created by default.
 
 ## Map event fields
 
