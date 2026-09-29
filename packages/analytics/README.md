@@ -319,12 +319,13 @@ monitor(video, {
 
 The mapping runs for each event passed to the destination. A field absent from an event-specific payload is omitted from the mapped result, including when a selector returns `undefined`. For example, `playtimeSeconds` above is omitted from a rendition-change event. For destinations that accept the Chunkify event directly, omit the mapper. Mapping does not alter collection, event selection, or snapshot timing. See [Monitor options](#monitor-options) for `includeEvents` and `snapshotIntervalMs`.
 
-To map event types differently, select a mapper in the adapter. This example assumes the Datadog RUM client has already been initialized. Other events keep their original fields:
+### Map event types differently
+
+Select a mapper based on the event name when different event types need different payloads. This HTTP example keeps all other events unchanged:
 
 ```js
-import { datadogRum } from "@datadog/browser-rum";
-import { createEventMapper } from "@chunkify/analytics";
-import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+import { createEventMapper, monitor } from "@chunkify/analytics";
+import { createHttpAdapter } from "@chunkify/analytics/http";
 
 const mapStateChange = createEventMapper({
   videoId: "video_id",
@@ -338,14 +339,19 @@ const mapRenditionChange = createEventMapper({
   height: "selected_rendition_height",
 });
 
-const destination = createDatadogAdapter(datadogRum, (event) => {
+const destination = createHttpAdapter("/api/video-analytics", (event) => {
   if (event.event_name === "chunkify.video.playback_state_changed") return mapStateChange(event);
   if (event.event_name === "chunkify.video.rendition_changed") return mapRenditionChange(event);
   return { ...event };
 });
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [destination],
+});
 ```
 
-Pass `destination` in `monitor()`'s `destinations` array. The same pattern works with the PostHog and HTTP adapters.
+The same mapper selection works with other adapters.
 
 ## Send events to a destination
 
