@@ -240,11 +240,16 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
 }
 ```
 
-`seek_completed` reports one logical seek interaction. Each new `seeking` resets a 400 ms quiet period after the last `seeked`. A playing view also waits for playback to resume; a paused view does not. An end, source change, fatal error, or destroy flushes a pending interaction as `interrupted` if it did not resume or settle. The quiet period is a heuristic because an HTML media element does not expose the user's pointer gesture. The event's `seek_interaction_duration_ms` sums time spent in the media element's seeking state, while `seek_resume_wait_ms` measures from the final `seeked` to `playing` when available:
+`seek_completed` reports one logical seek interaction. Each new `seeking` resets a 400 ms quiet period after the last `seeked`. A playing view also waits for playback to resume; a paused view does not. An end, source change, fatal error, or destroy flushes a pending interaction as `interrupted` if it did not resume or settle. The quiet period is a heuristic because an HTML media element does not expose the user's pointer gesture. `seek_started_at`, `last_seeked_at`, and `playback_resumed_at` mark the first seek, final `seeked`, and playback resume in UTC. The last two are `null` if those stages never occurred. `state_before_seek` and `state_after_seek` describe the surrounding playback states, including a `playing`-to-`playing` seek. The event's `seek_interaction_duration_ms` sums time spent in the media element's seeking state, while `seek_resume_wait_ms` measures from the final `seeked` to `playing` when available:
 
 ```json
 {
   "event_name": "chunkify.video.seek_completed",
+  "seek_started_at": "2026-09-29T13:05:26.300Z",
+  "last_seeked_at": "2026-09-29T13:05:26.395Z",
+  "playback_resumed_at": "2026-09-29T13:05:26.515Z",
+  "state_before_seek": "playing",
+  "state_after_seek": "playing",
   "from_playhead_seconds": 10,
   "to_playhead_seconds": 60,
   "seek_interaction_duration_ms": 350,
@@ -255,7 +260,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
 
 `seek_count` in snapshots and `view_ended` counts these logical interactions. The collector still uses each media seek to measure playing and seeking time, even when it sends only one seek record.
 
-These are excerpts; actual timeline records also have the shared identifiers and timestamp. Playhead fields are media positions, not elapsed viewing time or universal timestamps for live video, and can be `null` when unavailable. `occurred_at` and `sequence` place the records in the viewing timeline. Cumulative playing time by rendition remains in snapshots and `view_ended`.
+These are excerpts; actual timeline records also have the shared identifiers and timestamp. Playhead fields are media positions, not elapsed viewing time or universal timestamps for live video, and can be `null` when unavailable. `occurred_at` is when a record is sent to destinations; for a grouped seek, use its seek timestamps to place the interaction in the viewing timeline. `sequence` orders records within the view. Cumulative playing time by rendition remains in snapshots and `view_ended`.
 
 ### Field guide
 

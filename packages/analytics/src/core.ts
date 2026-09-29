@@ -97,6 +97,11 @@ export interface AnalyticsRenditionEvent extends AnalyticsEventEnvelope, Partial
 }
 export interface AnalyticsSeekEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
   event_name: "chunkify.video.seek_completed";
+  seek_started_at: string;
+  last_seeked_at: string | null;
+  playback_resumed_at: string | null;
+  state_before_seek: AnalyticsPlaybackState;
+  state_after_seek: AnalyticsPlaybackState;
   from_playhead_seconds: number | null;
   to_playhead_seconds: number | null;
   seek_interaction_duration_ms: number;
@@ -197,10 +202,14 @@ interface View {
 interface SeekInteraction {
   view: View;
   durationAtStart: number;
+  startedAt: string;
+  stateBeforeSeek: AnalyticsPlaybackState;
   fromPlayhead: number | null;
   toPlayhead: number | null;
   lastSeekedAt: number | null;
+  lastSeekedAtWall: string | null;
   resumedAt: number | null;
+  resumedAtWall: string | null;
 }
 
 interface FrameCounts {
@@ -472,6 +481,11 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     const now = performance.now();
     deliver({ ...envelope(current, "chunkify.video.seek_completed"),
       event_name: "chunkify.video.seek_completed",
+      seek_started_at: interaction.startedAt,
+      last_seeked_at: interaction.lastSeekedAtWall,
+      playback_resumed_at: interaction.resumedAtWall,
+      state_before_seek: interaction.stateBeforeSeek,
+      state_after_seek: current.playbackState,
       from_playhead_seconds: interaction.fromPlayhead,
       to_playhead_seconds: interaction.toPlayhead,
       seek_interaction_duration_ms: current.seekDuration + (current.seekSince === null ? 0 : now - current.seekSince) -
@@ -743,7 +757,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     }
     changePlaybackState("playing");
     if (seekInteraction?.view === view) {
-      seekInteraction.resumedAt ??= now;
+      if (seekInteraction.resumedAt === null) {
+        seekInteraction.resumedAt = now;
+        seekInteraction.resumedAtWall = new Date().toISOString();
+      }
       settleSeek();
     }
     scheduleSnapshot();
@@ -813,12 +830,16 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (view) {
         if (!seekInteraction) {
           seekInteraction = { view, durationAtStart: view.seekDuration,
-            fromPlayhead: view.lastPlayhead, toPlayhead: null, lastSeekedAt: null, resumedAt: null };
+            startedAt: new Date().toISOString(), stateBeforeSeek: view.playbackState,
+            fromPlayhead: view.lastPlayhead, toPlayhead: null,
+            lastSeekedAt: null, lastSeekedAtWall: null, resumedAt: null, resumedAtWall: null };
           view.seekCount++;
         }
         clearSeekTimer();
         seekInteraction.lastSeekedAt = null;
+        seekInteraction.lastSeekedAtWall = null;
         seekInteraction.resumedAt = null;
+        seekInteraction.resumedAtWall = null;
       }
       updatePlaybackPosition();
       if (view && !seeking) view.seekSince = performance.now();
@@ -831,6 +852,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (seekInteraction?.view === view) {
         seekInteraction.toPlayhead = playheadSeconds();
         seekInteraction.lastSeekedAt = performance.now();
+        seekInteraction.lastSeekedAtWall = new Date().toISOString();
         settleSeek();
       }
     },
