@@ -4,6 +4,7 @@ import { assertAnalyticsOptions } from "./options.js";
 export type { AnalyticsEventType } from "./event-types.js";
 
 const sdkVersion = "0.1.0"; // x-release-please-version
+const seekSettleMs = 400;
 
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
 export type AnalyticsErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
@@ -94,7 +95,21 @@ export interface AnalyticsRenditionEvent extends AnalyticsEventEnvelope, Partial
   selected_rendition_bitrate_bps: number | null;
   selected_rendition_frame_rate: number | null;
 }
-export type ChunkifyPlayerAnalyticsEvent = AnalyticsViewEvent | AnalyticsPlaybackStateEvent | AnalyticsRenditionEvent;
+export interface AnalyticsSeekEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.seek_completed";
+  seek_started_at: string;
+  last_seeked_at: string | null;
+  playback_resumed_at: string | null;
+  state_before_seek: AnalyticsPlaybackState;
+  state_after_seek: AnalyticsPlaybackState;
+  from_playhead_seconds: number | null;
+  to_playhead_seconds: number | null;
+  seek_interaction_duration_ms: number;
+  seek_resume_wait_ms: number | null;
+  seek_outcome: "resumed" | "paused" | "interrupted";
+}
+export type ChunkifyPlayerAnalyticsEvent = AnalyticsViewEvent | AnalyticsPlaybackStateEvent |
+  AnalyticsRenditionEvent | AnalyticsSeekEvent;
 export interface AnalyticsDestination {
   send(event: ChunkifyPlayerAnalyticsEvent): void | Promise<void>;
 }
@@ -104,7 +119,7 @@ export interface AnalyticsConfig {
   viewerId?: string | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
-  /** Event types passed to destinations. Defaults to all six types. */
+  /** Event types passed to destinations. Defaults to all seven types. */
   includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
 export interface AnalyticsOptions extends AnalyticsConfig {
@@ -162,6 +177,7 @@ interface View {
   seekDuration: number;
   seekSince: number | null;
   maximumPlayhead: number;
+  lastPlayhead: number | null;
   nextSnapshotAt: number;
   duration: number | null;
   intrinsicVideoWidth: number | null;
@@ -181,6 +197,19 @@ interface View {
   activeRenditionSince: number | null;
   playbackState: AnalyticsPlaybackState;
   playbackStateSince: number;
+}
+
+interface SeekInteraction {
+  view: View;
+  durationAtStart: number;
+  startedAt: string;
+  stateBeforeSeek: AnalyticsPlaybackState;
+  fromPlayhead: number | null;
+  toPlayhead: number | null;
+  lastSeekedAt: number | null;
+  lastSeekedAtWall: string | null;
+  resumedAt: number | null;
+  resumedAtWall: string | null;
 }
 
 interface FrameCounts {
@@ -347,6 +376,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   let wantsPlay = false;
   let seeking = false;
   let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+  let seekTimer: ReturnType<typeof setTimeout> | null = null;
+  let seekInteraction: SeekInteraction | null = null;
   let connector: AnalyticsConnector | null = null;
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
@@ -435,6 +466,49 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     }
   }
 
+  function clearSeekTimer() {
+    if (seekTimer !== null) clearTimeout(seekTimer);
+    seekTimer = null;
+  }
+
+  function finishSeek(outcome: AnalyticsSeekEvent["seek_outcome"]) {
+    const interaction = seekInteraction;
+    if (!interaction) return;
+    clearSeekTimer();
+    seekInteraction = null;
+    const current = interaction.view;
+    if (!includedEvents.has("chunkify.video.seek_completed")) return;
+    const now = performance.now();
+    deliver({ ...envelope(current, "chunkify.video.seek_completed"),
+      event_name: "chunkify.video.seek_completed",
+      seek_started_at: interaction.startedAt,
+      last_seeked_at: interaction.lastSeekedAtWall,
+      playback_resumed_at: interaction.resumedAtWall,
+      state_before_seek: interaction.stateBeforeSeek,
+      state_after_seek: current.playbackState,
+      from_playhead_seconds: interaction.fromPlayhead,
+      to_playhead_seconds: interaction.toPlayhead,
+      seek_interaction_duration_ms: current.seekDuration + (current.seekSince === null ? 0 : now - current.seekSince) -
+        interaction.durationAtStart,
+      seek_resume_wait_ms: outcome === "resumed" && interaction.lastSeekedAt !== null &&
+        interaction.resumedAt !== null ? Math.max(0, interaction.resumedAt - interaction.lastSeekedAt) : null,
+      seek_outcome: outcome });
+  }
+
+  function settleSeek() {
+    const interaction = seekInteraction;
+    if (!interaction || interaction.lastSeekedAt === null || seeking) return;
+    clearSeekTimer();
+    const remaining = seekSettleMs - (performance.now() - interaction.lastSeekedAt);
+    if (remaining > 0) {
+      seekTimer = globalThis.setTimeout(settleSeek, remaining);
+    } else if (!wantsPlay || interaction.view.playbackState === "paused") {
+      finishSeek("paused");
+    } else if (interaction.view.playbackState === "playing") {
+      finishSeek("resumed");
+    }
+  }
+
   function changePlaybackState(next: AnalyticsPlaybackState, current = view) {
     if (!current || current.playbackState === next) return;
     if (current.playbackState === "ended" || current.playbackState === "stopped" ||
@@ -444,7 +518,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     const elapsed = Math.max(0, now - current.playbackStateSince);
     current.playbackState = next;
     current.playbackStateSince = now;
-    if (!includedEvents.has("chunkify.video.playback_state_changed")) return;
+    if ((seekInteraction?.view === current && includedEvents.has("chunkify.video.seek_completed")) ||
+        !includedEvents.has("chunkify.video.playback_state_changed")) return;
     deliver({ ...envelope(current, "chunkify.video.playback_state_changed"),
       event_name: "chunkify.video.playback_state_changed", playhead_seconds: playheadSeconds(),
       from_state: previous, to_state: next, previous_state_duration_ms: elapsed });
@@ -533,6 +608,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       rebufferCount: 0, rebufferDuration: 0, rebufferSince: null,
       seekCount: 0, seekDuration: 0, seekSince: null,
       maximumPlayhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : 0,
+      lastPlayhead: playheadSeconds(),
       nextSnapshotAt: snapshotIntervalMs,
       duration: duration(media),
       intrinsicVideoWidth: initialVideoSize.width, intrinsicVideoHeight: initialVideoSize.height,
@@ -578,6 +654,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     refreshIntrinsicVideoSize(view);
     if (!Number.isFinite(media.currentTime)) return;
     view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
+    view.lastPlayhead = playheadSeconds();
   }
   function reportMediaError() {
     if (!view) return;
@@ -593,6 +670,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
     if (view === current) changePlaybackState("error");
+    if (view === current) finishSeek("interrupted");
   }
   function reportConnectorError(error: AnalyticsConnectorError) {
     if (!view) return;
@@ -615,7 +693,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       fatal: Boolean(error.fatal),
       playhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : null,
     });
-    if (error.fatal && view === current) changePlaybackState("error");
+    if (error.fatal && view === current) {
+      changePlaybackState("error");
+      finishSeek("interrupted");
+    }
   }
   function setConnector(next: AnalyticsConnector | null) {
     if (destroyed) return;
@@ -675,11 +756,21 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.activeRenditionSince = now;
     }
     changePlaybackState("playing");
+    if (seekInteraction?.view === view) {
+      if (seekInteraction.resumedAt === null) {
+        seekInteraction.resumedAt = now;
+        seekInteraction.resumedAtWall = new Date().toISOString();
+      }
+      settleSeek();
+    }
     scheduleSnapshot();
   }
   function finish(reason: AnalyticsEndReason) {
     if (!view) return;
     const current = view;
+    const seekOutcome = seekInteraction?.lastSeekedAt === null || seeking ? "interrupted" :
+      current.playbackState === "playing" ? "resumed" :
+      current.playbackState === "paused" ? "paused" : "interrupted";
     cancelFirstVideoFrame(current);
     stopPlaying();
     stopRebuffering();
@@ -689,6 +780,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     wantsPlay = false;
     seeking = false;
     changePlaybackState(reason === "ended" ? "ended" : "stopped", current);
+    finishSeek(seekOutcome);
     emit(current, "chunkify.video.view_ended", reason);
   }
   function metadata() {
@@ -730,18 +822,39 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     pause() {
       stopPlaying(); stopRebuffering(); wantsPlay = false;
       if (view && !media.ended) changePlaybackState("paused");
+      settleSeek();
     },
     seeking() {
       stopPlaying();
       stopRebuffering();
+      if (view) {
+        if (!seekInteraction) {
+          seekInteraction = { view, durationAtStart: view.seekDuration,
+            startedAt: new Date().toISOString(), stateBeforeSeek: view.playbackState,
+            fromPlayhead: view.lastPlayhead, toPlayhead: null,
+            lastSeekedAt: null, lastSeekedAtWall: null, resumedAt: null, resumedAtWall: null };
+          view.seekCount++;
+        }
+        clearSeekTimer();
+        seekInteraction.lastSeekedAt = null;
+        seekInteraction.lastSeekedAtWall = null;
+        seekInteraction.resumedAt = null;
+        seekInteraction.resumedAtWall = null;
+      }
       updatePlaybackPosition();
-      if (view && !seeking) { view.seekCount++; view.seekSince = performance.now(); }
+      if (view && !seeking) view.seekSince = performance.now();
       seeking = true;
       changePlaybackState("seeking");
     },
     seeked() {
       updatePlaybackPosition(); stopSeeking(); seeking = false;
       changePlaybackState(wantsPlay ? "resuming" : "paused");
+      if (seekInteraction?.view === view) {
+        seekInteraction.toPlayhead = playheadSeconds();
+        seekInteraction.lastSeekedAt = performance.now();
+        seekInteraction.lastSeekedAtWall = new Date().toISOString();
+        settleSeek();
+      }
     },
     timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,

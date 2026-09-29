@@ -1,7 +1,8 @@
 export { attachAnalytics } from "./core.js";
 export type { AnalyticsEventType, AnalyticsEndReason, AnalyticsErrorCategory, AnalyticsStartupOutcome,
   AnalyticsPlaybackState, AnalyticsEventEnvelope, AnalyticsViewEvent, AnalyticsPlaybackStateEvent,
-  AnalyticsRenditionEvent, RenditionPlayingTime, AnalyticsRendition, ViewMetrics, ChunkifyPlayerAnalyticsEvent,
+  AnalyticsRenditionEvent, AnalyticsSeekEvent, RenditionPlayingTime, AnalyticsRendition, ViewMetrics,
+  ChunkifyPlayerAnalyticsEvent,
   AnalyticsDestination, AnalyticsConfig, AnalyticsOptions, AnalyticsConnectorSnapshot,
   AnalyticsConnectorError, AnalyticsConnector, AnalyticsSession } from "./core.js";
 export { createEventMapper } from "./mapper.js";
