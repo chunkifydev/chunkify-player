@@ -110,7 +110,7 @@ test("default events describe playback state durations and rendition switches", 
   expect(events.at(-1)).toMatchObject({ playing_time_ms: 4000 });
 });
 
-test("state events distinguish buffering and seeking from playing time", async ({ page }) => {
+test("state and seek events distinguish buffering and seeking from playing time", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.evaluate(() => {
@@ -139,12 +139,151 @@ test("state events distinguish buffering and seeking from playing time", async (
   const changes = events.filter((event) => event.event_name === "chunkify.video.playback_state_changed");
   expect(changes.map((event) => [event.from_state, event.to_state, event.previous_state_duration_ms])).toEqual([
     ["startup", "playing", 0], ["playing", "buffering", 1000], ["buffering", "playing", 2000],
-    ["playing", "seeking", 1000], ["seeking", "resuming", 500], ["resuming", "playing", 200],
-    ["playing", "ended", 0],
   ]);
-  expect(changes[4]).toMatchObject({ playhead_seconds: 65 });
+  expect(events.find((event) => event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    to_playhead_seconds: 65, seek_interaction_duration_ms: 500, seek_resume_wait_ms: 200,
+    seek_outcome: "resumed",
+  });
   expect(events.at(-1)).toMatchObject({ playing_time_ms: 2000, rebuffer_duration_ms: 2000,
     seek_duration_ms: 500 });
+});
+
+test("rapid seek cycles emit one completed interaction without seek state records", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 10 });
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-scrubbing", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  const seek = (time: number) => page.evaluate((time) => {
+    const video = window.analyticsFixture.video;
+    video.currentTime = time;
+    video.dispatchEvent(new Event("seeking"));
+    video.dispatchEvent(new Event("seeked"));
+    video.dispatchEvent(new Event("playing"));
+  }, time);
+  await seek(25);
+  await page.clock.runFor(200);
+  await seek(45);
+  await page.clock.runFor(200);
+  await seek(60);
+  await page.clock.runFor(399);
+  expect(await page.evaluate(() => window.analyticsFixture.events.filter((event) =>
+    event.event_name === "chunkify.video.seek_completed"))).toHaveLength(0);
+  await page.clock.runFor(1);
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  expect(events.filter((event) => event.event_name === "chunkify.video.seek_completed")).toHaveLength(1);
+  expect(events.find((event) => event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    from_playhead_seconds: 10, to_playhead_seconds: 60, seek_outcome: "resumed",
+  });
+  expect(events.filter((event) => event.event_name === "chunkify.video.playback_state_changed")).toHaveLength(1);
+  await page.evaluate(() => window.analyticsFixture.video.dispatchEvent(new Event("ended")));
+  expect((await page.evaluate(() => window.analyticsFixture.events)).at(-1)).toMatchObject({ seek_count: 1 });
+});
+
+test("paused and interrupted seeks close without waiting for playback", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 10 });
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-paused-seek", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    f.video.dispatchEvent(new Event("pause"));
+    f.video.currentTime = 20;
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(400);
+  expect((await page.evaluate(() => window.analyticsFixture.events)).find((event) =>
+    event.event_name === "chunkify.video.seek_completed")).toMatchObject({ seek_outcome: "paused" });
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.currentTime = 30;
+    f.video.dispatchEvent(new Event("seeking"));
+    f.session!.destroy();
+  });
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  expect(events.filter((event) => event.event_name === "chunkify.video.seek_completed")).toHaveLength(2);
+  expect(events.at(-2)).toMatchObject({ event_name: "chunkify.video.seek_completed", seek_outcome: "interrupted" });
+  expect(events.at(-1)).toMatchObject({ event_name: "chunkify.video.view_ended", seek_count: 2 });
+  await page.clock.runFor(1000);
+  expect(await page.evaluate(() => window.analyticsFixture.events)).toHaveLength(events.length);
+});
+
+test("a seek waits for playback to resume after its final seeked event", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-resume", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(600);
+  expect((await page.evaluate(() => window.analyticsFixture.events)).filter((event) =>
+    event.event_name === "chunkify.video.seek_completed")).toHaveLength(0);
+  await page.evaluate(() => window.analyticsFixture.video.dispatchEvent(new Event("playing")));
+  expect((await page.evaluate(() => window.analyticsFixture.events)).find((event) =>
+    event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    seek_outcome: "resumed", seek_resume_wait_ms: 600,
+  });
+});
+
+test("excluding the grouped seek event keeps raw state changes available", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-raw-seek", includeEvents: ["playback_state_changed", "view_ended"],
+      destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+    for (const name of ["playing", "seeking", "seeked", "playing", "ended"]) {
+      f.video.dispatchEvent(new Event(name));
+    }
+    return f.events;
+  });
+  expect(events.filter((event) => event.event_name === "chunkify.video.seek_completed")).toHaveLength(0);
+  expect(events.filter((event) => event.event_name === "chunkify.video.playback_state_changed")
+    .map((event) => event.event_name === "chunkify.video.playback_state_changed" && event.to_state)).toEqual([
+    "playing", "seeking", "resuming", "playing", "ended",
+  ]);
+  expect(events.at(-1)).toMatchObject({ seek_count: 1 });
+});
+
+test("destroying from a seek destination ends the view once", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-destroy", destinations: [{ send(event) {
+        f.events.push(event);
+        if (event.event_name === "chunkify.video.seek_completed") f.session?.destroy();
+      } }],
+    });
+    f.session.startAttempt();
+    for (const name of ["playing", "seeking", "seeked", "playing"]) {
+      f.video.dispatchEvent(new Event(name));
+    }
+  });
+  await page.clock.runFor(400);
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  expect(events.filter((event) => event.event_name === "chunkify.video.seek_completed")).toHaveLength(1);
+  expect(events.filter((event) => event.event_name === "chunkify.video.view_ended")).toHaveLength(1);
+  expect(events.at(-1)).toMatchObject({ event_name: "chunkify.video.view_ended", reason: "destroyed" });
 });
 
 test("records intrinsic video size when it becomes available", async ({ page }) => {

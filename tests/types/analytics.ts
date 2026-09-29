@@ -29,6 +29,11 @@ const config: AnalyticsConfig = {
       void height;
       return;
     }
+    if (record.event_name === "chunkify.video.seek_completed") {
+      const outcome: "resumed" | "paused" | "interrupted" = record.seek_outcome;
+      void outcome;
+      return;
+    }
     const startup: number | null = record.startup_time_ms;
     const firstFrame: number | null = record.first_video_frame_time_ms;
     const buffering: number = record.rebuffer_duration_ms;
