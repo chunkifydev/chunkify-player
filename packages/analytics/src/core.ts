@@ -3,7 +3,7 @@ import { assertAnalyticsOptions } from "./options.js";
 
 export type { AnalyticsEventType } from "./event-types.js";
 
-const sdkVersion = "0.1.0"; // x-release-please-version
+const sdkVersion = "0.2.0"; // x-release-please-version
 const seekSettleMs = 400;
 
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";

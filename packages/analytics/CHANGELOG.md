@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.1.0...analytics-v0.2.0) (2026-09-29)
+
+
+### Features
+
+* **analytics:** group rapid seeks into one event ([3c427da](https://github.com/chunkifydev/chunkify-player/commit/3c427daee76b433cffc8eaea7958f99148dba76e))
+* **analytics:** group rapid seeks into one timeline event ([22c620d](https://github.com/chunkifydev/chunkify-player/commit/22c620dba3f30c54b30dc003f5d2f8585a658478))
+* **analytics:** include seek timeline boundaries ([3fcd156](https://github.com/chunkifydev/chunkify-player/commit/3fcd156481174bf0442c2a4ff30993bba1b62ff2))
+
+
+### Documentation
+
+* **analytics:** clarify event selection and field mapping ([aeda0c9](https://github.com/chunkifydev/chunkify-player/commit/aeda0c944ec91cd6c8427e8a7c937b0a2583eeed))
+* **analytics:** show event-specific mapping with HTTP ([dc7c04f](https://github.com/chunkifydev/chunkify-player/commit/dc7c04f1cfe3c0edf091c912ce3908f5d6d09b70))
+
 ## 0.1.0 (2026-09-28)
 
 
