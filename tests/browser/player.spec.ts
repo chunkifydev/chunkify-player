@@ -63,7 +63,7 @@ test("uses hls-video for HLS and video for ordinary media", async ({ page }) => 
   }))).toEqual({ tag: "video", source: "/tests/fixtures/media/video.mp4" });
 });
 
-test("caps hls.js auto quality to the player size", async ({ page }) => {
+test("caps hls.js auto quality by default and allows opting out", async ({ page }) => {
   const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
   test.skip(!hlsJsSupported, "This browser uses native HLS playback");
 
@@ -81,10 +81,31 @@ test("caps hls.js auto quality to the player size", async ({ page }) => {
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
     .toBeGreaterThanOrEqual(2);
 
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media as HTMLVideoElement & {
+      api?: { capLevelToPlayerSize: boolean };
+      config?: { capLevelToPlayerSize?: boolean };
+    };
+    element.setAttribute("cap-rendition-to-player-size", "false");
+    return {
+      property: element.capRenditionToPlayerSize,
+      config: media.config?.capLevelToPlayerSize,
+      live: media.api?.capLevelToPlayerSize,
+      sameMedia: element.media === media,
+    };
+  })).toEqual({ property: false, config: false, live: false, sameMedia: true });
+
   await player.evaluate((element: ChunkifyPlayer) => {
     element.src = "/tests/fixtures/media/video.mp4";
     element.src = "/tests/fixtures/media/master.m3u8";
   });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media as HTMLVideoElement & { api?: { capLevelToPlayerSize: boolean } };
+    return media.api?.capLevelToPlayerSize;
+  })).toBe(false);
+
+  await player.evaluate((element: ChunkifyPlayer) => { element.capRenditionToPlayerSize = true; });
+  await expect(player).not.toHaveAttribute("cap-rendition-to-player-size");
   await expect.poll(capEnabled).toBe(true);
 });
 

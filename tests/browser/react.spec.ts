@@ -143,6 +143,24 @@ test("React forwards private-playback options and errors", async ({ page }) => {
   );
 });
 
+test("React can disable and restore the HLS rendition size cap", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({
+    src: "/tests/fixtures/media/master.m3u8",
+    capRenditionToPlayerSize: false,
+  }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("cap-rendition-to-player-size", "false");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.capRenditionToPlayerSize))
+    .toBe(false);
+
+  await page.evaluate(() => window.reactFixture.render({
+    src: "/tests/fixtures/media/master.m3u8",
+  }));
+  await expect(player).not.toHaveAttribute("cap-rendition-to-player-size");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.capRenditionToPlayerSize))
+    .toBe(true);
+});
+
 test("React forwards and removes player colors", async ({ page }) => {
   await page.evaluate(() => window.reactFixture.render({
     primaryColor: "#700cd4",

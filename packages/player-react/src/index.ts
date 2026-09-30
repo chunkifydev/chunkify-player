@@ -86,6 +86,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   preload?: string | null | undefined;
   crossOrigin?: string | null | undefined;
   credentials?: PlayerCredentials | null | undefined;
+  capRenditionToPlayerSize?: boolean | undefined;
   theme?: string | null | undefined;
   aspectRatio?: PlayerAspectRatio | null | undefined;
   primaryColor?: string | null | undefined;
@@ -154,6 +155,7 @@ export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null 
     playsInline: props.playsInline ?? false,
     controls: props.controls ?? false,
     autoSeekToLive: props.autoSeekToLive ?? false,
+    capRenditionToPlayerSize: props.capRenditionToPlayerSize ?? true,
   };
   for (const name of callbackNames) delete elementProps[name];
   return createElement("chunkify-player", elementProps);

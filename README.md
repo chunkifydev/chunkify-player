@@ -54,6 +54,7 @@ JavaScript properties are:
 | `preload` | `preload` | Standard preload value. Defaults to `metadata`. |
 | `crossorigin` | `crossOrigin` | Standard media CORS setting. |
 | `credentials` | `credentials` | Use `include` for signed-cookie playback. |
+| `cap-rendition-to-player-size` | `capRenditionToPlayerSize` | Defaults to on for hls.js. Set to `"false"` to disable the size cap. |
 | `theme` | `theme` | Registered theme name. Defaults to `default`. |
 | `aspect-ratio` | `aspectRatio` | `portrait` for `9 / 16` or `landscape` for `16 / 9`. |
 | `primary-color` | `primaryColor` | Control foreground color. |
@@ -77,8 +78,11 @@ The player forwards standard media events such as `play`, `pause`, `timeupdate`,
 media element.
 
 For HLS playback through hls.js, automatic rendition selection is capped to
-the displayed media size. Native HLS rendition selection remains under the
-browser's control. Ordinary video files such as MP4 have no rendition switching.
+the displayed media size. Use `cap-rendition-to-player-size="false"` in HTML or
+`capRenditionToPlayerSize={false}` in React to remove that cap. This attribute
+accepts the string value `"false"`; it is not an HTML boolean attribute. Native
+HLS rendition selection remains under the browser's control. Ordinary video
+files such as MP4 have no rendition switching.
 
 ## Playback access
 
