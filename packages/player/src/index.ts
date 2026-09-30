@@ -38,6 +38,7 @@ const themeAttributes = [
 
 const playerAttributes = [
   ...mediaAttributes, ...themeAttributes, "credentials", "theme", "thumbnails",
+  "cap-rendition-to-player-size",
 ] as const;
 
 const mediaEvents = [
@@ -197,6 +198,14 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("credentials", value);
   }
 
+  get capRenditionToPlayerSize(): boolean {
+    return this.getAttribute("cap-rendition-to-player-size") !== "false";
+  }
+  set capRenditionToPlayerSize(value: boolean) {
+    if (value) this.removeAttribute("cap-rendition-to-player-size");
+    else this.setAttribute("cap-rendition-to-player-size", "false");
+  }
+
   get theme(): string { return resolvePlayerTheme(this.getAttribute("theme")); }
   set theme(value: string | null | undefined) { this.#setStringAttribute("theme", value); }
 
@@ -239,7 +248,7 @@ export class ChunkifyPlayer extends HTMLElement {
     for (const name of [
       "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
       "autoSeekToLive", "playsInline", "theme", "aspectRatio", "thumbnails", "primaryColor",
-      "secondaryColor", "accentColor",
+      "secondaryColor", "accentColor", "capRenditionToPlayerSize",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -299,12 +308,14 @@ export class ChunkifyPlayer extends HTMLElement {
     return media.localName === "hls-video" && hlsMedia.api ? "hlsjs" : "native";
   }
 
-  #configureHlsCredentials(media: ChunkifyMediaElement) {
+  #configureHlsPlayback(media: ChunkifyMediaElement) {
     if (media.localName !== "hls-video") return;
-    const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "config">;
-    hlsMedia.config = this.credentials === "include"
-      ? { xhrSetup: (xhr) => { xhr.withCredentials = true; } }
-      : null;
+    const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "config" | "api">;
+    const credentials = this.credentials === "include"
+      ? { xhrSetup: (xhr: XMLHttpRequest) => { xhr.withCredentials = true; } }
+      : {};
+    hlsMedia.config = { capLevelToPlayerSize: this.capRenditionToPlayerSize, ...credentials };
+    if (hlsMedia.api) hlsMedia.api.capLevelToPlayerSize = this.capRenditionToPlayerSize;
   }
 
   #attachHlsErrors(media: ChunkifyMediaElement) {
@@ -495,7 +506,7 @@ export class ChunkifyPlayer extends HTMLElement {
       replaced = true;
     }
 
-    this.#configureHlsCredentials(this.#media);
+    this.#configureHlsPlayback(this.#media);
 
     if (replaced || changedAttribute === undefined) {
       for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);

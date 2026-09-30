@@ -48,6 +48,8 @@ test("default events describe playback state durations and rendition switches", 
   await page.evaluate(() => {
     const f = window.analyticsFixture;
     const state = window as typeof window & { changeRendition: (rendition: AnalyticsRendition | null) => void };
+    f.video.style.width = "480px";
+    f.video.style.height = "270px";
     Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 42 });
     f.session = f.attachAnalytics(f.video, {
       videoId: "video-timeline", destinations: [{ send(event) { f.events.push(event); } }],
@@ -105,8 +107,10 @@ test("default events describe playback state durations and rendition switches", 
   expect(events[2]).toMatchObject({ from_state: "playing", to_state: "paused", previous_state_duration_ms: 3000 });
   expect(events[3]).toMatchObject({ from_state: "paused", to_state: "resuming", previous_state_duration_ms: 4000 });
   expect(events[5]).toMatchObject({ previous_rendition_width: 1280, previous_rendition_height: 720,
-    selected_rendition_width: 1920, selected_rendition_height: 1080, playhead_seconds: 42 });
+    selected_rendition_width: 1920, selected_rendition_height: 1080, playhead_seconds: 42,
+    player_width_px: 480, player_height_px: 270 });
   expect(events[5]).not.toHaveProperty("playing_time_ms");
+  expect(events[1]).not.toHaveProperty("player_width_px");
   expect(events.at(-1)).toMatchObject({ playing_time_ms: 4000 });
 });
 
@@ -298,15 +302,22 @@ test("destroying from a seek destination ends the view once", async ({ page }) =
   expect(events.at(-1)).toMatchObject({ event_name: "chunkify.video.view_ended", reason: "destroyed" });
 });
 
-test("records intrinsic video size when it becomes available", async ({ page }) => {
+test("records intrinsic and displayed video size when available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;
+    f.video.style.width = "320px";
+    f.video.style.height = "180px";
     f.session = f.attachSummaryAnalytics(f.video, { videoId: "asset-size", destinations: [{ send(event) { f.events.push(event); } }] });
     f.video.dispatchEvent(new Event("play"));
     Object.defineProperties(f.video, {
       videoWidth: { configurable: true, value: 1920 },
       videoHeight: { configurable: true, value: 1080 },
     });
+    f.video.style.width = "640px";
+    f.video.style.height = "360px";
+    f.video.dispatchEvent(new Event("ended"));
+    f.video.style.display = "none";
+    f.video.dispatchEvent(new Event("play"));
     f.video.dispatchEvent(new Event("ended"));
     f.session.destroy();
     return f.events;
@@ -314,13 +325,17 @@ test("records intrinsic video size when it becomes available", async ({ page }) 
   expect(events[0]).toMatchObject({
     schema_version: 1,
     media_width_px: null, media_height_px: null,
+    player_width_px: 320, player_height_px: 180,
   });
   expect(events[1]).toMatchObject({
     media_width_px: 1920, media_height_px: 1080,
+    player_width_px: 640, player_height_px: 360,
   });
   expect(events[1]).not.toHaveProperty("metrics");
   expect(events[1]).not.toHaveProperty("player_width_css_px");
   expect(events[1]).not.toHaveProperty("player_height_css_px");
+  expect(events[2]).toMatchObject({ player_width_px: null, player_height_px: null });
+  expect(events[3]).toMatchObject({ player_width_px: null, player_height_px: null });
 });
 
 test("startup and playing time exclude loading, buffering, pauses and seeks", async ({ page }) => {
@@ -463,6 +478,8 @@ test("rendition playing time follows playback, switches and view boundaries", as
   await page.evaluate(() => {
     const f = window.analyticsFixture;
     const state = window as typeof window & { changeRendition: (rendition: AnalyticsRendition | null) => void };
+    f.video.style.width = "400px";
+    f.video.style.height = "225px";
     f.session = f.attachSummaryAnalytics(f.video, {
       videoId: "asset-rendition-time", destinations: [{ send: (event) => { f.events.push(event); } }],
     });
@@ -498,6 +515,7 @@ test("rendition playing time follows playback, switches and view boundaries", as
   const snapshot = (await page.evaluate(() => window.analyticsFixture.events))[1]!;
   expect(snapshot.event_name).toBe("chunkify.video.view_snapshot");
   expect(snapshot.playing_time_ms).toBe(30000);
+  expect(snapshot).toMatchObject({ player_width_px: 400, player_height_px: 225 });
   expect(snapshot.rendition_playing_time).toEqual([
     { ...low, playing_time_ms: 20000 }, { ...high, playing_time_ms: 8000 },
   ]);

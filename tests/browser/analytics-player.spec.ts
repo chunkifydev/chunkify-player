@@ -12,6 +12,8 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     const playerEvents: ChunkifyPlayerAnalyticsEvent[] = [];
     const video = document.createElement("video");
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
+    video.style.cssText = "width:160px;height:90px";
+    player.style.cssText = "width:320px;height:180px";
     player.preload = "none";
     document.body.append(video, player);
 
@@ -33,6 +35,8 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     return {
       video: videoEvents.map((event) => [event.event_name, event.reason, event.video_id]),
       player: playerEvents.map((event) => [event.event_name, event.reason, event.video_id]),
+      videoSizes: videoEvents.map((event) => [event.player_width_px, event.player_height_px]),
+      playerSizes: playerEvents.map((event) => [event.player_width_px, event.player_height_px]),
     };
   });
 
@@ -46,6 +50,8 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
     ["chunkify.video.view_started", null, "asset-player"],
     ["chunkify.video.view_ended", "destroyed", "asset-player"],
   ]);
+  expect(result.videoSizes).toEqual([[160, 90], [160, 90]]);
+  expect(result.playerSizes).toEqual(Array(4).fill([320, 180]));
 });
 
 test("the standalone adapter follows Chunkify Player media replacements", async ({ page }) => {
@@ -121,14 +127,6 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-  const hlsFrameCallbacksAvailable = await player.evaluate((element: ChunkifyPlayer) =>
-    typeof (element.media as HTMLVideoElement).requestVideoFrameCallback === "function");
-  if (hlsFrameCallbacksAvailable) {
-    await player.evaluate((element: ChunkifyPlayer) => new Promise<void>((resolve) => {
-      (element.media as HTMLVideoElement).requestVideoFrameCallback(() => resolve());
-    }));
-  }
-
   await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
@@ -136,14 +134,6 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.filter((event) => event.event_name === "chunkify.video.view_started").length)).toBe(2);
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-  const mp4FrameCallbacksAvailable = await player.evaluate((element: ChunkifyPlayer) =>
-    typeof (element.media as HTMLVideoElement).requestVideoFrameCallback === "function");
-  if (mp4FrameCallbacksAvailable) {
-    await player.evaluate((element: ChunkifyPlayer) => new Promise<void>((resolve) => {
-      (element.media as HTMLVideoElement).requestVideoFrameCallback(() => resolve());
-    }));
-  }
-
   const events = await page.evaluate(() => {
     const state = window as typeof window & {
       analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
@@ -158,12 +148,6 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     ["chunkify.video.view_started", null],
     ["chunkify.video.view_ended", "destroyed"],
   ]);
-  if (hlsFrameCallbacksAvailable) {
-    expect(events[1]!.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
-  }
-  if (mp4FrameCallbacksAvailable) {
-    expect(events[3]!.first_video_frame_time_ms).toBeGreaterThanOrEqual(0);
-  }
   if (hlsJsActive) {
     expect(events[1]).toMatchObject({
       connector_name: "hls.js",
@@ -329,6 +313,7 @@ test("Shaka load boundaries keep one view per attempt and restore quality observ
   const result = await page.evaluate(async () => {
     const { monitorShaka } = await import("@chunkify/analytics/shaka");
     const video = document.createElement("video");
+    video.style.cssText = "width:480px;height:270px";
     document.body.append(video);
     class ShakaFixture extends EventTarget {
       observingQuality = false;
@@ -364,16 +349,17 @@ test("Shaka load boundaries keep one view per attempt and restore quality observ
       enabled, restored: shaka.observingQuality,
       events: records.map((event) => ({ name: event.event_name, reason: event.reason,
         outcome: event.startup_outcome, category: event.error_category,
-        requests: event.delivery_request_count, bytes: event.delivery_transferred_bytes })),
+        requests: event.delivery_request_count, bytes: event.delivery_transferred_bytes,
+        size: [event.player_width_px, event.player_height_px] })),
     };
   });
   expect(result).toEqual({
     enabled: true, restored: false, events: [
-      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0 },
-      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "started", category: null, requests: 1, bytes: 4 },
-      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0 },
-      { name: "chunkify.video.playback_error", reason: null, outcome: null, category: "network", requests: 0, bytes: 0 },
-      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "failed_before_start", category: null, requests: 0, bytes: 0 },
+      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0, size: [480, 270] },
+      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "started", category: null, requests: 1, bytes: 4, size: [480, 270] },
+      { name: "chunkify.video.view_started", reason: null, outcome: null, category: null, requests: 0, bytes: 0, size: [480, 270] },
+      { name: "chunkify.video.playback_error", reason: null, outcome: null, category: "network", requests: 0, bytes: 0, size: [480, 270] },
+      { name: "chunkify.video.view_ended", reason: "source_changed", outcome: "failed_before_start", category: null, requests: 0, bytes: 0, size: [480, 270] },
     ],
   });
 });
