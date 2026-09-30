@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.2.1...analytics-v0.3.0) (2026-09-30)
+
+
+### Features
+
+* **analytics:** record displayed player size ([7f086eb](https://github.com/chunkifydev/chunkify-player/commit/7f086ebecb5781e4ef59fad3f3cb869b486ea017))
+
 ## [0.2.1](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.2.0...analytics-v0.2.1) (2026-09-30)
 
 
