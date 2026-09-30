@@ -313,10 +313,10 @@ test("records intrinsic video size when it becomes available", async ({ page }) 
   });
   expect(events[0]).toMatchObject({
     schema_version: 1,
-    video_intrinsic_width_css_px: null, video_intrinsic_height_css_px: null,
+    media_width_px: null, media_height_px: null,
   });
   expect(events[1]).toMatchObject({
-    video_intrinsic_width_css_px: 1920, video_intrinsic_height_css_px: 1080,
+    media_width_px: 1920, media_height_px: 1080,
   });
   expect(events[1]).not.toHaveProperty("metrics");
   expect(events[1]).not.toHaveProperty("player_width_css_px");

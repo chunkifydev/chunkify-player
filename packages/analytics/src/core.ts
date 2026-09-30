@@ -32,8 +32,8 @@ export interface ViewMetrics {
   seek_duration_ms: number;
   maximum_playhead_seconds: number;
   furthest_progress_ratio: number | null;
-  video_intrinsic_width_css_px: number | null;
-  video_intrinsic_height_css_px: number | null;
+  media_width_px: number | null;
+  media_height_px: number | null;
   dropped_video_frames: number | null;
   total_video_frames: number | null;
   selected_rendition_width: number | null;
@@ -583,8 +583,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       seek_duration_ms: seekDuration,
       maximum_playhead_seconds: current.maximumPlayhead,
       furthest_progress_ratio: current.duration === null || current.duration === 0 ? null : Math.min(1, current.maximumPlayhead / current.duration),
-      video_intrinsic_width_css_px: current.intrinsicVideoWidth,
-      video_intrinsic_height_css_px: current.intrinsicVideoHeight,
+      media_width_px: current.intrinsicVideoWidth,
+      media_height_px: current.intrinsicVideoHeight,
       dropped_video_frames: viewFrames?.dropped ?? null,
       total_video_frames: viewFrames?.total ?? null,
       ...engineMetrics,

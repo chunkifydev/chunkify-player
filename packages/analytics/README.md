@@ -66,7 +66,7 @@ The second argument to `monitor()` has the same options as `monitorHlsJs()`, `mo
 
 Once monitoring is attached, each destination receives all event types that occur by default. An empty `includeEvents` array sends nothing. Excluding `view_snapshot` stops its timer but still collects the final view metrics. Rapid seeks within 400 ms of the last `seeked` are grouped into one `seek_completed` record; seek-related state changes are withheld while that record is enabled.
 
-For basic view monitoring, send only the start and final records. The final record still has cumulative viewing and quality measurements, but this configuration sends no periodic snapshots or separate state, rendition, seek, or error events:
+For playback-attempt counts and final view measurements, send only the start and final records. This configuration sends no interim snapshots or separate state, rendition, seek, or error events:
 
 ```js
 monitor(player, {
@@ -76,7 +76,7 @@ monitor(player, {
 });
 ```
 
-Add `playback_error` if you also want an immediate error record. Use [event mapping](#map-event-fields) to choose which fields each destination receives; `includeEvents` chooses which event types it receives.
+Add `playback_error` for immediate error reports, or `view_snapshot` for interim measurements during long views. See [choose events for reporting](#choose-events-for-reporting) for counting and timeline guidance. Use [event mapping](#map-event-fields) to choose which fields each destination receives; `includeEvents` chooses which event types it receives.
 
 ## Monitor third-party players
 
@@ -161,6 +161,19 @@ See [Shaka's setup guide](https://github.com/shaka-project/shaka-player/blob/mai
 
 The seven event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, `chunkify.video.view_ended`, `chunkify.video.playback_state_changed`, `chunkify.video.rendition_changed`, and `chunkify.video.seek_completed`. All records share identifiers, a timestamp, and a sequence number within the `view_id`. The first four contain cumulative view measurements. Snapshots normally arrive after each 30 seconds of active playing time. State, rendition, and seek records have smaller, event-specific payloads. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
 
+### Choose events for reporting
+
+| Goal | Events to include | How to use them |
+| --- | --- | --- |
+| Count playback attempts | `view_started` | Count distinct `view_id` values. An attempt can fail before any video plays. |
+| Count confirmed starts | `playback_state_changed` | Count each view's first transition to `playing`. If you collect only final records, count `view_ended` where `startup_outcome` is `started`, but that count depends on receiving the final record. |
+| Report view totals and playback quality | `view_started`, `view_ended`; add `view_snapshot` and `playback_error` when needed | Use each view's final cumulative measurements for playing time, buffering, seeks, and rendition use. Snapshots give interim measurements if the view is long or its final record is lost. Errors are sent immediately. |
+| Reconstruct a high-level playback timeline | All seven event types (the default) | Group by `view_id` and order by `sequence`. State changes show pauses and buffering; `seek_completed` summarizes rapid seeking; `rendition_changed` shows exposed quality switches; errors show failures. |
+
+`view_ended` means the monitored attempt closed, not necessarily that the video played to completion. Use `reason: "ended"` to identify playback that reached the media end. Distinct `view_id` values count attempts, not unique people; unique-viewer reporting requires your application to provide a pseudonymous `viewerId`. Deduplicate received records by `event_id`, and never sum cumulative snapshots together. Delivery of the final record on page exit is best effort, so an endpoint should not assume every start has an end.
+
+The default events describe a **high-level** timeline, not every user gesture or intermediate seek position. Grouped seeks replace their intermediate state changes, and a rendition switch is available only when the connector exposes it. The collector cannot reconstruct details it does not observe.
+
 ### Complete Chunkify Player event example
 
 This complete `view_ended` event is based on `<chunkify-player>` playing a local HLS stream, with timing values rounded for readability. The component used hls.js for this stream, so `connector_name` and `player_name` report `hls.js`. It is the **raw Chunkify event** passed to `send(event)`; an adapter or mapper can reshape it for a destination.
@@ -175,7 +188,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "view_id": "8267fd81-ecf6-4fb1-83d9-4d1fba46b1b6",
   "video_id": "video_123",
   "sdk_name": "@chunkify/analytics",
-  "sdk_version": "0.1.0",
+  "sdk_version": "0.2.0",
   "connector_name": "hls.js",
   "connector_version": "1.7.3",
   "player_name": "hls.js",
@@ -200,8 +213,8 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "seek_duration_ms": 0,
   "maximum_playhead_seconds": 6.021333,
   "furthest_progress_ratio": 1,
-  "video_intrinsic_width_css_px": 256,
-  "video_intrinsic_height_css_px": 144,
+  "media_width_px": 256,
+  "media_height_px": 144,
   "dropped_video_frames": 0,
   "total_video_frames": 68,
   "selected_rendition_width": 256,
@@ -287,7 +300,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `media_duration_seconds`, `startup_time_ms`, `first_video_frame_time_ms`, `playing_time_ms` | Media duration; time from attempt to first `playing`; time to the first frame callback; cumulative actual playing time. The two startup measurements can differ. |
 | `rebuffer_count`, `rebuffer_duration_ms`, `rebuffer_ratio`, `seek_count`, `seek_duration_ms` | Counts, cumulative durations, and rebuffer time divided by playing plus rebuffer time. The ratio is `null` until its denominator is positive. |
 | `maximum_playhead_seconds`, `furthest_progress_ratio` | Furthest playhead reached and that position divided by duration, capped at 1. Seeking near the end raises the ratio without watching the intervening video. |
-| `video_intrinsic_width_css_px`, `video_intrinsic_height_css_px`, `dropped_video_frames`, `total_video_frames` | Intrinsic display dimensions and browser frame counters when exposed. The dimensions are not necessarily encoded frame dimensions. |
+| `media_width_px`, `media_height_px`, `dropped_video_frames`, `total_video_frames` | The video element's intrinsic width and height (`videoWidth` and `videoHeight`) in CSS pixels, plus browser frame counters when exposed. These are not the player box dimensions or necessarily the encoded frame dimensions. |
 | `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
 | `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
 | `delivery_request_count`, `delivery_transferred_bytes`, `delivery_throughput_bps` | Aggregate requests, response bytes, and throughput where the engine exposes them. Throughput is in bits per second. |

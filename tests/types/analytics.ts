@@ -42,7 +42,7 @@ const config: AnalyticsConfig = {
     const firstFrame: number | null = record.first_video_frame_time_ms;
     const buffering: number = record.rebuffer_duration_ms;
     const progress: number | null = record.furthest_progress_ratio;
-    const videoWidth: number | null = record.video_intrinsic_width_css_px;
+    const videoWidth: number | null = record.media_width_px;
     const snapshot: boolean = record.event_name === "chunkify.video.view_snapshot";
     const frames: number | null = record.total_video_frames;
     const category: AnalyticsErrorCategory | null = record.error_category;
