@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.1.0...player-v1.2.0) (2026-09-30)
+
+
+### Features
+
+* **player:** cap HLS quality to player size ([e539340](https://github.com/chunkifydev/chunkify-player/commit/e539340dc26396c58c83d2dc32835859f40970a5))
+* **player:** expose HLS rendition size cap option ([4078221](https://github.com/chunkifydev/chunkify-player/commit/40782212d13e007fb2e56f5769071de3289b5080))
+
 ## [1.1.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.0.1...player-v1.1.0) (2026-09-28)
 
 

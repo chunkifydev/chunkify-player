@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.0.2...player-react-v1.1.0) (2026-09-30)
+
+
+### Features
+
+* **player:** expose HLS rendition size cap option ([4078221](https://github.com/chunkifydev/chunkify-player/commit/40782212d13e007fb2e56f5769071de3289b5080))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.1.0 to 1.2.0
+
 ## [1.0.2](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.0.1...player-react-v1.0.2) (2026-09-28)
 
 
