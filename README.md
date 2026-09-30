@@ -76,6 +76,10 @@ The player forwards standard media events such as `play`, `pause`, `timeupdate`,
 `ended`, and `error`. It also emits `mediachange` when it replaces the active
 media element.
 
+For HLS playback through hls.js, automatic rendition selection is capped to
+the displayed media size. Native HLS rendition selection remains under the
+browser's control. Ordinary video files such as MP4 have no rendition switching.
+
 ## Playback access
 
 For a path-token CDN, pass the complete authorized URL as `src`. For signed

@@ -299,12 +299,13 @@ export class ChunkifyPlayer extends HTMLElement {
     return media.localName === "hls-video" && hlsMedia.api ? "hlsjs" : "native";
   }
 
-  #configureHlsCredentials(media: ChunkifyMediaElement) {
+  #configureHlsPlayback(media: ChunkifyMediaElement) {
     if (media.localName !== "hls-video") return;
     const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "config">;
-    hlsMedia.config = this.credentials === "include"
-      ? { xhrSetup: (xhr) => { xhr.withCredentials = true; } }
-      : null;
+    const credentials = this.credentials === "include"
+      ? { xhrSetup: (xhr: XMLHttpRequest) => { xhr.withCredentials = true; } }
+      : {};
+    hlsMedia.config = { capLevelToPlayerSize: true, ...credentials };
   }
 
   #attachHlsErrors(media: ChunkifyMediaElement) {
@@ -495,7 +496,7 @@ export class ChunkifyPlayer extends HTMLElement {
       replaced = true;
     }
 
-    this.#configureHlsCredentials(this.#media);
+    this.#configureHlsPlayback(this.#media);
 
     if (replaced || changedAttribute === undefined) {
       for (const attribute of mediaAttributes) this.#syncMediaAttribute(attribute);

@@ -63,6 +63,31 @@ test("uses hls-video for HLS and video for ordinary media", async ({ page }) => 
   }))).toEqual({ tag: "video", source: "/tests/fixtures/media/video.mp4" });
 });
 
+test("caps hls.js auto quality to the player size", async ({ page }) => {
+  const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
+  test.skip(!hlsJsSupported, "This browser uses native HLS playback");
+
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/master.m3u8"
+      style="display:block;width:160px;height:90px"></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  const capEnabled = () => player.evaluate((element: ChunkifyPlayer) => {
+    const media = element.media as HTMLVideoElement & { api?: { capLevelToPlayerSize: boolean } };
+    return media.api?.capLevelToPlayerSize ?? false;
+  });
+  await expect.poll(capEnabled).toBe(true);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+    .toBeGreaterThanOrEqual(2);
+
+  await player.evaluate((element: ChunkifyPlayer) => {
+    element.src = "/tests/fixtures/media/video.mp4";
+    element.src = "/tests/fixtures/media/master.m3u8";
+  });
+  await expect.poll(capEnabled).toBe(true);
+});
+
 test("contains HLS and MP4 media by default and supports fit overrides", async ({ page }) => {
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player
