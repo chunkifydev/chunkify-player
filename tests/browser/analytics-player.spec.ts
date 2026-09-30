@@ -177,10 +177,10 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
   }
-  expect(events[1]!.video_intrinsic_width_css_px).toBeGreaterThan(0);
-  expect(events[1]!.video_intrinsic_height_css_px).toBeGreaterThan(0);
-  expect(events[3]!.video_intrinsic_width_css_px).toBeGreaterThan(0);
-  expect(events[3]!.video_intrinsic_height_css_px).toBeGreaterThan(0);
+  expect(events[1]!.media_width_px).toBeGreaterThan(0);
+  expect(events[1]!.media_height_px).toBeGreaterThan(0);
+  expect(events[3]!.media_width_px).toBeGreaterThan(0);
+  expect(events[3]!.media_height_px).toBeGreaterThan(0);
 });
 
 test("an external hls.js instance enriches an ordinary video", async ({ page, browserName }) => {

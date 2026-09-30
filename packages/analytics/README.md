@@ -213,8 +213,8 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "seek_duration_ms": 0,
   "maximum_playhead_seconds": 6.021333,
   "furthest_progress_ratio": 1,
-  "video_intrinsic_width_css_px": 256,
-  "video_intrinsic_height_css_px": 144,
+  "media_width_px": 256,
+  "media_height_px": 144,
   "dropped_video_frames": 0,
   "total_video_frames": 68,
   "selected_rendition_width": 256,
@@ -300,7 +300,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `media_duration_seconds`, `startup_time_ms`, `first_video_frame_time_ms`, `playing_time_ms` | Media duration; time from attempt to first `playing`; time to the first frame callback; cumulative actual playing time. The two startup measurements can differ. |
 | `rebuffer_count`, `rebuffer_duration_ms`, `rebuffer_ratio`, `seek_count`, `seek_duration_ms` | Counts, cumulative durations, and rebuffer time divided by playing plus rebuffer time. The ratio is `null` until its denominator is positive. |
 | `maximum_playhead_seconds`, `furthest_progress_ratio` | Furthest playhead reached and that position divided by duration, capped at 1. Seeking near the end raises the ratio without watching the intervening video. |
-| `video_intrinsic_width_css_px`, `video_intrinsic_height_css_px`, `dropped_video_frames`, `total_video_frames` | Intrinsic display dimensions and browser frame counters when exposed. The dimensions are not necessarily encoded frame dimensions. |
+| `media_width_px`, `media_height_px`, `dropped_video_frames`, `total_video_frames` | The video element's intrinsic width and height (`videoWidth` and `videoHeight`) in CSS pixels, plus browser frame counters when exposed. These are not the player box dimensions or necessarily the encoded frame dimensions. |
 | `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
 | `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
 | `delivery_request_count`, `delivery_transferred_bytes`, `delivery_throughput_bps` | Aggregate requests, response bytes, and throughput where the engine exposes them. Throughput is in bits per second. |
