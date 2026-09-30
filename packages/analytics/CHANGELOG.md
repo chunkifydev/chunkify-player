@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.2.0...analytics-v0.2.1) (2026-09-30)
+
+
+### Documentation
+
+* **analytics:** explain event choices for reporting ([bf99a02](https://github.com/chunkifydev/chunkify-player/commit/bf99a02b1597883f6b6ae39d990b0137f8db1304))
+
+
+### Refactors
+
+* **analytics:** shorten media dimension fields ([8bd34a4](https://github.com/chunkifydev/chunkify-player/commit/8bd34a4ec5b9b5038cb02be1c67ed7ffb85fe2d1))
+
 ## [0.2.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.1.0...analytics-v0.2.0) (2026-09-29)
 
 
