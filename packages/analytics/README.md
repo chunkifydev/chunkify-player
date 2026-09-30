@@ -215,6 +215,8 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "furthest_progress_ratio": 1,
   "media_width_px": 256,
   "media_height_px": 144,
+  "player_width_px": 640,
+  "player_height_px": 360,
   "dropped_video_frames": 0,
   "total_video_frames": 68,
   "selected_rendition_width": 256,
@@ -252,12 +254,14 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
 }
 ```
 
-`rendition_changed` reports a change between two known video renditions. It does not fire for the initial selection, repeated reports of the same rendition, or engines that do not expose rendition changes. The event has `previous_rendition_` and `selected_rendition_` fields for width, height, codec, bitrate in bits per second, and frame rate. Unknown properties are `null`:
+`rendition_changed` reports a change between two known video renditions. It does not fire for the initial selection, repeated reports of the same rendition, or engines that do not expose rendition changes. The event includes the displayed media size and has `previous_rendition_` and `selected_rendition_` fields for width, height, codec, bitrate in bits per second, and frame rate. Unknown properties are `null`:
 
 ```json
 {
   "event_name": "chunkify.video.rendition_changed",
   "playhead_seconds": 42,
+  "player_width_px": 640,
+  "player_height_px": 360,
   "previous_rendition_width": 1280,
   "previous_rendition_height": 720,
   "selected_rendition_width": 854,
@@ -301,6 +305,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `rebuffer_count`, `rebuffer_duration_ms`, `rebuffer_ratio`, `seek_count`, `seek_duration_ms` | Counts, cumulative durations, and rebuffer time divided by playing plus rebuffer time. The ratio is `null` until its denominator is positive. |
 | `maximum_playhead_seconds`, `furthest_progress_ratio` | Furthest playhead reached and that position divided by duration, capped at 1. Seeking near the end raises the ratio without watching the intervening video. |
 | `media_width_px`, `media_height_px`, `dropped_video_frames`, `total_video_frames` | The video element's intrinsic width and height (`videoWidth` and `videoHeight`) in CSS pixels, plus browser frame counters when exposed. These are not the player box dimensions or necessarily the encoded frame dimensions. |
+| `player_width_px`, `player_height_px` | The monitored media element's displayed box in CSS pixels. Present on view and rendition-change events; `null` when it has no measurable size. A final event retains the last measured size if the media element was removed first. |
 | `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
 | `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
 | `delivery_request_count`, `delivery_transferred_bytes`, `delivery_throughput_bps` | Aggregate requests, response bytes, and throughput where the engine exposes them. Throughput is in bits per second. |
@@ -308,6 +313,8 @@ These are excerpts; actual timeline records also have the shared identifiers and
 `reason` can be `ended`, `destroyed`, `source_changed`, or `page_exit`. `startup_outcome` can be `started`, `failed_before_start`, or `ended_before_start`. Error categories are `aborted`, `network`, `decode`, `unsupported`, or `unknown`.
 
 `first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
+
+Player size is sampled when these events are emitted; the collector does not record every resize. For Chunkify Player, this is the internal media box, not the outer control theme. Other supported monitors measure the media element passed to them.
 
 ## Map event fields
 
