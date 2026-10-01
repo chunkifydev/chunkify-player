@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.1.0...player-react-v1.2.0) (2026-10-01)
+
+
+### Features
+
+* **player:** add source retry and caption selection ([ff86645](https://github.com/chunkifydev/chunkify-player/commit/ff86645011a085c8be952ba67dfba81512f171a0))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.2.0 to 1.3.0
+
 ## [1.1.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.0.2...player-react-v1.1.0) (2026-09-30)
 
 
