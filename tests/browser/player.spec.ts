@@ -63,6 +63,30 @@ test("uses hls-video for HLS and video for ordinary media", async ({ page }) => 
   }))).toEqual({ tag: "video", source: "/tests/fixtures/media/video.mp4" });
 });
 
+test("an explicit type plays an extensionless HLS URL and can switch back to automatic detection", async ({ page }) => {
+  await page.route("**/tests/fixtures/media/manifest", async (route) => {
+    const source = new URL("/tests/fixtures/media/master.m3u8", route.request().url()).href;
+    await route.fulfill({ response: await route.fetch({ url: source }), contentType: "application/vnd.apple.mpegurl" });
+  });
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/manifest" type="application/vnd.apple.mpegurl" muted></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
+  expect(await player.evaluate((element: ChunkifyPlayer) => ({
+    type: element.type, tag: element.media.localName,
+  }))).toEqual({ type: "application/vnd.apple.mpegurl", tag: "hls-video" });
+
+  await player.evaluate((element: ChunkifyPlayer) => { element.type = null; });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
+  await player.evaluate((element: ChunkifyPlayer) => { element.type = "application/x-mpegURL"; });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("hls-video");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+});
+
 test("caps hls.js auto quality by default and allows opting out", async ({ page }) => {
   const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
   test.skip(!hlsJsSupported, "This browser uses native HLS playback");
@@ -282,7 +306,7 @@ test("the bundled theme supports player-level control visibility variables", asy
     return {
       play: displays("media-play-button"),
       mute: displays("media-mute-button"),
-      captions: displays("media-captions-button"),
+      captions: displays("media-captions-menu-button"),
       pip: displays("media-pip-button"),
       fullscreen: displays("media-fullscreen-button"),
       airplay: displays("media-airplay-button"),
@@ -504,6 +528,64 @@ test("mirrors standard tracks into HLS and MP4 media", async ({ page }) => {
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
     Array.from(element.media.querySelectorAll<HTMLTrackElement>(":scope > track"), (track) => track.label),
   )).toEqual(["English captions", "French"]);
+});
+
+for (const source of ["master.m3u8", "video.mp4"] as const) {
+  test(`chooses and disables caption tracks in ${source}`, async ({ page }) => {
+    await page.route("**/captions-en.vtt", (route) => route.fulfill({
+      contentType: "text/vtt", body: "WEBVTT\n\n00:00.000 --> 00:06.000\nEnglish captions\n",
+    }));
+    await page.route("**/captions-fr.vtt", (route) => route.fulfill({
+      contentType: "text/vtt", body: "WEBVTT\n\n00:00.000 --> 00:06.000\nSous-titres français\n",
+    }));
+    await page.evaluate((src) => {
+      const width = src === "video.mp4" ? 320 : 640;
+      const height = src === "video.mp4" ? 180 : 360;
+      document.body.innerHTML = `<chunkify-player controls muted
+        style="width:${width}px;height:${height}px" src="/tests/fixtures/media/${src}">
+        <track kind="captions" srclang="en" label="English" src="/captions-en.vtt">
+        <track kind="captions" srclang="fr" label="Français" src="/captions-fr.vtt">
+      </chunkify-player>`;
+    }, source);
+    const player = page.locator("chunkify-player");
+    const button = player.locator("media-captions-menu-button");
+    const menu = player.locator("media-captions-menu");
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+      .toBeGreaterThanOrEqual(source === "video.mp4" ? 1 : 2);
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+      Array.from(element.media.textTracks, (track) => track.label))).toEqual(["English", "Français"]);
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(menu).toBeVisible();
+    await expect(menu.locator("media-chrome-menu-item")).toHaveCount(3);
+    await menu.locator("media-chrome-menu-item").filter({ hasText: "Français" }).click();
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+      Array.from(element.media.textTracks, (track) => [track.label, track.mode]))).toEqual([
+      ["English", "disabled"], ["Français", "showing"],
+    ]);
+
+    await button.click();
+    await menu.locator("media-chrome-menu-item").filter({ hasText: "Off" }).click();
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+      Array.from(element.media.textTracks, (track) => track.mode))).toEqual(["disabled", "disabled"]);
+  });
+}
+
+test("keeps the basic example toolbar near the bottom with caption tracks", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  const player = page.locator("chunkify-player");
+  await expect(player.locator("media-control-bar")).toBeVisible();
+  const bottomGap = () => player.evaluate((element) => {
+    const controller = element.shadowRoot?.querySelector("[part=theme]")?.shadowRoot?.querySelector("media-controller");
+    const bar = controller?.querySelector("media-control-bar");
+    if (!controller || !bar) throw new Error("Player toolbar is missing");
+    return (controller.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom)
+      / controller.getBoundingClientRect().height;
+  });
+  expect(await bottomGap()).toBeLessThan(0.2);
+  await player.locator("media-captions-menu-button").click();
+  await expect(player.locator("media-captions-menu")).toBeVisible();
+  expect(await bottomGap()).toBeLessThan(0.2);
 });
 
 test("creates thumbnail previews from the thumbnails attribute", async ({ page }) => {

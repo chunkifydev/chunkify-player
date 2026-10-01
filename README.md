@@ -49,6 +49,7 @@ JavaScript properties are:
 | Attribute | Property | Purpose |
 | --- | --- | --- |
 | `src` | `src` | HLS manifest or ordinary video URL. |
+| `type` | `type` | Optional source MIME type. Use `application/vnd.apple.mpegurl` for an HLS URL without `.m3u8`. |
 | `poster` | `poster` | Poster image URL. |
 | `thumbnails` | `thumbnails` | WebVTT thumbnail preview URL. |
 | `preload` | `preload` | Standard preload value. Defaults to `metadata`. |
@@ -71,6 +72,17 @@ Boolean attributes follow HTML rules, so `controls="false"` still enables
 controls. String properties accept `null` or `undefined` to remove their
 attribute.
 
+The player detects HLS from a `.m3u8` URL path by default. For a manifest URL
+without that extension, set its MIME type explicitly:
+
+```html
+<chunkify-player src="https://media.example.com/videos/123/play"
+  type="application/vnd.apple.mpegurl" controls></chunkify-player>
+```
+
+The React wrapper accepts the same `type` prop. `application/x-mpegURL` also
+selects HLS. An explicit non-HLS type selects ordinary video playback.
+
 The read-only `media` property returns the active media element. Read it again
 after switching between HLS and MP4 because that change replaces the element.
 The player forwards standard media events such as `play`, `pause`, `timeupdate`,
@@ -86,9 +98,9 @@ files such as MP4 have no rendition switching.
 
 ## Playback access
 
-For a path-token CDN, pass the complete authorized URL as `src`. For signed
-cookies, set the cookie in the application backend before creating the player,
-then enable credentials:
+For a path-token CDN, pass the complete authorized URL as `src`. For
+cookie-protected media, have the application backend set the cookie before
+setting `src`, then enable credentials:
 
 ```html
 <chunkify-player
@@ -98,9 +110,18 @@ then enable credentials:
 ></chunkify-player>
 ```
 
-The media origin must return `Access-Control-Allow-Credentials: true` and an
-explicit `Access-Control-Allow-Origin` matching the page origin. Browser cookie
-rules still apply.
+`credentials="include"` sends eligible cookies with HLS playlists and segments
+and with native video requests. It also sets the underlying media element's
+`crossorigin` value to `use-credentials`, so no separate `crossorigin` attribute
+is needed. The player does not create or sign cookies.
+
+For cross-origin playback, the media origin must return
+`Access-Control-Allow-Credentials: true` and an explicit
+`Access-Control-Allow-Origin` matching the page origin. The cookie's domain and
+path must cover the media URL. If the page and media are on different sites,
+the cookie needs `SameSite=None; Secure`, and browser restrictions on third-party
+cookies may still block it. Using app and media hosts on the same site avoids
+that restriction.
 
 For authorization, network, format, and decoding failures, the component
 dispatches a sanitized `playback-error` event. Its detail contains `code`,
@@ -111,6 +132,12 @@ player.addEventListener("playback-error", (event) => {
   console.log(event.detail.code, event.detail.engine);
 });
 ```
+
+After restoring access following a `playback-error`, call `player.retry()` to
+reload the same source with the browser's current cookies. It returns `true`
+when a failed source is retried and `false` when there is no failed source to
+retry. It restarts loading; the viewer can then press Play. The React wrapper
+exposes `retry()` through its ref.
 
 The application remains responsible for creating, refreshing, and revoking
 tokens and cookies. The player does not provide DRM.
@@ -132,6 +159,9 @@ Direct-child `<track>` elements are still mirrored into the active media
 element for captions, subtitles, chapters, and custom metadata. An explicit
 `<track kind="metadata" label="thumbnails">` takes precedence over the
 `thumbnails` attribute.
+
+When multiple caption or subtitle tracks are present, the captions control
+opens a menu to choose a track or turn captions off.
 
 Same-origin tracks need no CORS attribute. Public cross-origin tracks require
 `crossorigin="anonymous"` and an `Access-Control-Allow-Origin` response header.

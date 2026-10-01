@@ -37,7 +37,7 @@ const themeAttributes = [
 ] as const;
 
 const playerAttributes = [
-  ...mediaAttributes, ...themeAttributes, "credentials", "theme", "thumbnails",
+  ...mediaAttributes, ...themeAttributes, "credentials", "theme", "thumbnails", "type",
   "cap-rendition-to-player-size",
 ] as const;
 
@@ -48,8 +48,10 @@ const mediaEvents = [
   "timeupdate", "volumechange", "waiting",
 ] as const;
 
-function isHlsSource(source: string): boolean {
+function isHlsSource(source: string, type: string | null): boolean {
   if (!source) return false;
+  const mimeType = type?.split(";", 1)[0]?.trim().toLowerCase();
+  if (mimeType) return mimeType === "application/vnd.apple.mpegurl" || mimeType === "application/x-mpegurl";
   try {
     return new URL(source, document.baseURI).pathname.toLowerCase().endsWith(".m3u8");
   } catch {
@@ -176,8 +178,19 @@ export class ChunkifyPlayer extends HTMLElement {
     return this.#media;
   }
 
+  /** Reload the current source after a playback failure. */
+  retry(): boolean {
+    if (!this.isConnected || !this.src || this.#failedMedia !== this.#media
+      || (this.hasAttribute("credentials") && this.credentials === null)) return false;
+    this.#syncMedia("src");
+    return true;
+  }
+
   get src(): string { return this.getAttribute("src") ?? ""; }
   set src(value: string | null | undefined) { this.#setStringAttribute("src", value); }
+
+  get type(): string { return this.getAttribute("type") ?? ""; }
+  set type(value: string | null | undefined) { this.#setStringAttribute("type", value); }
 
   get poster(): string { return this.getAttribute("poster") ?? ""; }
   set poster(value: string | null | undefined) { this.#setStringAttribute("poster", value); }
@@ -246,7 +259,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   connectedCallback() {
     for (const name of [
-      "src", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
+      "src", "type", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
       "autoSeekToLive", "playsInline", "theme", "aspectRatio", "thumbnails", "primaryColor",
       "secondaryColor", "accentColor", "capRenditionToPlayerSize",
     ]) {
@@ -493,7 +506,7 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#syncThemeSelection();
     }
 
-    const tagName = isHlsSource(this.src) ? "hls-video" : "video";
+    const tagName = isHlsSource(this.src, this.getAttribute("type")) ? "hls-video" : "video";
     let replaced = false;
     if (this.#media.localName !== tagName || changedAttribute === "credentials") {
       this.#cancelPendingHlsSource();

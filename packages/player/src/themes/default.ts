@@ -69,8 +69,16 @@ export const defaultThemeMarkup = String.raw`
     display: var(--mute-button, flex);
   }
 
-  media-captions-button.small-button {
+  media-captions-menu-button.small-button {
     display: var(--captions-button, flex);
+  }
+
+  media-captions-menu {
+    position: absolute;
+    bottom: 76px;
+    right: 80px;
+    --media-menu-background: rgb(20 20 30 / 0.95);
+    --media-menu-border-radius: 12px;
   }
 
   media-pip-button.small-button {
@@ -247,10 +255,20 @@ export const defaultThemeMarkup = String.raw`
     display: var(--mute-button, flex);
   }
 
-  media-controller:not([breakpointsm]) media-captions-button.small-button {
+  media-controller:not([breakpointsm]) media-captions-menu-button.small-button {
+    display: var(--captions-button, flex);
     position: absolute;
     top: 22px;
     left: 16px;
+  }
+
+  media-controller:not([breakpointsm]) media-captions-menu {
+    z-index: 2;
+    top: 12px;
+    left: 82px;
+    bottom: auto;
+    right: auto;
+    --media-menu-max-height: calc(100% - 24px);
   }
 
   media-controller:not([breakpointsm]) div[slot="centered-chrome"] media-play-button {
@@ -264,7 +282,7 @@ export const defaultThemeMarkup = String.raw`
     height: 48px;
   }
 
-  media-captions-button:not([mediasubtitleslist]),
+  media-captions-menu-button:not([mediasubtitleslist]),
   media-airplay-button[mediaairplayunavailable],
   media-fullscreen-button[mediafullscreenunavailable],
   media-cast-button[mediacastunavailable],
@@ -334,10 +352,10 @@ export const defaultThemeMarkup = String.raw`
       <media-preview-thumbnail slot="preview"></media-preview-thumbnail>
       <media-preview-time-display slot="preview"></media-preview-time-display>
     </media-time-range>
-    <media-captions-button class="small-button">
+    <media-captions-menu-button class="small-button">
       <svg slot="off" viewBox="0 0 16 16"><path d="M12.6 13.7H3.4C2 13.7.8 12.6.8 11.1V4.9c0-1.4 1.1-2.6 2.6-2.6h9.3c1.4 0 2.6 1.1 2.6 2.6v6.2c-.1 1.5-1.3 2.6-2.7 2.6z"/><path fill="#fff" d="M4.7 8H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h1.5c.2 0 .4.2.4.4s-.2.4-.4.4zM12.5 8H6.7c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h5.7c.2 0 .4.2.4.4s-.1.4-.3.4zM7.7 10.2H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h4.6c.2 0 .4.2.4.4-.1.2-.3.4-.5.4zM12.5 10.2H9.8c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h2.7c.2 0 .4.2.4.4s-.2.4-.4.4z"/></svg>
       <svg slot="on" viewBox="0 0 16 16"><path d="M4.7 8H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h1.5c.2 0 .4.2.4.4s-.2.4-.4.4zM12.5 8H6.7c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h5.7c.2 0 .4.2.4.4s-.1.4-.3.4zM7.7 10.2H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h4.6c.2 0 .4.2.4.4-.1.2-.3.4-.5.4zM12.5 10.2H9.8c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h2.7c.2 0 .4.2.4.4s-.2.4-.4.4z"/></svg>
-    </media-captions-button>
+    </media-captions-menu-button>
     <media-pip-button class="small-button">
       <svg slot="enter" viewBox="0 0 16 16"><path d="M14.2 13.1H1.8c-.4 0-.7-.3-.7-.7V3.5c0-.4.3-.7.7-.7h12.3c.4 0 .7.3.7.7v8.9c.1.5-.2.7-.6.7zM2.5 11.8h11V4.3h-11v7.5z"/><path d="M7.2 7.3h5.1v3.1H7.2z"/></svg>
       <svg slot="exit" viewBox="0 0 16 16"><path d="M14.2 13.1H1.8c-.4 0-.7-.3-.7-.7V3.5c0-.4.3-.7.7-.7h12.3c.4 0 .7.3.7.7v8.9c.1.5-.2.7-.6.7zM2.5 11.8h11V4.3h-11v7.5z"/><path d="M7.2 7.3h5.1v3.1H7.2z"/></svg>
@@ -347,5 +365,6 @@ export const defaultThemeMarkup = String.raw`
       <svg slot="exit" viewBox="0 0 16 16"><path d="M2.9 6.6c-.4 0-.7-.3-.7-.7v-3c0-.4.3-.7.7-.7h3c.4 0 .7.3.7.7s-.2.7-.6.7H3.6V6c0 .3-.3.6-.7.6zM13.1 6.6c-.4 0-.7-.3-.7-.7V3.6H10c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h3c.4 0 .7.3.7.7v3c.1.4-.2.7-.6.7zM6 13.8H3c-.4 0-.7-.3-.7-.7v-3c0-.4.3-.7.7-.7.4 0 .7.3.7.7v2.4H6c.4 0 .7.3.7.7-.1.3-.4.6-.7.6zM13.1 13.8h-3c-.4 0-.7-.3-.7-.7 0-.4.3-.7.7-.7h2.4V10c0-.4.3-.7.7-.7.4 0 .7.3.7.7v3c-.1.5-.4.8-.8.8z"/></svg>
     </media-fullscreen-button>
   </media-control-bar>
+  <media-captions-menu hidden></media-captions-menu>
 </media-controller>
 `;
