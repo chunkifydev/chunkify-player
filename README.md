@@ -86,9 +86,9 @@ files such as MP4 have no rendition switching.
 
 ## Playback access
 
-For a path-token CDN, pass the complete authorized URL as `src`. For signed
-cookies, set the cookie in the application backend before creating the player,
-then enable credentials:
+For a path-token CDN, pass the complete authorized URL as `src`. For
+cookie-protected media, have the application backend set the cookie before
+setting `src`, then enable credentials:
 
 ```html
 <chunkify-player
@@ -98,9 +98,18 @@ then enable credentials:
 ></chunkify-player>
 ```
 
-The media origin must return `Access-Control-Allow-Credentials: true` and an
-explicit `Access-Control-Allow-Origin` matching the page origin. Browser cookie
-rules still apply.
+`credentials="include"` sends eligible cookies with HLS playlists and segments
+and with native video requests. It also sets the underlying media element's
+`crossorigin` value to `use-credentials`, so no separate `crossorigin` attribute
+is needed. The player does not create or sign cookies.
+
+For cross-origin playback, the media origin must return
+`Access-Control-Allow-Credentials: true` and an explicit
+`Access-Control-Allow-Origin` matching the page origin. The cookie's domain and
+path must cover the media URL. If the page and media are on different sites,
+the cookie needs `SameSite=None; Secure`, and browser restrictions on third-party
+cookies may still block it. Using app and media hosts on the same site avoids
+that restriction.
 
 For authorization, network, format, and decoding failures, the component
 dispatches a sanitized `playback-error` event. Its detail contains `code`,
