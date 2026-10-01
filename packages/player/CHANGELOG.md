@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.2.0...player-v1.3.0) (2026-10-01)
+
+
+### Features
+
+* **player:** add source retry and caption selection ([ff86645](https://github.com/chunkifydev/chunkify-player/commit/ff86645011a085c8be952ba67dfba81512f171a0))
+
 ## [1.2.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.1.0...player-v1.2.0) (2026-09-30)
 
 
