@@ -113,6 +113,41 @@ for (const source of ["video.mp4", "master.m3u8"] as const) {
     expect(await player.evaluate((element: ChunkifyPlayer) => element.media.getAttribute("src")))
       .toBeNull();
   });
+
+  test(`${source} retries the same URL after cookie access is restored`, async ({ page, context, mediaServer }) => {
+    const target = `${mediaServer.origin}/cookies/${source}?signature=private-fixture-value`;
+    await page.evaluate((src) => {
+      const player = document.createElement("chunkify-player");
+      player.credentials = "include";
+      player.muted = true;
+      player.src = src;
+      player.addEventListener("playback-error", () => { player.dataset.failed = "true"; });
+      document.body.append(player);
+    }, target);
+
+    const player = page.locator("chunkify-player");
+    await expect(player).toHaveAttribute("data-failed", "true");
+    expect(await player.evaluate((element: ChunkifyPlayer) => element.media.getAttribute("src"))).toBeNull();
+    expect(mediaServer.requests.some((request) => request.status === 403)).toBe(true);
+
+    await context.addCookies([{
+      name: "media_access", value: "fixture", url: mediaServer.origin,
+      httpOnly: true, sameSite: "Lax",
+    }]);
+    expect(await player.evaluate((element: ChunkifyPlayer) => ({
+      first: element.retry(), second: element.retry(), src: element.src,
+    }))).toEqual({ first: true, second: false, src: target });
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+      .toBeGreaterThanOrEqual(2);
+    await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+      .toBeGreaterThan(0.1);
+    const requestedPath = new URL(target).pathname + new URL(target).search;
+    const attempts = mediaServer.requests.filter((request) => request.target === requestedPath);
+    expect(attempts.some((request) => request.status === 403)).toBe(true);
+    expect(attempts.some((request) => request.status < 400
+      && request.cookie.includes("media_access=fixture"))).toBe(true);
+  });
 }
 
 test("invalid credentials fail before the player sends a request", async ({ page, mediaServer }) => {
@@ -129,6 +164,7 @@ test("invalid credentials fail before the player sends a request", async ({ page
   const player = page.locator("chunkify-player");
   await expect(player).toHaveAttribute("data-error", /"code":"invalid-credentials"/);
   await expect(player).not.toHaveAttribute("data-error", /secret-value/);
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.retry())).toBe(false);
   expect(mediaServer.requests).toEqual([]);
 });
 

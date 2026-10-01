@@ -81,6 +81,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   children?: ReactNode | undefined;
   ref?: Ref<ChunkifyPlayerRef> | undefined;
   src?: string | null | undefined;
+  type?: string | null | undefined;
   poster?: string | null | undefined;
   thumbnails?: string | null | undefined;
   preload?: string | null | undefined;

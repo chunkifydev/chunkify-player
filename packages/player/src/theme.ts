@@ -1,4 +1,5 @@
 import "media-chrome";
+import "media-chrome/dist/menu/index.js";
 import { MediaTheme } from "media-chrome/dist/media-theme.js";
 import { defaultThemeMarkup } from "./themes/default.js";
 

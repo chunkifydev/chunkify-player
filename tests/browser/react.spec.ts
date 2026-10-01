@@ -84,6 +84,18 @@ test("React updates callbacks and switches between HLS and MP4", async ({ page }
   await expect(page.locator("body")).toHaveAttribute("data-event-target", "true");
 });
 
+test("React forwards and removes an explicit source type", async ({ page }) => {
+  await page.evaluate(() => window.reactFixture.render({
+    type: "application/vnd.apple.mpegurl",
+  }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("type", "application/vnd.apple.mpegurl");
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.type)).toBe("application/vnd.apple.mpegurl");
+
+  await page.evaluate(() => window.reactFixture.render({}));
+  await expect(player).not.toHaveAttribute("type");
+});
+
 test("React unmount clears the ref and stops playback", async ({ page }) => {
   await page.evaluate(() => window.reactFixture.render({
     src: "/tests/fixtures/media/master.m3u8",
