@@ -371,10 +371,16 @@ test("disables automatic live seeking by default and supports an explicit opt-in
 for (const [autoSeekToLive, native] of [[false, false], [true, false], [false, true]] as const) test(`starts ${native ? "native " : ""}live HLS ${autoSeekToLive ? "near the live edge with opt-in" : "at the available beginning by default"}`, async ({ page, browserName }) => {
   test.skip(native && browserName !== "webkit", "Native HLS is only available in WebKit");
 
-  if (native) await page.evaluate(async () => {
-    const { Hls } = await import("hls-video-element");
-    Hls.isSupported = () => false;
-  });
+  if (native) {
+    const supportsNativeHls = await page.evaluate(() => Boolean(
+      document.createElement("video").canPlayType("application/vnd.apple.mpegurl"),
+    ));
+    test.skip(!supportsNativeHls, "This WebKit build does not support native HLS");
+    await page.evaluate(async () => {
+      const { Hls } = await import("hls-video-element");
+      Hls.isSupported = () => false;
+    });
+  }
 
   await page.evaluate((autoSeekToLive) => {
     document.body.innerHTML = `<chunkify-player
@@ -421,6 +427,10 @@ for (const [autoSeekToLive, native] of [[false, false], [true, false], [false, t
 
 test("native live HLS keeps a seek made before the first Play", async ({ page, browserName }) => {
   test.skip(browserName !== "webkit", "Native HLS is only available in WebKit");
+  const supportsNativeHls = await page.evaluate(() => Boolean(
+    document.createElement("video").canPlayType("application/vnd.apple.mpegurl"),
+  ));
+  test.skip(!supportsNativeHls, "This WebKit build does not support native HLS");
   await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
     Hls.isSupported = () => false;
