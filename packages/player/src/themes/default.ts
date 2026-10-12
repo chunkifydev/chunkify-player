@@ -303,7 +303,6 @@ export const defaultThemeMarkup = String.raw`
 </style>
 
 <media-controller
-  noautoseektolive="{{noautoseektolive}}"
   breakpoints="xs:360 sm:600 md:760 lg:960 xl:1100"
   defaultsubtitles="{{defaultsubtitles}}"
   defaultduration="{{defaultduration}}"

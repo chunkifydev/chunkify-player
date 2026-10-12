@@ -28,9 +28,14 @@ export function resolvePlayerTheme(name: string | null): string {
   return name && themeTemplates.has(name) ? name : defaultPlayerTheme;
 }
 
-export function createPlayerTheme(name: string) {
+export function createPlayerTheme(name: string, noAutoSeekToLive = true) {
   const theme = new MediaTheme();
-  theme.template = themeTemplates.get(resolvePlayerTheme(name))!;
+  // The controller reads this when its store is created, before later syncs run.
+  theme.toggleAttribute("noautoseektolive", noAutoSeekToLive);
+  const template = themeTemplates.get(resolvePlayerTheme(name))!.cloneNode(true) as HTMLTemplateElement;
+  const controller = template.content.querySelector("media-controller");
+  controller?.setAttribute("noautoseektolive", "{{noautoseektolive}}");
+  theme.template = template;
   theme.setAttribute("part", "theme");
   return theme;
 }
