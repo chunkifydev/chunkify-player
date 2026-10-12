@@ -93,6 +93,8 @@ export class ChunkifyPlayer extends HTMLElement {
   #hlsErrorCleanup: (() => void) | null = null;
   #failedMedia: ChunkifyMediaElement | null = null;
   #playbackGeneration = 0;
+  #firstHlsPlayPending = false;
+  #soughtBeforeFirstHlsPlay = false;
   #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
   #thumbnailTrack = document.createElement("track");
   #trackObserver = new MutationObserver((records) => {
@@ -124,6 +126,18 @@ export class ChunkifyPlayer extends HTMLElement {
   #forwardMediaEvent = (event: Event) => {
     const media = event.currentTarget as ChunkifyMediaElement;
     if (media !== this.#media) return;
+    if (event.type === "seeking" && this.#firstHlsPlayPending && media.paused) {
+      this.#soughtBeforeFirstHlsPlay = true;
+    }
+    if ((event.type === "play" || event.type === "playing")
+      && this.#firstHlsPlayPending && media.seekable.length) {
+      this.#firstHlsPlayPending = false;
+      const start = media.seekable.start(0);
+      if (!this.autoSeekToLive && !this.#soughtBeforeFirstHlsPlay
+        && this.#engineFor(media) === "native" && media.currentTime > start + 1) {
+        media.currentTime = start;
+      }
+    }
     const generation = this.#playbackGeneration;
     const mediaError = event.type === "error" ? media.error : null;
     this.dispatchEvent(new Event(event.type));
@@ -327,7 +341,11 @@ export class ChunkifyPlayer extends HTMLElement {
     const credentials = this.credentials === "include"
       ? { xhrSetup: (xhr: XMLHttpRequest) => { xhr.withCredentials = true; } }
       : {};
-    hlsMedia.config = { capLevelToPlayerSize: this.capRenditionToPlayerSize, ...credentials };
+    hlsMedia.config = {
+      capLevelToPlayerSize: this.capRenditionToPlayerSize,
+      startPosition: this.autoSeekToLive ? -1 : 0,
+      ...credentials,
+    };
     if (hlsMedia.api) hlsMedia.api.capLevelToPlayerSize = this.capRenditionToPlayerSize;
   }
 
@@ -484,8 +502,10 @@ export class ChunkifyPlayer extends HTMLElement {
 
   #syncThemeSelection() {
     const themeName = this.theme;
-    if (themeName === this.#themeName) return;
-    const theme = createPlayerTheme(themeName);
+    const noAutoSeekToLive = !this.autoSeekToLive;
+    if (themeName === this.#themeName
+      && this.#theme.hasAttribute("noautoseektolive") === noAutoSeekToLive) return;
+    const theme = createPlayerTheme(themeName, noAutoSeekToLive);
     this.#theme.replaceWith(theme);
     theme.append(this.#media);
     this.#theme = theme;
@@ -506,7 +526,13 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#syncThemeSelection();
     }
 
-    const tagName = isHlsSource(this.src, this.getAttribute("type")) ? "hls-video" : "video";
+    const isHls = isHlsSource(this.src, this.getAttribute("type"));
+    const tagName = isHls ? "hls-video" : "video";
+    if (changedAttribute === undefined || changedAttribute === "src"
+      || changedAttribute === "type" || changedAttribute === "credentials") {
+      this.#firstHlsPlayPending = isHls;
+      this.#soughtBeforeFirstHlsPlay = false;
+    }
     let replaced = false;
     if (this.#media.localName !== tagName || changedAttribute === "credentials") {
       this.#cancelPendingHlsSource();

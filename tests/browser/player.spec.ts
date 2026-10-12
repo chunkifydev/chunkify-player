@@ -368,6 +368,134 @@ test("disables automatic live seeking by default and supports an explicit opt-in
   })).toEqual({ property: true, controller: false });
 });
 
+for (const [autoSeekToLive, native] of [[false, false], [true, false], [false, true]] as const) test(`starts ${native ? "native " : ""}live HLS ${autoSeekToLive ? "near the live edge with opt-in" : "at the available beginning by default"}`, async ({ page, browserName }) => {
+  test.skip(native && browserName !== "webkit", "Native HLS is only available in WebKit");
+
+  if (native) {
+    const supportsNativeHls = await page.evaluate(() => Boolean(
+      document.createElement("video").canPlayType("application/vnd.apple.mpegurl"),
+    ));
+    test.skip(!supportsNativeHls, "This WebKit build does not support native HLS");
+    await page.evaluate(async () => {
+      const { Hls } = await import("hls-video-element");
+      Hls.isSupported = () => false;
+    });
+  }
+
+  await page.evaluate((autoSeekToLive) => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/live.m3u8" controls muted
+      ${autoSeekToLive ? "autoseektolive" : ""}></chunkify-player>`;
+  }, autoSeekToLive);
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+    .toBeGreaterThanOrEqual(2);
+  const position = await player.evaluate((element: ChunkifyPlayer) => ({
+    currentTime: element.media.currentTime,
+    seekableStart: element.media.seekable.start(0),
+    seekableEnd: element.media.seekable.end(0),
+  }));
+  expect(position.seekableEnd - position.seekableStart).toBeGreaterThan(native ? 4 : 8);
+  if (autoSeekToLive) expect(position.currentTime - position.seekableStart).toBeGreaterThan(2);
+  else expect(position.currentTime - position.seekableStart).toBeLessThan(2);
+
+  if (autoSeekToLive) {
+    await player.evaluate((element: ChunkifyPlayer) => {
+      element.media.currentTime = element.media.seekable.start(0);
+    });
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+      .toBeLessThan(position.seekableStart + 2);
+    await player.locator("media-control-bar media-play-button").first()
+      .evaluate((button: HTMLElement) => button.click());
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+      .toBeGreaterThan(position.seekableStart + 2);
+  }
+
+  if (!autoSeekToLive) {
+    await player.locator("media-control-bar media-play-button").first()
+      .evaluate((button: HTMLElement) => button.click());
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+      .toBeGreaterThan(position.currentTime + 0.25);
+    const playing = await player.evaluate((element: ChunkifyPlayer) => ({
+      currentTime: element.media.currentTime,
+      readyState: element.media.readyState,
+    }));
+    expect(playing.readyState).toBeGreaterThanOrEqual(2);
+    expect(playing.currentTime - position.seekableStart).toBeLessThan(2);
+  }
+});
+
+test("native live HLS keeps a seek made before the first Play", async ({ page, browserName }) => {
+  test.skip(browserName !== "webkit", "Native HLS is only available in WebKit");
+  const supportsNativeHls = await page.evaluate(() => Boolean(
+    document.createElement("video").canPlayType("application/vnd.apple.mpegurl"),
+  ));
+  test.skip(!supportsNativeHls, "This WebKit build does not support native HLS");
+  await page.evaluate(async () => {
+    const { Hls } = await import("hls-video-element");
+    Hls.isSupported = () => false;
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/live.m3u8" controls muted></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+    .toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => { element.media.currentTime = 3; });
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+    .toBeGreaterThan(2.5);
+  await player.locator("media-control-bar media-play-button").first()
+    .evaluate((button: HTMLElement) => button.click());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+    .toBeGreaterThan(3.25);
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+    .toBeLessThan(5);
+});
+
+for (const autoSeekToLive of [false, true]) test(`custom themes ${autoSeekToLive ? "seek to live with opt-in" : "keep the default live start"} when Play is pressed`, async ({ page }) => {
+  await page.evaluate(async (autoSeekToLive) => {
+    const { registerPlayerTheme } = await import("@chunkify/player");
+    const template = document.createElement("template");
+    template.innerHTML = `<media-controller>
+      <slot name="media" slot="media"></slot>
+      <media-play-button></media-play-button>
+    </media-controller>`;
+    registerPlayerTheme("minimal", template);
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/live.m3u8" theme="minimal" controls muted
+      ${autoSeekToLive ? "autoseektolive" : ""}></chunkify-player>`;
+  }, autoSeekToLive);
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+    .toBeGreaterThanOrEqual(2);
+  if (autoSeekToLive) {
+    await player.evaluate((element: ChunkifyPlayer) => {
+      element.media.currentTime = element.media.seekable.start(0);
+    });
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+      .toBeLessThan(2);
+  }
+  const clickTime = await player.evaluate((element: ChunkifyPlayer) => {
+    const button = element.shadowRoot?.querySelector("media-theme")
+      ?.shadowRoot?.querySelector<HTMLElement>("media-play-button");
+    if (!button) throw new Error("Custom theme has no play button");
+    button.click();
+    return element.media.currentTime;
+  });
+  if (autoSeekToLive) {
+    expect(clickTime).toBeGreaterThan(2);
+    return;
+  }
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime))
+    .toBeGreaterThan(0.25);
+  const position = await player.evaluate((element: ChunkifyPlayer) => ({
+    currentTime: element.media.currentTime,
+    seekableStart: element.media.seekable.start(0),
+    readyState: element.media.readyState,
+  }));
+  expect(position.readyState).toBeGreaterThanOrEqual(2);
+  expect(position.currentTime - position.seekableStart).toBeLessThan(2);
+});
+
 test("keeps the theme and controls inside a fixed player box", async ({ page }) => {
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player controls
