@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.0...player-v1.3.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **player:** start live HLS at the available beginning ([83d8b10](https://github.com/chunkifydev/chunkify-player/commit/83d8b10e40717cd34d7f32054756355ac396acdc))
+* **player:** start live HLS at the available beginning ([5d028d7](https://github.com/chunkifydev/chunkify-player/commit/5d028d7a123ea543840274d8cb9f2224416cb609))
+
 ## [1.3.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.2.0...player-v1.3.0) (2026-10-01)
 
 
