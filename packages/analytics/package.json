@@ -23,6 +23,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./chunkify": {
+      "types": "./dist/chunkify.d.ts",
+      "import": "./dist/chunkify.js"
+    },
     "./datadog": {
       "types": "./dist/datadog.d.ts",
       "import": "./dist/datadog.js"

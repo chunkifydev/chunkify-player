@@ -3,6 +3,7 @@ import { createDatadogAdapter } from "@chunkify/analytics/datadog";
 import { createHttpAdapter } from "@chunkify/analytics/http";
 import { createOtlpAdapter } from "@chunkify/analytics/otlp";
 import { createPostHogAdapter } from "@chunkify/analytics/posthog";
+import { createChunkifyAdapter, type ChunkifyCollectorEvent } from "@chunkify/analytics/chunkify";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",
@@ -57,10 +58,21 @@ const config: AnalyticsConfig = {
 };
 const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } }, mapEvent);
 const posthog = createPostHogAdapter({ capture(name, properties) { void name; void properties; } }, mapEvent);
-const http = createHttpAdapter("/api/analytics", mapEvent);
+const http = createHttpAdapter("/api/analytics", { mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" } });
 const otlp = createOtlpAdapter("https://collector.example.com/v1/logs");
-const mappedOtlp = createOtlpAdapter("https://collector.example.com/v1/logs", mapEvent);
-const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp] });
+const chunkify = createChunkifyAdapter("https://collector.example.com/v1/events", { ingestKey: "public-key" });
+createChunkifyAdapter("/v1/events", { ingestKey: "public-key", collectBrowserContext: false });
+function readCollectorContext(event: ChunkifyCollectorEvent) {
+  const device: "desktop" | "mobile" | "tablet" | "unknown" | undefined = event.browser_context?.device_type;
+  void device;
+}
+void readCollectorContext;
+// @ts-expect-error A public ingest key is required.
+createChunkifyAdapter("/v1/events", {});
+// @ts-expect-error Browser collection is a boolean option.
+createChunkifyAdapter("/v1/events", { ingestKey: "key", collectBrowserContext: "yes" });
+const mappedOtlp = createOtlpAdapter("https://collector.example.com/v1/logs", { mapAttributes: mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" } });
+const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp, chunkify] });
 void mappedOtlp;
 session.startAttempt();
 session.destroy();

@@ -1,6 +1,6 @@
 # @chunkify/analytics
 
-Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. It has no runtime dependency on `@chunkify/player` and does not send data to Chunkify. Each event goes to the destinations supplied by the application.
+Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. It has no runtime dependency on `@chunkify/player` and no built-in analytics endpoint. Each event goes to the destinations supplied by the application.
 
 ```sh
 npm install @chunkify/analytics
@@ -333,7 +333,7 @@ const mapForEndpoint = createEventMapper({
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createHttpAdapter("/api/video-analytics", mapForEndpoint)],
+  destinations: [createHttpAdapter("/api/video-analytics", { mapEvent: mapForEndpoint })],
 });
 ```
 
@@ -359,11 +359,11 @@ const mapRenditionChange = createEventMapper({
   height: "selected_rendition_height",
 });
 
-const destination = createHttpAdapter("/api/video-analytics", (event) => {
+const destination = createHttpAdapter("/api/video-analytics", { mapEvent: (event) => {
   if (event.event_name === "chunkify.video.playback_state_changed") return mapStateChange(event);
   if (event.event_name === "chunkify.video.rendition_changed") return mapRenditionChange(event);
   return { ...event };
-});
+} });
 
 monitor(video, {
   videoId: "video_123",
@@ -375,7 +375,110 @@ The same mapper selection works with other adapters.
 
 ## Send events to a destination
 
-Destinations keep collection separate from delivery. Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
+Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The Chunkify destination can add browser context to its own payload; other destinations receive the original playback event. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
+
+### Chunkify collector
+
+Use the dedicated adapter for the self-hosted Chunkify collector. The server is
+maintained separately in `chunkifydev/chunkify-analytics`, currently a private
+repository. The client adapter is part of this SDK.
+Pass its full native ingestion URL and public ingest key:
+
+```js
+import { monitor } from "@chunkify/analytics";
+import { createChunkifyAdapter } from "@chunkify/analytics/chunkify";
+
+monitor(video, {
+  videoId: "video_123",
+  destinations: [createChunkifyAdapter("https://analytics.example.com/v1/events", {
+    ingestKey: "YOUR_PUBLIC_INGEST_KEY",
+  })],
+});
+```
+
+The adapter sets `X-Chunkify-Ingest-Key` and posts the complete event with an additional
+`browser_context` object. It reuses the HTTP adapter's endpoint validation, omitted
+cookies/referrer, delivery errors, and best-effort keepalive for final events.
+It does not change the event delivered to other destinations or generate extra events.
+The collector returns this object under `events[].event.browser_context` in authenticated
+raw-event reads and preserves it on restart. Duplicate delivery keeps the first payload.
+
+Set `collectBrowserContext: false` alongside `ingestKey` to disable browser collection.
+The adapter then sends the original event without reading browser APIs. Importing and
+constructing the adapter is safe outside a browser; sends without a browser window also
+use the original event. Inaccessible APIs produce null fields instead of failing delivery.
+
+#### Browser context fields
+
+`BrowserContext` and `ChunkifyCollectorEvent` are exported types from
+`@chunkify/analytics/chunkify`. Context has its own `schema_version: 1` and does not
+change the core playback event type.
+
+| Fields | Source and meaning |
+| --- | --- |
+| `user_agent` | `navigator.userAgent`, limited to 512 characters. |
+| `browser_name`, `browser_version` | Best-effort parsing of the reported user agent and low-entropy Client Hints. |
+| `os_name`, `os_version` | Reported OS and version from the user agent, with Client Hints platform fallback/correction. |
+| `device_type` | Inferred `desktop`, `mobile`, `tablet`, or `unknown`. |
+| `device_family` | Broad family when identifiable: `iPhone`, `iPad`, `iPod Touch`, `Android`, or `Android Tablet`. Null for other devices. This is not a hardware model. |
+| `language`, `language_prefix` | `navigator.language`, such as `fr-FR`, and its primary language, such as `fr`. |
+| `timezone` | Browser timezone from `Intl.DateTimeFormat`, such as `Europe/Paris`. |
+| `timezone_offset_minutes` | `Date.getTimezoneOffset()`: UTC minus local time in minutes. Paris is `-60` in winter and `-120` in summer. |
+| `screen_width_px`, `screen_height_px` | Browser-reported screen dimensions in CSS pixels. |
+| `viewport_width_px`, `viewport_height_px` | `window.innerWidth` and `window.innerHeight`, in CSS pixels. |
+| `pixel_ratio` | `window.devicePixelRatio`. |
+
+Stable fields are collected at the first browser send and cached for that adapter
+instance. Screen/viewport dimensions, pixel ratio, and timezone offset are sampled on
+every send. Create a new adapter to refresh cached language, timezone, or browser identity.
+Each event includes its context so delivery does not depend on an earlier metadata request.
+
+Browser recognition covers Chrome/Chromium, Edge, Firefox, Safari, Opera, and Samsung
+Internet, including their recognized iOS/Android variants. OS recognition covers Windows,
+macOS, iOS, iPadOS, Android, ChromeOS, and Linux. Reduced or spoofed user agents can limit
+accuracy. For example, Windows `10.0` is the reported NT version and does not distinguish
+Windows 10 from Windows 11. Desktop-mode iPads are inferred from Macintosh and touch
+signals, with no invented OS version. A recognized Android Client Hints platform can
+correct a desktop-mode Linux user agent. Unsupported device families and versions stay
+null; recognized TV/console markers use device type `unknown` in this initial schema.
+
+Other strings are limited to 64 characters, or 128 for timezone. Dimensions must be
+positive integers up to 1,000,000; pixel ratio must be finite and in `(0, 100]`. The fixed
+schema and string limits keep context below 8 KiB even with JSON escaping. The collector's
+request-body limit still applies to the complete event. Context is reported or inferred
+data and does not identify or authenticate a viewer.
+
+The local Chromium collector test on 2026-10-16 measured 537 additional uncompressed
+JSON bytes per event. This is one browser fixture, not a universal size; the collector
+integration test reports the measured overhead when rerun. Browser-side batching and
+compression are not implemented by this adapter.
+
+#### Comparison with PostHog
+
+This selection follows PostHog's [browser event properties](https://github.com/PostHog/posthog-js/blob/main/packages/browser-common/src/utils/event-utils.ts)
+and [device classification](https://github.com/PostHog/posthog-js/blob/main/packages/core/src/utils/user-agent-utils.ts).
+
+| PostHog fields | Chunkify choice |
+| --- | --- |
+| `$browser`, `$browser_version`, `$os`, `$os_version`, `$raw_user_agent` | Equivalent reported environment fields, with bounded strings and null for unavailable values. |
+| `$device`, `$device_type` | Broad device family and category. Initial recognition focuses on desktop, phone, and tablet playback. |
+| `$browser_language`, `$browser_language_prefix`, `$timezone`, `$timezone_offset` | Included with explicit names and offset units. |
+| `$screen_width`, `$screen_height`, `$viewport_width`, `$viewport_height` | Included; Chunkify also reports pixel ratio. |
+| `$current_url`, `$host`, `$pathname`, referrer and campaign properties | Excluded from this first browser/device slice. Page attribution needs a separate collection policy. |
+| `$webview_app`, `$webview_app_version`, precise hardware model | Deferred; specialized in-app parsing and high-entropy hardware queries are outside this initial schema. |
+| SDK name/version, event ID/time, session identity | Existing Chunkify fields cover SDK and event identity. No new browser session, cookie, or device identity is created. |
+
+The Chunkify adapter does not request high-entropy hints, enumerate installed software,
+or request location permission. The adapter does not obtain or send a client IP.
+The collector adds request IP fields to its flat `event_context` object. See its
+IP settings and trusted-proxy rules in the separate collector repository.
+Browser context collection does not determine the viewer's IP address.
+GeoIP enrichment is not implemented.
+
+Generic HTTP/OTLP adapters and custom callbacks continue to receive playback events.
+Their mapping functions can add application-selected fields. PostHog and Datadog clients
+collect their own context. A future browser batch format could share context within one
+request; it is separate from collector database write batching.
 
 ### Datadog RUM
 
@@ -425,7 +528,7 @@ The application controls PostHog's automatic collection and persistence settings
 
 ### OTLP/HTTP logs
 
-The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter sends no cookies or authorization headers. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Pass a mapper as the second argument to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
+The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter omits browser credentials and cookies. Use `headers` in the options object for a public ingest key. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Use `mapAttributes` in the options object to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
 
 ```ts
 import { createEventMapper } from "@chunkify/analytics";
@@ -440,22 +543,47 @@ const attributes = createEventMapper({
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs", attributes)],
+  destinations: [createOtlpAdapter("https://analytics.example.com/v1/logs", { mapAttributes: attributes })],
 });
 ```
 
 This adapter emits OTLP **logs**, not OTLP metrics. Your gateway or provider handles storage and aggregation.
 
+Both HTTP and OTLP adapters accept `headers` in their options object. Headers are
+copied when the adapter is created, and `Content-Type` remains `application/json`.
+Cookie headers are rejected. Keep private provider credentials and the collector's
+read token on your server; browser configuration may contain only public client
+or ingest keys.
+
+#### Updating HTTP and OTLP mappers from 0.3.x
+
+The second argument is now an options object. Calls without a second argument
+continue to work. Update existing mapper arguments as follows:
+
+```js
+// Before
+createHttpAdapter(endpoint, mapper);
+createOtlpAdapter(endpoint, mapper);
+
+// Now
+createHttpAdapter(endpoint, { mapEvent: mapper });
+createOtlpAdapter(endpoint, { mapAttributes: mapper });
+```
+
+Passing the old function argument throws a `TypeError`.
+
 ### HTTP endpoint
 
-The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Pass a mapper as its second argument when the endpoint needs a different payload; otherwise it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the collector isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
+The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Its optional second argument accepts `mapEvent` for a different payload and `headers` for a public ingest key. Without a mapper it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the analytics session isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
 
 ```ts
 import { createHttpAdapter } from "@chunkify/analytics/http";
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createHttpAdapter("/api/video-analytics")],
+  destinations: [createHttpAdapter("/api/video-analytics", {
+    headers: { "X-Chunkify-Ingest-Key": "YOUR_PUBLIC_INGEST_KEY" },
+  })],
 });
 ```
 

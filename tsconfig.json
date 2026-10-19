@@ -6,6 +6,7 @@
     "paths": {
       "@chunkify/player": ["./packages/player/src/index.ts"],
       "@chunkify/analytics": ["./packages/analytics/src/index.ts"],
+      "@chunkify/analytics/chunkify": ["./packages/analytics/src/chunkify.ts"],
       "@chunkify/analytics/datadog": ["./packages/analytics/src/datadog.ts"],
       "@chunkify/analytics/posthog": ["./packages/analytics/src/posthog.ts"],
       "@chunkify/analytics/http": ["./packages/analytics/src/http.ts"],
