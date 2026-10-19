@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.3.0...analytics-v0.4.0) (2026-10-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **analytics:** HTTP and OTLP mapper callbacks now belong in the options object as mapEvent and mapAttributes respectively.
+
+### Features
+
+* **analytics:** add Chunkify adapter and configurable headers ([589238d](https://github.com/chunkifydev/chunkify-player/commit/589238d8d90f07391eed94f899d929e5fecb4c66))
+
 ## [0.3.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.2.1...analytics-v0.3.0) (2026-09-30)
 
 
