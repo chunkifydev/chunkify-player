@@ -1,5 +1,5 @@
 import type { AnalyticsDestination, ChunkifyPlayerAnalyticsEvent } from "./core.js";
-import { createHttpAdapter } from "./http.js";
+import { createHttpAdapter, type HttpAdapterOptions } from "./http.js";
 
 type OtlpValue =
   | { stringValue: string }
@@ -54,17 +54,28 @@ function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent, attributes: objec
   };
 }
 
+export interface OtlpAdapterOptions extends Pick<HttpAdapterOptions, "headers"> {
+  mapAttributes?: (event: ChunkifyPlayerAnalyticsEvent) => object;
+}
+
 /** Send each analytics event as an OTLP/HTTP JSON log record to a customer gateway. */
 export function createOtlpAdapter(
   endpoint: string,
-  mapAttributes: (event: ChunkifyPlayerAnalyticsEvent) => object = (event) => event,
+  options: OtlpAdapterOptions = {},
 ): AnalyticsDestination {
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    throw new TypeError("OTLP adapter options must be an object.");
+  }
+  const mapAttributes = options.mapAttributes === undefined ? (event: ChunkifyPlayerAnalyticsEvent) => event : options.mapAttributes;
   if (typeof mapAttributes !== "function") throw new TypeError("OTLP attribute mapper must be a function.");
-  return createHttpAdapter(endpoint, (event) => {
-    const attributes = mapAttributes(event);
-    if (!attributes || typeof attributes !== "object" || Array.isArray(attributes)) {
-      throw new TypeError("OTLP attribute mapper must return an object.");
-    }
-    return toOtlpLogRequest(event, attributes);
+  return createHttpAdapter(endpoint, {
+    headers: options.headers,
+    mapEvent(event) {
+      const attributes = mapAttributes(event);
+      if (!attributes || typeof attributes !== "object" || Array.isArray(attributes)) {
+        throw new TypeError("OTLP attribute mapper must return an object.");
+      }
+      return toOtlpLogRequest(event, attributes);
+    },
   });
 }

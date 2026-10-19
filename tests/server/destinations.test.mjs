@@ -60,16 +60,20 @@ test("HTTP adapter posts JSON without browser credentials and checks delivery st
     assert.equal(requests[0].url, "/api/video-analytics");
     assert.deepEqual(requests[0].init, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: new Headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(event),
       credentials: "omit",
       referrerPolicy: "no-referrer",
       redirect: "error",
       keepalive: true,
     });
-    const mappedAdapter = createHttpAdapter("/api/video-analytics", (record) => ({ videoId: record.video_id }));
+    const headers = { "X-Chunkify-Ingest-Key": "public-key", "content-type": "text/plain" };
+    const mappedAdapter = createHttpAdapter("/api/video-analytics", { mapEvent: (record) => ({ videoId: record.video_id }), headers });
+    headers["X-Chunkify-Ingest-Key"] = "changed-after-creation";
     await assert.rejects(mappedAdapter.send(event), /HTTP 503/);
     assert.equal(requests[1].init.body, JSON.stringify({ videoId: "asset-1" }));
+    assert.equal(requests[1].init.headers.get("x-chunkify-ingest-key"), "public-key");
+    assert.equal(requests[1].init.headers.get("content-type"), "application/json");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -82,6 +86,8 @@ test("HTTP adapter rejects secret-bearing and nonlocal insecure endpoints", () =
   }
   assert.doesNotThrow(() => createHttpAdapter("http://127.0.0.1:8888/collect"));
   assert.throws(() => createHttpAdapter("/collect", null), TypeError);
+  assert.throws(() => createHttpAdapter("/collect", { mapEvent: null }), TypeError);
+  assert.throws(() => createHttpAdapter("/collect", { headers: { Cookie: "session=secret" } }), TypeError);
 });
 
 test("OTLP adapter sends typed log attributes without unavailable values", async () => {
@@ -111,7 +117,7 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
     };
     await createOtlpAdapter("https://collector.example.com/v1/logs").send(event);
     assert.equal(requests[0].url, "https://collector.example.com/v1/logs");
-    assert.equal(requests[0].init.headers["Content-Type"], "application/json");
+    assert.equal(requests[0].init.headers.get("Content-Type"), "application/json");
     assert.equal(requests[0].init.credentials, "omit");
     assert.equal(requests[0].init.referrerPolicy, "no-referrer");
     assert.equal(requests[0].init.keepalive, true);
@@ -146,7 +152,9 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
       playtime_seconds: (record) => record.playing_time_ms / 1000,
       unavailable: () => null,
     });
-    await createOtlpAdapter("https://collector.example.com/v1/logs", mapAttributes).send(event);
+    await createOtlpAdapter("https://collector.example.com/v1/logs", { mapAttributes,
+      headers: { "X-Chunkify-Ingest-Key": "public-key" } }).send(event);
+    assert.equal(requests[1].init.headers.get("x-chunkify-ingest-key"), "public-key");
     const mappedLog = JSON.parse(requests[1].init.body).resourceLogs[0].scopeLogs[0].logRecords[0];
     assert.equal(mappedLog.timeUnixNano, log.timeUnixNano);
     assert.equal(mappedLog.eventName, log.eventName);
@@ -159,7 +167,8 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
     assert.equal(event.playing_time_ms, 12500);
     assert.throws(() => createOtlpAdapter("https://collector.example.com/v1/logs?api_key=secret"), TypeError);
     assert.throws(() => createOtlpAdapter("/v1/logs", null), TypeError);
-    await assert.rejects(createOtlpAdapter("/v1/logs", () => null).send(event), TypeError);
+    assert.throws(() => createOtlpAdapter("/v1/logs", { mapAttributes: null }), TypeError);
+    await assert.rejects(createOtlpAdapter("/v1/logs", { mapAttributes: () => null }).send(event), TypeError);
     await assert.rejects(createOtlpAdapter("/v1/logs").send({ ...event, occurred_at: "invalid" }), TypeError);
   } finally {
     globalThis.fetch = originalFetch;
