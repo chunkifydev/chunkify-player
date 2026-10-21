@@ -9,7 +9,7 @@ test("Chunkify imports and sends unchanged events without a browser, and reports
     return new Response("{}", { status: requests.length === 1 ? 201 : 503 });
   });
   const event = Object.freeze({ event_name: "chunkify.video.view_ended", video_id: "video-a" });
-  const destination = createChunkifyAdapter("/v1/events", { ingestKey: "public-key" });
+  const destination = createChunkifyAdapter("/v1/events", { ingestKey: "public-key", retry: false });
   await destination.send(event);
   assert.deepEqual(JSON.parse(requests[0].options.body), event);
   assert.equal(requests[0].options.headers.get("x-chunkify-ingest-key"), "public-key");

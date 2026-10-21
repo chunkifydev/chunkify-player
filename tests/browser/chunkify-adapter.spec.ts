@@ -43,6 +43,35 @@ test("Chunkify sends browser context with each event without changing the shared
   expect(original.every((event) => !("browser_context" in event))).toBe(true);
 });
 
+test("Chunkify retries a temporary failure with the original event and browser context", async ({ page }) => {
+  const bodies: string[] = [];
+  const keys: (string | undefined)[] = [];
+  await page.route("**/chunkify-retry-events", async (route) => {
+    bodies.push(route.request().postData()!);
+    keys.push(route.request().headers()["x-chunkify-ingest-key"]);
+    if (bodies.length === 1) {
+      await page.setViewportSize({ width: 640, height: 480 });
+      await route.fulfill({ status: 503, headers: { "Retry-After": "1" }, body: "{}" });
+    } else {
+      await route.fulfill({ status: 201, body: "{}" });
+    }
+  });
+  await page.goto("/tests/fixtures/analytics.html");
+  await page.evaluate(async () => {
+    const path = "/packages/analytics/dist/chunkify.js";
+    const { createChunkifyAdapter } = await import(path);
+    await createChunkifyAdapter("/chunkify-retry-events", { ingestKey: "public-key" }).send({
+      event_name: "chunkify.video.view_ended", event_id: "event-retry", view_id: "view-retry", sequence: 3,
+    });
+  });
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toBe(bodies[0]);
+  expect(keys).toEqual(["public-key", "public-key"]);
+  expect(JSON.parse(bodies[1]!)).toMatchObject({
+    event_id: "event-retry", browser_context: { viewport_width_px: 960, viewport_height_px: 540 },
+  });
+});
+
 test("reported browser identities, mobile devices, and low-entropy hints have explicit fallbacks", async ({ page }) => {
   const received: BrowserContext[] = [];
   await page.route("**/chunkify-events", async (route) => {

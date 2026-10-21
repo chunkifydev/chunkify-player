@@ -375,7 +375,7 @@ The same mapper selection works with other adapters.
 
 ## Send events to a destination
 
-Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The Chunkify destination can add browser context to its own payload; other destinations receive the original playback event. The package does not retry, queue, or guarantee delivery on page exit. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
+Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The Chunkify destination can add browser context to its own payload; other destinations receive the original playback event. The HTTP transport supports [bounded retries](#retries-and-delivery-limits), enabled by default for Chunkify. Delivery on page exit remains best effort. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
 
 ### Chunkify collector
 
@@ -402,6 +402,9 @@ cookies/referrer, delivery errors, and best-effort keepalive for final events.
 It does not change the event delivered to other destinations or generate extra events.
 The collector returns this object under `events[].event.browser_context` in authenticated
 raw-event reads and preserves it on restart. Duplicate delivery keeps the first payload.
+Temporary failures are retried at most twice using the same event ID and serialized
+payload, including browser context. The collector deduplicates by project and event ID.
+Set `retry: false` alongside `ingestKey` to disable retries.
 
 Set `collectBrowserContext: false` alongside `ingestKey` to disable browser collection.
 The adapter then sends the original event without reading browser APIs. Importing and
@@ -574,7 +577,7 @@ Passing the old function argument throws a `TypeError`.
 
 ### HTTP endpoint
 
-The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Its optional second argument accepts `mapEvent` for a different payload and `headers` for a public ingest key. Without a mapper it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Non-2xx responses reject the adapter's `send()` promise; the analytics session isolates delivery failures and does not retry them. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
+The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Its optional second argument accepts `mapEvent` for a different payload, `headers` for a public ingest key, and `retry` to enable bounded retries. Without a mapper it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Failed delivery rejects the adapter's `send()` promise after any enabled retries; the analytics session isolates that rejection from playback and other destinations. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
 
 ```ts
 import { createHttpAdapter } from "@chunkify/analytics/http";
@@ -586,6 +589,41 @@ monitor(video, {
   })],
 });
 ```
+
+### Retries and delivery limits
+
+Chunkify retries are enabled by default. Generic HTTP and OTLP retries are opt-in:
+
+```js
+createChunkifyAdapter(endpoint, { ingestKey: "PUBLIC_KEY", retry: false });
+createHttpAdapter(endpoint, { retry: true });
+createOtlpAdapter(endpoint, { retry: true });
+```
+
+When enabled, the transport retries network failures, request timeouts, and HTTP
+`429`, `502`, `503`, and `504` at most twice, for three attempts total. Other HTTP
+statuses are not retried. Backoff starts at 500 ms, then 1 second, with up to 250 ms
+of random delay added each time. A readable `Retry-After` header, in seconds or as
+an HTTP date, can increase that delay. If it requires waiting more than 10 seconds,
+delivery fails instead of retrying early. Cross-origin servers must expose this
+header with `Access-Control-Expose-Headers: Retry-After` for browsers to read it.
+
+All three adapters abort each request after 5 seconds and allow up to 32 pending
+sends per adapter instance, including sends waiting to retry. Further sends reject
+immediately until capacity becomes available. There is no waiting queue or offline
+storage. Successful delivery means an HTTP 2xx response; the adapter does not read
+the response body. Final failures reject `send()`; when using `monitor()`, delivery
+failures are swallowed so playback and other destinations can continue.
+
+Every retry reuses the serialized payload. A server may have stored an event even
+when its response was lost, so generic HTTP/OTLP receivers must tolerate duplicate
+delivery before enabling retries. Preserve `event_id` in custom mappings when the
+receiver uses it for deduplication. Retries can arrive after later events; use the
+event's `sequence` and `occurred_at` to order them.
+
+PostHog and Datadog retain their clients' delivery behavior. Custom destinations
+receive no automatic retry wrapper. Browser shutdown can prevent retries and
+keepalive requests from completing; this is not guaranteed delivery.
 
 ### Custom destination
 

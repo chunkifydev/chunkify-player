@@ -58,7 +58,9 @@ test("HTTP adapter posts JSON without browser credentials and checks delivery st
     const event = { event_name: "chunkify.video.view_ended", video_id: "asset-1" };
     await adapter.send(event);
     assert.equal(requests[0].url, "/api/video-analytics");
-    assert.deepEqual(requests[0].init, {
+    const { signal, ...init } = requests[0].init;
+    assert.ok(signal instanceof AbortSignal);
+    assert.deepEqual(init, {
       method: "POST",
       headers: new Headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(event),

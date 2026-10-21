@@ -31,6 +31,8 @@ export interface ChunkifyAdapterOptions {
   ingestKey: string;
   /** Collect browser context for this destination. Defaults to true. */
   collectBrowserContext?: boolean;
+  /** Retry temporary failures at most twice. Defaults to true. */
+  retry?: boolean;
 }
 
 /** Send complete analytics events to the full native collector endpoint, normally /v1/events. */
@@ -44,6 +46,7 @@ export function createChunkifyAdapter(endpoint: string, options: ChunkifyAdapter
   }
   const readContext = options.collectBrowserContext === false ? () => undefined : createBrowserContextReader();
   return createHttpAdapter(endpoint, {
+    retry: options.retry === undefined ? true : options.retry,
     headers: { "X-Chunkify-Ingest-Key": options.ingestKey },
     mapEvent(event): ChunkifyCollectorEvent {
       const context = readContext();

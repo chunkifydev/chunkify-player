@@ -58,10 +58,10 @@ const config: AnalyticsConfig = {
 };
 const datadog = createDatadogAdapter({ addAction(name, context) { void name; void context; } }, mapEvent);
 const posthog = createPostHogAdapter({ capture(name, properties) { void name; void properties; } }, mapEvent);
-const http = createHttpAdapter("/api/analytics", { mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" } });
+const http = createHttpAdapter("/api/analytics", { mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" }, retry: true });
 const otlp = createOtlpAdapter("https://collector.example.com/v1/logs");
 const chunkify = createChunkifyAdapter("https://collector.example.com/v1/events", { ingestKey: "public-key" });
-createChunkifyAdapter("/v1/events", { ingestKey: "public-key", collectBrowserContext: false });
+createChunkifyAdapter("/v1/events", { ingestKey: "public-key", collectBrowserContext: false, retry: false });
 function readCollectorContext(event: ChunkifyCollectorEvent) {
   const device: "desktop" | "mobile" | "tablet" | "unknown" | undefined = event.browser_context?.device_type;
   void device;
@@ -71,7 +71,13 @@ void readCollectorContext;
 createChunkifyAdapter("/v1/events", {});
 // @ts-expect-error Browser collection is a boolean option.
 createChunkifyAdapter("/v1/events", { ingestKey: "key", collectBrowserContext: "yes" });
-const mappedOtlp = createOtlpAdapter("https://collector.example.com/v1/logs", { mapAttributes: mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" } });
+const mappedOtlp = createOtlpAdapter("https://collector.example.com/v1/logs", { mapAttributes: mapEvent, headers: { "X-Chunkify-Ingest-Key": "public-key" }, retry: true });
+// @ts-expect-error Retry is a boolean option.
+createHttpAdapter("/events", { retry: 2 });
+// @ts-expect-error Retry is a boolean option.
+createOtlpAdapter("/v1/logs", { retry: "yes" });
+// @ts-expect-error Retry is a boolean option.
+createChunkifyAdapter("/events", { ingestKey: "key", retry: {} });
 const session = attachAnalytics(video, { ...config, videoId: "asset-types", destinations: [datadog, posthog, http, otlp, chunkify] });
 void mappedOtlp;
 session.startAttempt();
