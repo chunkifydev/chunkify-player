@@ -5,7 +5,6 @@
 
 ### Features
 
-* **analytics:** add bounded adapter retries ([f8d26e8](https://github.com/chunkifydev/chunkify-player/commit/f8d26e898661fe4cd20ddfce340828bdf60d4f0f))
 * **analytics:** add bounded adapter retries ([e43aca1](https://github.com/chunkifydev/chunkify-player/commit/e43aca1e4ed7076e6fdbe7b76c7297d84386fd9f))
 
 ## [0.4.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.3.0...analytics-v0.4.0) (2026-10-19)
