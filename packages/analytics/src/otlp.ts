@@ -54,7 +54,7 @@ function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent, attributes: objec
   };
 }
 
-export interface OtlpAdapterOptions extends Pick<HttpAdapterOptions, "headers"> {
+export interface OtlpAdapterOptions extends Pick<HttpAdapterOptions, "headers" | "retry"> {
   mapAttributes?: (event: ChunkifyPlayerAnalyticsEvent) => object;
 }
 
@@ -70,6 +70,7 @@ export function createOtlpAdapter(
   if (typeof mapAttributes !== "function") throw new TypeError("OTLP attribute mapper must be a function.");
   return createHttpAdapter(endpoint, {
     headers: options.headers,
+    retry: options.retry,
     mapEvent(event) {
       const attributes = mapAttributes(event);
       if (!attributes || typeof attributes !== "object" || Array.isArray(attributes)) {
