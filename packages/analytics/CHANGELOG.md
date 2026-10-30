@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.5.0...analytics-v0.6.0) (2026-10-30)
+
+
+### Features
+
+* **analytics:** include page origin and path in browser context ([5e4f5f6](https://github.com/chunkifydev/chunkify-player/commit/5e4f5f6b331a057de113838772ae53abad0770ae))
+
 ## [0.5.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.4.0...analytics-v0.5.0) (2026-10-21)
 
 
