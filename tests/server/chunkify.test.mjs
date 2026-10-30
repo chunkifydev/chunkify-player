@@ -26,3 +26,34 @@ test("Chunkify requires a valid configuration and retains HTTP endpoint restrict
   }
   assert.throws(() => createChunkifyAdapter("https://example.com/v1/events?key=secret", { ingestKey: "key" }), TypeError);
 });
+
+test("page context strips URL credentials, query and fragment, and handles unavailable locations", async (t) => {
+  const requests = [];
+  const browserWindow = { location: { href: "https://username:secret@example.com:8443/watch/episode?token=private#secret" } };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: browserWindow });
+  t.after(() => { delete globalThis.window; });
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return new Response("{}", { status: 201 });
+  });
+  const adapter = createChunkifyAdapter("/v1/events", { ingestKey: "public-key" });
+  const event = { event_name: "chunkify.video.view_started" };
+  await adapter.send(event);
+  assert.equal(requests[0].browser_context.page_origin, "https://example.com:8443");
+  assert.equal(requests[0].browser_context.page_path, "/watch/episode");
+  for (const value of ["username", "secret", "token", "private"]) assert.ok(!JSON.stringify(requests).includes(value));
+  for (const href of ["data:text/html,private", "file:///private/video.html", "about:blank", "invalid"]) {
+    browserWindow.location.href = href;
+    await adapter.send(event);
+    assert.equal(requests.at(-1).browser_context.page_origin, null);
+    assert.equal(requests.at(-1).browser_context.page_path, null);
+  }
+  browserWindow.location.href = `https://example.com/${"a".repeat(2048)}`;
+  await adapter.send(event);
+  assert.equal(requests.at(-1).browser_context.page_origin, "https://example.com");
+  assert.equal(requests.at(-1).browser_context.page_path, null);
+  Object.defineProperty(browserWindow, "location", { get() { throw new Error("Unavailable"); } });
+  await adapter.send(event);
+  assert.equal(requests.at(-1).browser_context.page_origin, null);
+  assert.equal(requests.at(-1).browser_context.page_path, null);
+});

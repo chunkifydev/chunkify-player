@@ -34,7 +34,7 @@ test("Chunkify sends browser context with each event without changing the shared
       schema_version: 1, browser_name: { chromium: "Chrome", firefox: "Firefox", webkit: "Safari" }[browserName],
       device_type: "desktop", device_family: null, language: "fr-FR", language_prefix: "fr", timezone: "Europe/Paris",
       screen_width_px: 1920, screen_height_px: 1080, viewport_width_px: 960, viewport_height_px: 540,
-      pixel_ratio: 2,
+      pixel_ratio: 2, page_origin: "http://127.0.0.1:4173", page_path: "/tests/fixtures/analytics.html",
     });
   }
   const delivered = requests.map(({ body: { browser_context, ...event } }) => event)
@@ -51,6 +51,7 @@ test("Chunkify retries a temporary failure with the original event and browser c
     keys.push(route.request().headers()["x-chunkify-ingest-key"]);
     if (bodies.length === 1) {
       await page.setViewportSize({ width: 640, height: 480 });
+      await page.evaluate(() => history.replaceState({}, "", "/different-page?token=secret#fragment"));
       await route.fulfill({ status: 503, headers: { "Retry-After": "1" }, body: "{}" });
     } else {
       await route.fulfill({ status: 201, body: "{}" });
@@ -68,7 +69,7 @@ test("Chunkify retries a temporary failure with the original event and browser c
   expect(bodies[1]).toBe(bodies[0]);
   expect(keys).toEqual(["public-key", "public-key"]);
   expect(JSON.parse(bodies[1]!)).toMatchObject({
-    event_id: "event-retry", browser_context: { viewport_width_px: 960, viewport_height_px: 540 },
+    event_id: "event-retry", browser_context: { viewport_width_px: 960, viewport_height_px: 540, page_path: "/tests/fixtures/analytics.html" },
   });
 });
 
@@ -215,4 +216,28 @@ test("disabled collection and generic destinations leave browser collection to t
   expect(requests[1]).toMatchObject({ body: result.event, key: "custom-public-key" });
   expect(requests[2]!.key).toBe("custom-public-key");
   expect(JSON.stringify(requests[2]!.body)).not.toContain("browser_context");
+});
+
+test("page context follows SPA navigation without collecting query strings or fragments", async ({ page }) => {
+  const requests: { context: BrowserContext; referrer: string | undefined }[] = [];
+  await page.route("**/chunkify-events", async route => {
+    requests.push({ context: route.request().postDataJSON().browser_context, referrer: route.request().headers().referer });
+    await route.fulfill({ status: 201, body: "{}" });
+  });
+  await page.goto("/tests/fixtures/analytics.html?token=secret#private");
+  await page.evaluate(async () => {
+    const path = "/packages/analytics/dist/chunkify.js";
+    const { createChunkifyAdapter } = await import(path);
+    const adapter = createChunkifyAdapter("/chunkify-events", { ingestKey: "public-key" });
+    const event = { event_name: "chunkify.video.view_started" };
+    await adapter.send(event);
+    history.pushState({}, "", "/watch/second?email=private@example.com#secret");
+    await adapter.send(event);
+  });
+  expect(requests.map(({ context }) => [context.page_origin, context.page_path])).toEqual([
+    ["http://127.0.0.1:4173", "/tests/fixtures/analytics.html"],
+    ["http://127.0.0.1:4173", "/watch/second"],
+  ]);
+  expect(requests.every(({ referrer }) => referrer === undefined)).toBe(true);
+  for (const value of ["secret", "private", "token=", "email="]) expect(JSON.stringify(requests)).not.toContain(value);
 });

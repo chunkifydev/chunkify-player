@@ -22,6 +22,10 @@ export interface BrowserContext {
   viewport_width_px: number | null;
   viewport_height_px: number | null;
   pixel_ratio: number | null;
+  /** Current document's HTTP(S) origin, without credentials. */
+  page_origin: string | null;
+  /** Current document's pathname, without query parameters or fragment. */
+  page_path: string | null;
 }
 
 export type ChunkifyCollectorEvent = ChunkifyPlayerAnalyticsEvent & { browser_context?: BrowserContext };
