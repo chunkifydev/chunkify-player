@@ -123,3 +123,59 @@ test("initial rendition is emitted for each attempt at its actual media position
   }
   session.destroy();
 });
+
+test("a source change clears its rendition even between attempts", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 0,
+    src: "one.mp4", currentSrc: "one.mp4", ownerDocument: { defaultView: null } });
+  const events = [];
+  const session = attachAnalytics(media, { videoId: "source-reset", destinations: [{ send(event) { events.push(event); } }] });
+  let select;
+  session.setConnector({ name: "test", version: null, playerName: null, playerVersion: null,
+    snapshot: () => null, subscribeToErrors: () => () => {},
+    subscribeToRenditions(listener) { select = listener; return () => {}; } });
+  const low = { width: 1280, height: 720, codec: "avc1", bitrate_bps: 2000000, frame_rate: 30 };
+  select(low); session.startAttempt(); session.sourceChanged(); session.startAttempt();
+  const second = events.at(-1);
+  assert.equal(second.event_name, "chunkify.video.view_started");
+  select(low);
+  assert.equal(events.at(-1).view_id, second.view_id);
+  assert.equal(events.at(-1).previous_rendition_width, null);
+  media.dispatchEvent(new Event("ended")); session.sourceChanged(); session.startAttempt();
+  assert.equal(events.at(-1).event_name, "chunkify.video.view_started");
+  session.destroy();
+});
+
+test("played range limit leaves room for final JSON and OTLP delivery", async (t) => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { createOtlpAdapter } = await import("@chunkify/analytics/otlp");
+  const media = Object.assign(new EventTarget(), { duration: 1000, currentTime: 0,
+    src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
+  const events = [];
+  const session = attachAnalytics(media, { videoId: "range-limit", destinations: [{ send(event) { events.push(event); } }] });
+  session.startAttempt();
+  const playRange = (i) => {
+    media.currentTime = i * 3 + 0.123456789012345; media.dispatchEvent(new Event("seeking"));
+    media.dispatchEvent(new Event("seeked")); media.dispatchEvent(new Event("playing"));
+    media.currentTime += 0.987654321098765; media.dispatchEvent(new Event("timeupdate"));
+    media.dispatchEvent(new Event("pause"));
+    // A paused seek needs a new play intent before the next range.
+    media.dispatchEvent(new Event("play"));
+  };
+  for (let i = 0; i < 128; i++) playRange(i);
+  media.dispatchEvent(new Event("ended"));
+  const end = events.at(-1);
+  assert.equal(end.played_ranges.length, 128);
+  assert.ok(Buffer.byteLength(JSON.stringify(end)) < 48 * 1024);
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    assert.equal(init.keepalive, true);
+    assert.ok(Buffer.byteLength(init.body) < 48 * 1024);
+    return new Response(null, { status: 204 });
+  });
+  await createOtlpAdapter("https://collector.example/v1/logs").send(end);
+  session.startAttempt();
+  for (let i = 0; i < 129; i++) playRange(i);
+  media.dispatchEvent(new Event("ended"));
+  assert.equal(events.at(-1).played_ranges, null);
+  session.destroy();
+});

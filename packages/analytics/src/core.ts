@@ -692,7 +692,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       else merged.push({ ...range });
     }
     // Keep event payloads bounded without silently reporting incomplete coverage.
-    view.playedRanges = merged.length <= 1000 ? merged : null;
+    view.playedRanges = merged.length <= 128 ? merged : null;
   }
   function stopPlaying(includeCurrentPosition = true) {
     if (snapshotTimer !== null) {
@@ -838,6 +838,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     scheduleSnapshot();
   }
   function finish(reason: AnalyticsEndReason) {
+    if (reason === "source_changed") selectedRendition = null;
     if (!view) return;
     const current = view;
     const seekOutcome = seekInteraction?.lastSeekedAt === null || seeking ? "interrupted" :
