@@ -375,7 +375,7 @@ The same mapper selection works with other adapters.
 
 ## Send events to a destination
 
-Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The Chunkify destination can add browser context to its own payload; other destinations receive the original playback event. The HTTP transport supports [bounded retries](#retries-and-delivery-limits), enabled by default for Chunkify. Delivery on page exit remains best effort. Do not put personal information, tokens, or URLs in supplied metadata. The event payload omits raw URLs and error messages. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
+Provide at least one adapter or object with `send(event)`. Every included event goes to every destination. The Chunkify destination can add browser context to its own payload; other destinations receive the original playback event. The HTTP transport supports [bounded retries](#retries-and-delivery-limits), enabled by default for Chunkify. Delivery on page exit remains best effort. Do not put personal information, tokens, or URLs in supplied metadata. The core event payload omits raw URLs and error messages. The Chunkify adapter adds the page origin and path, excluding query parameters and fragments. The Datadog and PostHog examples use [the player markup](#monitor-chunkify-player-or-a-video-element) shown above.
 
 ### Chunkify collector
 
@@ -430,11 +430,17 @@ change the core playback event type.
 | `screen_width_px`, `screen_height_px` | Browser-reported screen dimensions in CSS pixels. |
 | `viewport_width_px`, `viewport_height_px` | `window.innerWidth` and `window.innerHeight`, in CSS pixels. |
 | `pixel_ratio` | `window.devicePixelRatio`. |
+| `page_origin`, `page_path` | Current document HTTP(S) origin and pathname, without credentials, query parameters, or fragments. Each field is null if unavailable or longer than 2048 characters. |
 
 Stable fields are collected at the first browser send and cached for that adapter
-instance. Screen/viewport dimensions, pixel ratio, and timezone offset are sampled on
+instance. Page origin/path, screen/viewport dimensions, pixel ratio, and timezone offset are sampled on
 every send. Create a new adapter to refresh cached language, timezone, or browser identity.
 Each event includes its context so delivery does not depend on an earlier metadata request.
+Page context follows single-page navigation on subsequent events; retries keep the
+original serialized context. In an iframe, it describes the iframe document, not
+the parent page. Referrer and campaign parameters are not collected. Paths can
+still contain application-defined identifiers; disable browser context if those
+paths should not be collected.
 
 Browser recognition covers Chrome/Chromium, Edge, Firefox, Safari, Opera, and Samsung
 Internet, including their recognized iOS/Android variants. OS recognition covers Windows,
@@ -467,16 +473,16 @@ and [device classification](https://github.com/PostHog/posthog-js/blob/main/pack
 | `$device`, `$device_type` | Broad device family and category. Initial recognition focuses on desktop, phone, and tablet playback. |
 | `$browser_language`, `$browser_language_prefix`, `$timezone`, `$timezone_offset` | Included with explicit names and offset units. |
 | `$screen_width`, `$screen_height`, `$viewport_width`, `$viewport_height` | Included; Chunkify also reports pixel ratio. |
-| `$current_url`, `$host`, `$pathname`, referrer and campaign properties | Excluded from this first browser/device slice. Page attribution needs a separate collection policy. |
+| `$current_url`, `$host`, `$pathname` | `page_origin` and `page_path` identify the current page, excluding credentials, query parameters, and fragments. |
+| Referrer and campaign properties | Not collected. |
 | `$webview_app`, `$webview_app_version`, precise hardware model | Deferred; specialized in-app parsing and high-entropy hardware queries are outside this initial schema. |
 | SDK name/version, event ID/time, session identity | Existing Chunkify fields cover SDK and event identity. No new browser session, cookie, or device identity is created. |
 
 The Chunkify adapter does not request high-entropy hints, enumerate installed software,
 or request location permission. The adapter does not obtain or send a client IP.
-The collector adds request IP fields to its flat `event_context` object. See its
-IP settings and trusted-proxy rules in the separate collector repository.
-Browser context collection does not determine the viewer's IP address.
-GeoIP enrichment is not implemented.
+The collector derives continent, country and city locally from the request address, then
+discards that address. See the separate collector repository for geolocation and
+trusted-proxy configuration.
 
 Generic HTTP/OTLP adapters and custom callbacks continue to receive playback events.
 Their mapping functions can add application-selected fields. PostHog and Datadog clients

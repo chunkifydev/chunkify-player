@@ -99,7 +99,19 @@ function stableContext(browserWindow: Window & typeof globalThis): StableContext
 }
 
 type StableContext = Omit<BrowserContext, "screen_width_px" | "screen_height_px" |
-  "viewport_width_px" | "viewport_height_px" | "pixel_ratio" | "timezone_offset_minutes">;
+  "viewport_width_px" | "viewport_height_px" | "pixel_ratio" | "timezone_offset_minutes" |
+  "page_origin" | "page_path">;
+
+function pageContext(browserWindow: Window & typeof globalThis): Pick<BrowserContext, "page_origin" | "page_path"> {
+  const url = read(() => new URL(browserWindow.location.href));
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
+    return { page_origin: null, page_path: null };
+  }
+  return {
+    page_origin: url.origin.length <= 2048 ? url.origin : null,
+    page_path: url.pathname.length <= 2048 ? url.pathname : null,
+  };
+}
 
 /** Each adapter caches stable context on its first browser send, without browser listeners or storage. */
 export function createBrowserContextReader(): () => BrowserContext | undefined {
@@ -112,6 +124,7 @@ export function createBrowserContextReader(): () => BrowserContext | undefined {
     const offset = read(() => new browserWindow.Date().getTimezoneOffset());
     return {
       ...stable,
+      ...pageContext(browserWindow),
       timezone_offset_minutes: typeof offset === "number" && Number.isInteger(offset) && Math.abs(offset) <= 1440 ? offset : null,
       screen_width_px: dimension(read(() => browserWindow.screen.width)),
       screen_height_px: dimension(read(() => browserWindow.screen.height)),
