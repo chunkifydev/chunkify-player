@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.6.0...analytics-v0.7.0) (2026-10-30)
+
+
+### Features
+
+* **analytics:** record watched ranges and initial renditions ([#23](https://github.com/chunkifydev/chunkify-player/issues/23)) ([0cb75a7](https://github.com/chunkifydev/chunkify-player/commit/0cb75a7c0e41600da54f0322be7805099e3226f0))
+
 ## [0.6.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.5.0...analytics-v0.6.0) (2026-10-30)
 
 
