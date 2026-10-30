@@ -20,8 +20,15 @@ export interface RenditionPlayingTime {
   playing_time_ms: number;
 }
 export type AnalyticsRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
+export interface PlayedRange {
+  start_seconds: number;
+  end_seconds: number;
+}
 export interface ViewMetrics {
   media_duration_seconds: number | null;
+  playhead_seconds: number | null;
+  /** Cumulative, merged media ranges played by this attempt. Null if the range limit is exceeded. */
+  played_ranges: PlayedRange[] | null;
   startup_time_ms: number | null;
   first_video_frame_time_ms: number | null;
   playing_time_ms: number;
@@ -182,6 +189,8 @@ interface View {
   seekSince: number | null;
   maximumPlayhead: number;
   lastPlayhead: number | null;
+  rangeStart: number | null;
+  playedRanges: PlayedRange[] | null;
   nextSnapshotAt: number;
   duration: number | null;
   intrinsicVideoWidth: number | null;
@@ -464,7 +473,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.activeRendition = selectedRendition;
       view.activeRenditionSince = now;
     }
-    if (view && previous && next) emitRenditionChange(view, previous, next);
+    if (view && next) emitRenditionChange(view, previous, next);
   }
 
   function playheadSeconds(): number | null {
@@ -554,15 +563,15 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       from_state: previous, to_state: next, previous_state_duration_ms: elapsed });
   }
 
-  function emitRenditionChange(current: View, previous: AnalyticsRendition, selected: AnalyticsRendition) {
+  function emitRenditionChange(current: View, previous: AnalyticsRendition | null, selected: AnalyticsRendition) {
     if (!includedEvents.has("chunkify.video.rendition_changed")) return;
     refreshPlayerSize(current);
     deliver({ ...envelope(current, "chunkify.video.rendition_changed"),
       event_name: "chunkify.video.rendition_changed", playhead_seconds: playheadSeconds(),
       player_width_px: current.playerWidth, player_height_px: current.playerHeight,
-      previous_rendition_width: previous.width, previous_rendition_height: previous.height,
-      previous_rendition_codec: previous.codec, previous_rendition_bitrate_bps: previous.bitrate_bps,
-      previous_rendition_frame_rate: previous.frame_rate,
+      previous_rendition_width: previous?.width ?? null, previous_rendition_height: previous?.height ?? null,
+      previous_rendition_codec: previous?.codec ?? null, previous_rendition_bitrate_bps: previous?.bitrate_bps ?? null,
+      previous_rendition_frame_rate: previous?.frame_rate ?? null,
       selected_rendition_width: selected.width, selected_rendition_height: selected.height,
       selected_rendition_codec: selected.codec, selected_rendition_bitrate_bps: selected.bitrate_bps,
       selected_rendition_frame_rate: selected.frame_rate });
@@ -605,6 +614,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       error_fatal: error?.fatal ?? null,
       error_playhead_seconds: error?.playhead ?? null,
       media_duration_seconds: current.duration,
+      playhead_seconds: playheadSeconds(),
+      played_ranges: current.playedRanges?.map((range) => ({ ...range })) ?? null,
       startup_time_ms: current.startup,
       first_video_frame_time_ms: current.firstVideoFrame,
       playing_time_ms: playingTime,
@@ -644,6 +655,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       seekCount: 0, seekDuration: 0, seekSince: null,
       maximumPlayhead: Number.isFinite(media.currentTime) ? Math.max(0, media.currentTime) : 0,
       lastPlayhead: playheadSeconds(),
+      rangeStart: null, playedRanges: [],
       nextSnapshotAt: snapshotIntervalMs,
       duration: duration(media),
       intrinsicVideoWidth: initialVideoSize.width, intrinsicVideoHeight: initialVideoSize.height,
@@ -662,14 +674,34 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     if (includedEvents.size > 0) observeFirstVideoFrame(current);
     emit(current, "chunkify.video.view_started");
     if (view !== current) return;
+    if (selectedRendition) emitRenditionChange(current, null, selectedRendition);
     if (media.error) reportMediaError();
   }
-  function stopPlaying() {
+  function recordPlayedRange(end = playheadSeconds()) {
+    if (!view || view.rangeStart === null || view.playedRanges === null || end === null) return;
+    const start = view.rangeStart;
+    view.rangeStart = end;
+    if (end <= start) return;
+    // Merge overlaps so replaying a section still counts once within this view.
+    const ranges = [...view.playedRanges, { start_seconds: start, end_seconds: end }]
+      .sort((a, b) => a.start_seconds - b.start_seconds);
+    const merged: PlayedRange[] = [];
+    for (const range of ranges) {
+      const last = merged.at(-1);
+      if (last && range.start_seconds <= last.end_seconds) last.end_seconds = Math.max(last.end_seconds, range.end_seconds);
+      else merged.push({ ...range });
+    }
+    // Keep event payloads bounded without silently reporting incomplete coverage.
+    view.playedRanges = merged.length <= 1000 ? merged : null;
+  }
+  function stopPlaying(includeCurrentPosition = true) {
     if (snapshotTimer !== null) {
       clearTimeout(snapshotTimer);
       snapshotTimer = null;
     }
     if (!view || view.playingSince === null) return;
+    recordPlayedRange(includeCurrentPosition && !media.seeking ? playheadSeconds() : view.lastPlayhead);
+    view.rangeStart = null;
     const now = performance.now();
     closeActiveRendition(now);
     view.playing += now - view.playingSince;
@@ -689,6 +721,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     if (!view) return;
     refreshIntrinsicVideoSize(view);
     if (!Number.isFinite(media.currentTime)) return;
+    if (media.seeking) return;
+    if (view.playingSince !== null && !seeking && !media.seeking) recordPlayedRange();
     view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
     view.lastPlayhead = playheadSeconds();
   }
@@ -788,6 +822,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     view.startup ??= now - view.startedAt;
     stopRebuffering();
     view.playingSince ??= now;
+    view.rangeStart ??= playheadSeconds();
     if (view.activeRenditionSince === null && selectedRendition) {
       view.activeRendition = selectedRendition;
       view.activeRenditionSince = now;
@@ -863,7 +898,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       settleSeek();
     },
     seeking() {
-      stopPlaying();
+      stopPlaying(false);
       stopRebuffering();
       if (view) {
         if (!seekInteraction) {

@@ -303,6 +303,8 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `error_category`, `error_code`, `error_fatal`, `error_playhead_seconds` | Normalized error details on `playback_error`; otherwise `null`. Raw error messages and URLs are not included. |
 | `media_duration_seconds`, `startup_time_ms`, `first_video_frame_time_ms`, `playing_time_ms` | Media duration; time from attempt to first `playing`; time to the first frame callback; cumulative actual playing time. The two startup measurements can differ. |
 | `rebuffer_count`, `rebuffer_duration_ms`, `rebuffer_ratio`, `seek_count`, `seek_duration_ms` | Counts, cumulative durations, and rebuffer time divided by playing plus rebuffer time. The ratio is `null` until its denominator is positive. |
+| `played_ranges` | Cumulative media ranges actually played in this attempt, as `start_seconds` / `end_seconds`. Overlaps and replays are merged. Pauses, buffering and skipped sections are excluded. `[]` means no section played; `null` means coverage is unavailable after more than 1,000 disjoint ranges. |
+| `playhead_seconds` | Current media position at the snapshot or event. |
 | `maximum_playhead_seconds`, `furthest_progress_ratio` | Furthest playhead reached and that position divided by duration, capped at 1. Seeking near the end raises the ratio without watching the intervening video. |
 | `media_width_px`, `media_height_px`, `dropped_video_frames`, `total_video_frames` | The video element's intrinsic width and height (`videoWidth` and `videoHeight`) in CSS pixels, plus browser frame counters when exposed. These are not the player box dimensions or necessarily the encoded frame dimensions. |
 | `player_width_px`, `player_height_px` | The monitored media element's displayed box in CSS pixels. Present on view and rendition-change events; `null` when it has no measurable size. A final event retains the last measured size if the media element was removed first. |
@@ -641,3 +643,5 @@ monitor(video, {
   destinations: [{ send(event) { console.log(event); } }],
 });
 ```
+
+Rendition events include the initial selection for each attempt, with null previous-rendition fields. Subsequent events identify the change at its media position. Seeking backward can revisit the same position with another rendition.

@@ -98,15 +98,17 @@ test("default events describe playback state durations and rendition switches", 
     "chunkify.video.playback_state_changed",
     "chunkify.video.playback_state_changed",
     "chunkify.video.rendition_changed",
+    "chunkify.video.rendition_changed",
     "chunkify.video.playback_state_changed",
     "chunkify.video.view_ended",
   ]);
-  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   expect(events[1]).toMatchObject({ from_state: "startup", to_state: "playing",
     previous_state_duration_ms: 2000, playhead_seconds: 42 });
   expect(events[2]).toMatchObject({ from_state: "playing", to_state: "paused", previous_state_duration_ms: 3000 });
   expect(events[3]).toMatchObject({ from_state: "paused", to_state: "resuming", previous_state_duration_ms: 4000 });
-  expect(events[5]).toMatchObject({ previous_rendition_width: 1280, previous_rendition_height: 720,
+  expect(events[5]).toMatchObject({ previous_rendition_width: null, selected_rendition_width: 1280 });
+  expect(events[6]).toMatchObject({ previous_rendition_width: 1280, previous_rendition_height: 720,
     selected_rendition_width: 1920, selected_rendition_height: 1080, playhead_seconds: 42,
     player_width_px: 480, player_height_px: 270 });
   expect(events[5]).not.toHaveProperty("playing_time_ms");

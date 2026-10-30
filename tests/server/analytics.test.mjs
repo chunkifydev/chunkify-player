@@ -73,3 +73,53 @@ test("one failing destination does not prevent other destinations receiving the 
   assert.deepEqual(delivered, ["chunkify.video.view_started", "chunkify.video.playback_state_changed",
     "chunkify.video.view_ended"]);
 });
+
+test("played ranges exclude seeks and pauses, merge replays, and reset per attempt", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 0,
+    seeking: false, src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
+  const events = [];
+  const session = attachAnalytics(media, { videoId: "ranges", destinations: [{ send(event) { events.push(event); } }] });
+  const emit = (name, position = media.currentTime) => { media.currentTime = position; media.dispatchEvent(new Event(name)); };
+  emit("play"); emit("playing"); emit("timeupdate", 10); emit("pause", 12);
+  emit("timeupdate", 15); // A paused position must not become watched coverage.
+  emit("play"); emit("playing"); emit("timeupdate", 20);
+  media.seeking = true;
+  emit("timeupdate", 40); // The browser may update currentTime before dispatching seeking.
+  emit("seeking"); media.seeking = false; emit("seeked"); emit("playing");
+  emit("timeupdate", 50); emit("waiting", 52); emit("timeupdate", 54); emit("playing");
+  emit("timeupdate", 55);
+  emit("seeking", 5); emit("seeked"); emit("playing"); emit("timeupdate", 18); emit("ended");
+  const end = events.at(-1);
+  assert.deepEqual(end.played_ranges, [
+    { start_seconds: 0, end_seconds: 20 },
+    { start_seconds: 40, end_seconds: 52 },
+    { start_seconds: 54, end_seconds: 55 },
+  ]);
+  assert.equal(end.playhead_seconds, 18);
+  emit("play", 0); emit("playing"); emit("timeupdate", 3); emit("ended");
+  assert.deepEqual(events.at(-1).played_ranges, [{ start_seconds: 0, end_seconds: 3 }]);
+  assert.deepEqual(end.played_ranges[0], { start_seconds: 0, end_seconds: 20 });
+  session.destroy();
+});
+
+test("initial rendition is emitted for each attempt at its actual media position", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 12,
+    src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
+  const events = [];
+  const session = attachAnalytics(media, { videoId: "initial-rendition", destinations: [{ send(event) { events.push(event); } }] });
+  session.setConnector({ name: "test", version: null, playerName: null, playerVersion: null,
+    snapshot: () => null, subscribeToErrors: () => () => {},
+    subscribeToRenditions(listener) { listener({ width: 1280, height: 720, codec: "avc1", bitrate_bps: 2000000, frame_rate: 30 }); return () => {}; } });
+  for (let i = 0; i < 2; i++) { session.startAttempt(); media.dispatchEvent(new Event("ended")); }
+  const changes = events.filter((e) => e.event_name === "chunkify.video.rendition_changed");
+  assert.equal(changes.length, 2);
+  assert.notEqual(changes[0].view_id, changes[1].view_id);
+  for (const event of changes) {
+    assert.equal(event.previous_rendition_width, null);
+    assert.equal(event.selected_rendition_width, 1280);
+    assert.equal(event.playhead_seconds, 12);
+  }
+  session.destroy();
+});
