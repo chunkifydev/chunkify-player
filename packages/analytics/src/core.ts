@@ -9,6 +9,7 @@ const seekSettleMs = 400;
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";
 export type AnalyticsErrorCategory = "aborted" | "network" | "decode" | "unsupported" | "unknown";
 export type AnalyticsStartupOutcome = "started" | "failed_before_start" | "ended_before_start";
+export type AnalyticsVisibilityState = "visible" | "hidden";
 export type AnalyticsPlaybackState = "startup" | "resuming" | "playing" | "paused" | "buffering" |
   "seeking" | "error" | "ended" | "stopped";
 export interface RenditionPlayingTime {
@@ -69,6 +70,8 @@ export interface AnalyticsEventEnvelope {
   connector_version: string | null;
   player_name: string | null;
   player_version: string | null;
+  /** Tab visibility when this event was recorded. Missing on older events; null if unavailable. */
+  visibility_state?: AnalyticsVisibilityState | null;
   delivery_hostname: string | null;
   environment: string | null;
   viewer_id: string | null;
@@ -481,12 +484,20 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   }
 
   function envelope(current: View, event_name: ChunkifyPlayerAnalyticsEvent["event_name"]): AnalyticsEventEnvelope {
+    let visibility: AnalyticsVisibilityState | null = null;
+    try {
+      const state = media.ownerDocument.visibilityState;
+      if (state === "visible" || state === "hidden") visibility = state;
+    } catch {
+      // Visibility is optional, including for media without an accessible document.
+    }
     return {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
       sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
+      visibility_state: visibility,
       delivery_hostname: current.hostname, environment, viewer_id: viewerId,
       reason: null, startup_outcome: null, error_category: null, error_code: null,
       error_fatal: null, error_playhead_seconds: null,
@@ -894,6 +905,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.resourceStarted = true;
     },
     pause() {
+      // A queued pause can arrive after play() has already resumed the media.
+      if (media.paused === false) return;
       stopPlaying(); stopRebuffering(); wantsPlay = false;
       if (view && !media.ended) changePlaybackState("paused");
       settleSeek();
@@ -935,7 +948,14 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   };
   for (const [name, listener] of Object.entries(listeners)) media.addEventListener(name, listener);
   const page = media.ownerDocument.defaultView;
+  const visibilitychange = () => {
+    if (!view) return;
+    updatePlaybackPosition();
+    metadata();
+    emit(view, "chunkify.video.view_snapshot");
+  };
   const pagehide = () => finish("page_exit");
+  media.ownerDocument.addEventListener?.("visibilitychange", visibilitychange);
   page?.addEventListener("pagehide", pagehide);
   return {
     startAttempt,
@@ -945,6 +965,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (destroyed) return;
       destroyed = true;
       for (const [name, listener] of Object.entries(listeners)) media.removeEventListener(name, listener);
+      media.ownerDocument.removeEventListener?.("visibilitychange", visibilitychange);
       page?.removeEventListener("pagehide", pagehide);
       finish("destroyed");
       try { unsubscribeConnector?.(); } catch {}

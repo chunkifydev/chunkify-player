@@ -18,6 +18,21 @@ test("analytics imports without a DOM and reports its package version", async ()
   assert.equal(events[0].connector_version, pkg.version);
 });
 
+test("unavailable visibility does not prevent delivery", async () => {
+  const { attachAnalytics } = await import("@chunkify/analytics");
+  for (const document of [{ defaultView: null }, {
+    defaultView: null, get visibilityState() { throw new Error("unavailable"); },
+  }]) {
+    const events = [];
+    const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: document });
+    const session = attachAnalytics(media, { videoId: "visibility", destinations: [{ send(event) { events.push(event); } }] });
+    session.startAttempt();
+    session.destroy();
+    assert.equal(events.length, 3);
+    assert.ok(events.every((event) => event.visibility_state === null));
+  }
+});
+
 test("event mapper selects, renames, and calculates fields without changing the source event", async () => {
   const { attachAnalytics, createEventMapper } = await import("@chunkify/analytics");
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
