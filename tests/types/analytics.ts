@@ -20,6 +20,8 @@ const config: AnalyticsConfig = {
   includeEvents: ["view_started", "view_ended"],
   destinations: [{ async send(event) {
     const record: ChunkifyPlayerAnalyticsEvent = event;
+    const visibility: "visible" | "hidden" | null | undefined = record.visibility_state;
+    void visibility;
     if (record.event_name === "chunkify.video.playback_state_changed") {
       const state: string = record.to_state;
       void state;

@@ -159,7 +159,7 @@ See [Shaka's setup guide](https://github.com/shaka-project/shaka-player/blob/mai
 
 ## Events and metrics
 
-The seven event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, `chunkify.video.view_ended`, `chunkify.video.playback_state_changed`, `chunkify.video.rendition_changed`, and `chunkify.video.seek_completed`. All records share identifiers, a timestamp, and a sequence number within the `view_id`. The first four contain cumulative view measurements. Snapshots normally arrive after each 30 seconds of active playing time. State, rendition, and seek records have smaller, event-specific payloads. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
+The seven event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, `chunkify.video.view_ended`, `chunkify.video.playback_state_changed`, `chunkify.video.rendition_changed`, and `chunkify.video.seek_completed`. All records share identifiers, a timestamp, and a sequence number within the `view_id`. The first four contain cumulative view measurements. Snapshots arrive after each 30 seconds of active playing time and when the tab visibility changes during an attempt. State, rendition, and seek records have smaller, event-specific payloads. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
 
 ### Choose events for reporting
 
@@ -242,6 +242,8 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
 
 ### Playback timeline events
 
+Every event includes `visibility_state`, either `"visible"`, `"hidden"`, or `null` when unavailable. The collector reads the media element's owning document at event time. A hidden tab can keep playing; visibility alone never changes the playback state or stops watch-time measurement. With `view_snapshot` enabled, visibility changes emit an immediate snapshot so a timeline can distinguish "Playing in background" without waiting for the next timed snapshot. Chrome may pause muted background playback and resume it when the tab becomes visible. Report a transition to `paused` with `visibility_state: "hidden"` as "Paused in background" to distinguish it from a pause that began while visible. This describes the observed context, not who caused the pause. Browser pause events do not identify user, application, or browser intent. Older events omit the field and cannot be classified retrospectively.
+
 `playback_state_changed` reports the state entered and the wall-clock time spent in the previous state. Possible states are `startup` (the first attempt before playback), `resuming` (waiting after a pause or seek), `playing`, `paused`, `buffering`, `seeking`, `error`, `ended`, and `stopped`. With `seek_completed` enabled, state changes during a seek interaction are withheld; the seek record replaces them. Otherwise, raw seek state changes remain available. The final transition to `ended` or `stopped` closes the last state before `view_ended` unless a seek interaction is still pending. A fatal error enters `error`; `view_ended` still reports why the view ended. For example, pausing after 20 seconds of playback produces these event-specific fields:
 
 ```json
@@ -250,7 +252,8 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "from_state": "playing",
   "to_state": "paused",
   "previous_state_duration_ms": 20000,
-  "playhead_seconds": 42
+  "playhead_seconds": 42,
+  "visibility_state": "visible"
 }
 ```
 

@@ -19,6 +19,59 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.analyticsFixture));
 });
 
+test("visibility describes background pauses without pausing background playback", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "background", snapshotIntervalMs: 1000,
+      destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(await page.evaluate(() => window.analyticsFixture.events.at(-1))).toMatchObject({
+    event_name: "chunkify.video.view_snapshot", visibility_state: "hidden", playing_time_ms: 0,
+  });
+  await page.clock.runFor(2000);
+  const playing = await page.evaluate(() => window.analyticsFixture.events);
+  expect(playing.filter((event) => event.event_name === "chunkify.video.playback_state_changed")
+    .map((event) => event.to_state)).toEqual(["playing"]);
+  expect(playing.at(-1)).toMatchObject({
+    event_name: "chunkify.video.view_snapshot", visibility_state: "hidden", playing_time_ms: 2000,
+  });
+  await page.evaluate(() => window.analyticsFixture.video.dispatchEvent(new Event("pause")));
+  expect(await page.evaluate(() => window.analyticsFixture.events.at(-1)?.event_name)).toBe("chunkify.video.view_snapshot");
+  await page.evaluate(() => {
+    Object.defineProperty(window.analyticsFixture.video, "paused", { configurable: true, value: true });
+    window.analyticsFixture.video.dispatchEvent(new Event("pause"));
+  });
+  await page.clock.runFor(3000);
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    f.video.dispatchEvent(new Event("play"));
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  await page.clock.runFor(1000);
+  await page.evaluate(() => {
+    window.analyticsFixture.video.dispatchEvent(new Event("pause"));
+    window.analyticsFixture.session!.destroy();
+  });
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  expect(events.filter((event) => event.event_name === "chunkify.video.playback_state_changed" && event.to_state === "paused")
+    .map((event) => event.visibility_state)).toEqual(["hidden", "visible"]);
+  expect(events.at(-1)).toMatchObject({ visibility_state: "visible", playing_time_ms: 3000 });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(await page.evaluate(() => window.analyticsFixture.events.length)).toBe(events.length);
+});
+
 test("attachment stays idle and one playback attempt emits ordered start and end records", async ({ page }) => {
   await page.evaluate(() => {
     const f = window.analyticsFixture;
