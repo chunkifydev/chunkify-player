@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.1...player-v1.3.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **player:** continue playback when tabs become hidden ([#27](https://github.com/chunkifydev/chunkify-player/issues/27)) ([050343e](https://github.com/chunkifydev/chunkify-player/commit/050343e1c80dffcf70a15dc4b60c1f8703c15d97))
+
 ## [1.3.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.0...player-v1.3.1) (2026-10-12)
 
 
