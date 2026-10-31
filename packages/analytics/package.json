@@ -1,6 +1,6 @@
 {
   "name": "@chunkify/analytics",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Standalone playback analytics for HTML media and Chunkify Player",
   "license": "MIT",
   "repository": {

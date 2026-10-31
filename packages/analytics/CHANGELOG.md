@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.7.0...analytics-v0.8.0) (2026-10-31)
+
+
+### Features
+
+* **analytics:** distinguish background playback from pauses ([#25](https://github.com/chunkifydev/chunkify-player/issues/25)) ([68241fd](https://github.com/chunkifydev/chunkify-player/commit/68241fd6493bdbc58365ab6277e179fdc63b4862))
+
 ## [0.7.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.6.0...analytics-v0.7.0) (2026-10-30)
 
 
