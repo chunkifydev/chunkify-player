@@ -96,6 +96,12 @@ accepts the string value `"false"`; it is not an HTML boolean attribute. Native
 HLS rendition selection remains under the browser's control. Ordinary video
 files such as MP4 have no rendition switching.
 
+Playing video continues when you switch tabs, including muted video and sources
+without an audio track. The player makes one resume attempt if the browser pauses
+playback immediately after the tab becomes hidden. Pausing through the controls
+or `player.media.pause()` still takes effect. Browsers and operating systems can
+still restrict background playback or suspend the page.
+
 ## Playback access
 
 For a path-token CDN, pass the complete authorized URL as `src`. For

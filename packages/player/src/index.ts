@@ -95,6 +95,16 @@ export class ChunkifyPlayer extends HTMLElement {
   #playbackGeneration = 0;
   #firstHlsPlayPending = false;
   #soughtBeforeFirstHlsPlay = false;
+  #backgroundPauseDeadline: number | null = null;
+  #visibilityDocument: Document | null = null;
+  #onVisibilityChange = () => {
+    this.#backgroundPauseDeadline = null;
+    if (this.ownerDocument.hidden && !this.#media.paused && !this.#media.ended
+      && !this.#media.error && this.#media.readyState >= 2) {
+      // Only recover the immediate browser pause caused by hiding the tab.
+      this.#backgroundPauseDeadline = performance.now() + 250;
+    }
+  };
   #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
   #thumbnailTrack = document.createElement("track");
   #trackObserver = new MutationObserver((records) => {
@@ -126,6 +136,11 @@ export class ChunkifyPlayer extends HTMLElement {
   #forwardMediaEvent = (event: Event) => {
     const media = event.currentTarget as ChunkifyMediaElement;
     if (media !== this.#media) return;
+    if (event.type === "pause") this.#resumeBackgroundPlayback(media);
+    if (event.type === "emptied" || event.type === "loadstart"
+      || event.type === "ended" || event.type === "error") {
+      this.#backgroundPauseDeadline = null;
+    }
     if (event.type === "seeking" && this.#firstHlsPlayPending && media.paused) {
       this.#soughtBeforeFirstHlsPlay = true;
     }
@@ -283,11 +298,16 @@ export class ChunkifyPlayer extends HTMLElement {
       Reflect.set(this, name, value);
     }
     this.#trackObserver.observe(this, { attributes: true, childList: true, subtree: true });
+    this.#visibilityDocument = this.ownerDocument;
+    this.#visibilityDocument.addEventListener("visibilitychange", this.#onVisibilityChange);
     this.#syncMedia();
   }
 
   disconnectedCallback() {
     this.#playbackGeneration++;
+    this.#backgroundPauseDeadline = null;
+    this.#visibilityDocument?.removeEventListener("visibilitychange", this.#onVisibilityChange);
+    this.#visibilityDocument = null;
     this.#trackObserver.disconnect();
     this.#cancelPendingHlsSource();
     this.#detachHlsErrors();
@@ -306,11 +326,27 @@ export class ChunkifyPlayer extends HTMLElement {
 
   #createMedia(tagName: "video" | "hls-video"): ChunkifyMediaElement {
     const media = document.createElement(tagName) as ChunkifyMediaElement;
+    const pause = media.pause;
+    media.pause = () => {
+      // Controls and application calls must always override background recovery.
+      if (media === this.#media) this.#backgroundPauseDeadline = null;
+      pause.call(media);
+    };
     media.setAttribute("part", "media");
     media.setAttribute("slot", "media");
     media.setAttribute("aria-label", "Video player");
     for (const event of mediaEvents) media.addEventListener(event, this.#forwardMediaEvent);
     return media;
+  }
+
+  #resumeBackgroundPlayback(media: ChunkifyMediaElement) {
+    const deadline = this.#backgroundPauseDeadline;
+    this.#backgroundPauseDeadline = null;
+    if (deadline === null || performance.now() > deadline || !this.isConnected
+      || !this.ownerDocument.hidden || !media.paused || media.ended || media.error) return;
+    // A single play request continues muted/audio-free video in browsers that
+    // pause it on tab changes. A rejected request leaves the browser in control.
+    void media.play().catch(() => {});
   }
 
   #clearMedia(media: ChunkifyMediaElement) {
@@ -516,6 +552,10 @@ export class ChunkifyPlayer extends HTMLElement {
     if (changedAttribute === undefined || changedAttribute === "src" || changedAttribute === "credentials") {
       this.#playbackGeneration++;
       this.#failedMedia = null;
+    }
+    if (changedAttribute === undefined || changedAttribute === "src"
+      || changedAttribute === "type" || changedAttribute === "credentials") {
+      this.#backgroundPauseDeadline = null;
     }
     if (this.hasAttribute("credentials") && this.credentials === null) {
       this.#fail("invalid-credentials", null);
