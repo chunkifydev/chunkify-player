@@ -307,7 +307,7 @@ test("the bundled theme supports player-level control visibility variables", asy
       play: displays("media-play-button"),
       mute: displays("media-mute-button"),
       captions: displays("media-captions-menu-button"),
-      playbackRate: displays("media-playback-rate-menu-button"),
+      settings: displays("media-settings-menu-button"),
       pip: displays("media-pip-button"),
       fullscreen: displays("media-fullscreen-button"),
       airplay: displays("media-airplay-button"),
@@ -316,7 +316,7 @@ test("the bundled theme supports player-level control visibility variables", asy
   });
 
   await player.evaluate((element) => {
-    for (const name of ["play", "mute", "captions", "playback-rate", "pip", "fullscreen", "airplay", "cast"] as const) {
+    for (const name of ["play", "mute", "captions", "settings", "pip", "fullscreen", "airplay", "cast"] as const) {
       element.style.setProperty(`--${name}-button`, "none");
     }
   });
@@ -324,7 +324,7 @@ test("the bundled theme supports player-level control visibility variables", asy
     play: ["none", "none"],
     mute: ["none"],
     captions: ["none"],
-    playbackRate: ["none"],
+    settings: ["none"],
     pip: ["none"],
     fullscreen: ["none"],
     airplay: ["none"],
@@ -340,7 +340,7 @@ test("the bundled theme supports player-level control visibility variables", asy
     play: ["none", "none"],
     mute: ["none"],
     captions: ["none"],
-    playbackRate: ["none"],
+    settings: ["none"],
     pip: ["none"],
     fullscreen: ["none"],
     airplay: ["none"],
@@ -361,19 +361,21 @@ for (const source of ["master.m3u8", "video.mp4"] as const) {
         });
       }, { source, width });
       const player = page.locator("chunkify-player");
-      const button = player.locator("media-playback-rate-menu-button");
-      const menu = player.locator("media-playback-rate-menu");
+      const button = player.locator("media-settings-menu-button");
+      const menu = player.locator("media-settings-menu");
+      const speedMenu = player.locator("chunkify-playback-rate-menu");
+      const slider = speedMenu.getByRole("slider", { name: "Playback speed" });
       await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
         .toBeGreaterThanOrEqual(source === "video.mp4" ? 1 : 2);
       await expect(button).toBeVisible();
+      expect((await button.boundingBox())!.width).toBe(width < 600 ? 48 : 32);
       await expect(menu).toBeHidden();
       await button.click();
       await expect(menu).toBeVisible();
-      await expect(menu.getByRole("menuitemradio")).toHaveText([
-        "0.5x", "0.75x", "1x", "1.25x", "1.5x", "1.75x", "2x",
-      ]);
-      await expect(menu.getByRole("menuitemradio", { name: "1x", exact: true }))
-        .toHaveAttribute("aria-checked", "true");
+      await expect(slider).toBeHidden();
+      await menu.getByRole("menuitem", { name: /Playback speed/ }).click();
+      await expect(slider).toBeFocused();
+      await expect(slider).toHaveValue("1");
 
       const playerBounds = await player.boundingBox();
       const menuBounds = await menu.boundingBox();
@@ -382,24 +384,42 @@ for (const source of ["master.m3u8", "video.mp4"] as const) {
       expect(menuBounds!.x).toBeGreaterThanOrEqual(playerBounds!.x);
       expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(playerBounds!.x + playerBounds!.width);
 
-      for (const rate of [2, 0.5, 1]) {
-        await menu.getByRole("menuitemradio", { name: `${rate}x`, exact: true }).click();
-        await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(rate);
-        await expect(player).toHaveAttribute("data-rate", String(rate));
-        await expect(button).toHaveAttribute("mediaplaybackrate", String(rate));
-        await expect(menu).toBeHidden();
-        await button.click();
-        await expect(menu.getByRole("menuitemradio", { name: `${rate}x`, exact: true }))
-          .toHaveAttribute("aria-checked", "true");
-      }
+      await menu.evaluate(async (element) => {
+        const animations = [...element.getAnimations({ subtree: true }),
+          ...element.shadowRoot!.getAnimations({ subtree: true })];
+        await Promise.all(animations.map((animation) => animation.finished));
+      });
+      // Use actual pointer coordinates: WebKit's locator hit test stops at the nested shadow host.
+      const pointerBounds = await slider.boundingBox();
+      await page.mouse.click(pointerBounds!.x + pointerBounds!.width / 2, pointerBounds!.y + pointerBounds!.height / 2);
+      await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(1.25);
+      await expect(player).toHaveAttribute("data-rate", "1.25");
+      await expect(slider).toHaveAttribute("aria-valuetext", "1.25×");
+      await expect(speedMenu).toBeVisible();
+      await page.mouse.down();
+      await page.mouse.move(pointerBounds!.x + pointerBounds!.width - 10,
+        pointerBounds!.y + pointerBounds!.height / 2, { steps: 5 });
+      await page.mouse.up();
+      await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(2);
+      await speedMenu.getByRole("button", { name: "Reset playback speed" }).click();
+      await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(1);
+      await expect(slider).toHaveValue("1");
+      await slider.press("ArrowRight");
+      await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(1.05);
 
       await player.evaluate((element: ChunkifyPlayer) => { element.media.playbackRate = 1.5; });
-      await expect(button).toHaveAttribute("mediaplaybackrate", "1.5");
-      await expect(menu.getByRole("menuitemradio", { name: "1.5x", exact: true }))
-        .toHaveAttribute("aria-checked", "true");
+      await expect(slider).toHaveValue("1.5");
+      await expect(speedMenu.locator("output")).toHaveText("1.5×");
+      await speedMenu.getByRole("button", { name: "Back to previous menu" }).click();
+      await expect(speedMenu).toBeHidden();
+      await expect(menu.locator("[slot=description]")).toHaveText("1.5×");
+      await expect(menu).toBeVisible();
+      await menu.getByRole("menuitem", { name: /Playback speed/ }).click();
+      await expect(slider).toHaveValue("1.5");
       await player.evaluate((element: ChunkifyPlayer) => { element.controls = false; });
       await expect(button).toBeHidden();
       await expect(menu).toBeHidden();
+      await expect(slider).toBeHidden();
     });
   }
 }
@@ -410,22 +430,29 @@ test("operates the playback speed menu with the keyboard", async ({ page }) => {
       style="width:800px;aspect-ratio:16/9" src="/tests/fixtures/media/video.mp4"></chunkify-player>`;
   });
   const player = page.locator("chunkify-player");
-  const button = player.locator("media-playback-rate-menu-button");
-  const menu = player.locator("media-playback-rate-menu");
+  const button = player.locator("media-settings-menu-button");
+  const menu = player.locator("media-settings-menu");
+  const speedMenu = player.locator("chunkify-playback-rate-menu");
+  const item = menu.getByRole("menuitem", { name: /Playback speed/ });
+  const slider = speedMenu.getByRole("slider", { name: "Playback speed" });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
     .toBeGreaterThanOrEqual(1);
   await button.focus();
   await page.keyboard.press("Enter");
-  await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitemradio").first()).toBeFocused();
+  await expect(item).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(slider).toBeFocused();
   await page.keyboard.press("End");
-  await expect(menu.getByRole("menuitemradio", { name: "2x", exact: true })).toBeFocused();
-  await page.keyboard.press("Enter");
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(2);
-  await expect(menu).toBeHidden();
-  await expect(button).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(menu.getByRole("menuitemradio").first()).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(0.5);
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(0.55);
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(speedMenu).toBeHidden();
+  await expect(menu).toBeVisible();
+  await expect(item).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
   await expect(button).toBeFocused();

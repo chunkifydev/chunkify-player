@@ -68,6 +68,7 @@ export type ChunkifyPlayerStyle = CSSProperties & {
   "--mute-button"?: CSSProperties["display"] | undefined;
   "--captions-button"?: CSSProperties["display"] | undefined;
   "--playback-rate-button"?: CSSProperties["display"] | undefined;
+  "--settings-button"?: CSSProperties["display"] | undefined;
   "--pip-button"?: CSSProperties["display"] | undefined;
   "--fullscreen-button"?: CSSProperties["display"] | undefined;
   "--airplay-button"?: CSSProperties["display"] | undefined;
