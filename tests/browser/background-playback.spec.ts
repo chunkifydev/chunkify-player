@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { ChunkifyPlayer } from "../../packages/player/src/index.js";
 
-async function startVideo(page: Page, source: string, analytics = false, playbackRate = 1) {
+async function startVideo(page: Page, source: string, analytics = false) {
   await page.goto("/tests/fixtures/player.html");
   await page.evaluate(() => customElements.whenDefined("chunkify-player"));
   await page.evaluate(async ({ source, analytics }) => {
@@ -29,10 +29,7 @@ async function startVideo(page: Page, source: string, analytics = false, playbac
   const player = page.locator("chunkify-player");
   await expect.poll(() => player.evaluate((player: ChunkifyPlayer) => player.media.readyState))
     .toBeGreaterThanOrEqual(1);
-  await player.evaluate((player: ChunkifyPlayer, rate) => {
-    player.media.playbackRate = rate;
-    return player.media.play();
-  }, playbackRate);
+  await player.evaluate((player: ChunkifyPlayer) => player.media.play());
   await expect.poll(() => player.evaluate((player: ChunkifyPlayer) => player.media.readyState))
     .toBeGreaterThanOrEqual(2);
   return player;
@@ -79,12 +76,14 @@ for (const source of ["video.mp4", "master.m3u8"]) {
   });
 
   test(`${source}: recovers delayed and repeated browser pauses without reporting an analytics pause`, async ({ page }) => {
-    const player = await startVideo(page, `/tests/fixtures/media/${source}`, true, 0.25);
+    const backgroundSource = source === "video.mp4" ? "video.mp4" : "stream.m3u8";
+    const player = await startVideo(page, `/tests/fixtures/media/background/${backgroundSource}`, true);
     await player.evaluate(() => {
       Object.defineProperty(document, "hidden", { configurable: true, value: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    // Keep the short fixture playing beyond the delayed pause seen in Chrome.
+    // Use a long fixture at normal speed so media-engine rate changes or the
+    // end of the clip cannot interfere with this delayed-pause regression.
     await page.waitForTimeout(11_000);
     for (let attempt = 0; attempt < 2; attempt++) {
       const before = await player.evaluate((player: ChunkifyPlayer) => {
