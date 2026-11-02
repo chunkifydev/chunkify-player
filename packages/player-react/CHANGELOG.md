@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.2.3...player-react-v1.3.0) (2026-11-02)
+
+
+### Features
+
+* **player:** add settings for speed, quality and subtitles ([#31](https://github.com/chunkifydev/chunkify-player/issues/31)) ([3e15eb0](https://github.com/chunkifydev/chunkify-player/commit/3e15eb0fbeadf2456b8c4955a3177db11c048756))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.3.3 to 1.4.0
+
 ## [1.2.3](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.2.2...player-react-v1.2.3) (2026-11-02)
 
 
