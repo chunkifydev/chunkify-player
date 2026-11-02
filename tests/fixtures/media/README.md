@@ -29,3 +29,17 @@ ffmpeg -i tests/fixtures/media/background/video.mp4 -map 0:v:0 -c copy \
   -hls_segment_filename tests/fixtures/media/background/segment%02d.m4s \
   tests/fixtures/media/background/stream.m3u8
 ```
+
+`quality/master.m3u8` adds 720p and 2160p encodes of the same clip for quality
+selection tests and the basic example. These are upscaled test patterns, not
+samples of HD/4K image detail. Generate each rendition with the command below,
+substituting `720` or `2160` for `HEIGHT`:
+
+```sh
+ffmpeg -i tests/fixtures/media/video.mp4 -vf scale=-2:HEIGHT \
+  -c:v libx264 -profile:v baseline -preset veryfast -crf 35 \
+  -g 24 -keyint_min 24 -sc_threshold 0 -c:a copy \
+  -f hls -hls_time 2 -hls_playlist_type vod -hls_segment_type fmp4 \
+  -hls_segment_filename tests/fixtures/media/quality/HEIGHTp/segment%02d.m4s \
+  tests/fixtures/media/quality/HEIGHTp/stream.m3u8
+```

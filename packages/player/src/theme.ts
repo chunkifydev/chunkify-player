@@ -3,6 +3,8 @@ import "media-chrome/dist/menu/index.js";
 import { MediaTheme } from "media-chrome/dist/media-theme.js";
 import { defaultThemeMarkup } from "./themes/default.js";
 import "./playback-rate-menu.js";
+import "./rendition-menu.js";
+import "./settings-menu.js";
 
 export const defaultPlayerTheme = "default";
 

@@ -94,6 +94,13 @@ adjust the slider from 0.5× to 2× in 0.05× steps. **Reset** restores 1×. The
 shows the current speed. You can also set `player.media.playbackRate` directly
 and listen for `ratechange`, or `onRateChange` in React.
 
+Settings also includes **Quality** when the playback engine exposes renditions.
+Choose a resolution to force it, or **Auto** to restore adaptive selection. HD
+and 4K badges identify resolutions of at least 720p and 2160p, respectively.
+**Subtitles** lists available caption/subtitle tracks and an **Off** option.
+The captions button in the control bar provides the same choices; both menus
+stay in sync. Settings without available options are hidden.
+
 For HLS playback through hls.js, automatic rendition selection is capped to
 the displayed media size. Use `cap-rendition-to-player-size="false"` in HTML or
 `capRenditionToPlayerSize={false}` in React to remove that cap. This attribute

@@ -14,7 +14,7 @@ class PlaybackRateMenu extends MediaChromeMenu {
         :host { --media-menu-max-height: none; }
         .speed-control { padding: 4px 16px 10px; }
         .speed-value, .speed-limits { display: flex; justify-content: space-between; align-items: center; }
-        output { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        output { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
         .speed-limits { font-size: 12px; opacity: .7; line-height: 16px; }
         .reset { padding: 2px 8px; border-radius: 6px; cursor: pointer; background: rgb(255 255 255 / .1); }
         .reset:active { background: rgb(255 255 255 / .2); }
@@ -80,7 +80,7 @@ class PlaybackRateMenu extends MediaChromeMenu {
     this.#range.setAttribute("aria-valuetext", label);
     this.#output.value = label;
     const description = this.parentElement?.querySelector(":scope > [slot=description]");
-    if (description) description.textContent = label;
+    if (description) description.textContent = rate === 1 ? "Normal" : label;
   }
 }
 

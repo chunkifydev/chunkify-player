@@ -362,7 +362,7 @@ for (const source of ["master.m3u8", "video.mp4"] as const) {
       }, { source, width });
       const player = page.locator("chunkify-player");
       const button = player.locator("media-settings-menu-button");
-      const menu = player.locator("media-settings-menu");
+      const menu = player.locator("chunkify-settings-menu");
       const speedMenu = player.locator("chunkify-playback-rate-menu");
       const slider = speedMenu.getByRole("slider", { name: "Playback speed" });
       await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
@@ -386,7 +386,7 @@ for (const source of ["master.m3u8", "video.mp4"] as const) {
 
       await menu.evaluate(async (element) => {
         const animations = [...element.getAnimations({ subtree: true }),
-          ...element.shadowRoot!.getAnimations({ subtree: true })];
+          ...element.shadowRoot!.getAnimations()];
         await Promise.all(animations.map((animation) => animation.finished));
       });
       // Use actual pointer coordinates: WebKit's locator hit test stops at the nested shadow host.
@@ -431,7 +431,7 @@ test("operates the playback speed menu with the keyboard", async ({ page }) => {
   });
   const player = page.locator("chunkify-player");
   const button = player.locator("media-settings-menu-button");
-  const menu = player.locator("media-settings-menu");
+  const menu = player.locator("chunkify-settings-menu");
   const speedMenu = player.locator("chunkify-playback-rate-menu");
   const item = menu.getByRole("menuitem", { name: /Playback speed/ });
   const slider = speedMenu.getByRole("slider", { name: "Playback speed" });
@@ -440,6 +440,9 @@ test("operates the playback speed menu with the keyboard", async ({ page }) => {
   await button.focus();
   await page.keyboard.press("Enter");
   await expect(item).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(item).toBeFocused();
+  await expect(item).toContainText("Normal");
   await page.keyboard.press("Enter");
   await expect(slider).toBeFocused();
   await page.keyboard.press("End");
@@ -457,6 +460,98 @@ test("operates the playback speed menu with the keyboard", async ({ page }) => {
   await expect(menu).toBeHidden();
   await expect(button).toBeFocused();
 });
+
+for (const width of [320, 800]) {
+  test(`forces quality and restores Auto at ${width}px`, async ({ page }) => {
+    const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
+    test.skip(!hlsJsSupported, "This browser uses native HLS playback");
+    await page.evaluate((width) => {
+      document.body.innerHTML = `<chunkify-player controls muted playsinline loop
+        style="width:${width}px;aspect-ratio:16/9"
+        src="/tests/fixtures/media/quality/master.m3u8"></chunkify-player>`;
+    }, width);
+    const player = page.locator("chunkify-player");
+    const settings = player.locator("chunkify-settings-menu");
+    const quality = player.locator("chunkify-rendition-menu");
+    const qualityRow = settings.getByRole("menuitem", { name: /^Quality/ });
+    const openQuality = async () => {
+      if (!await settings.isVisible()) await player.locator("media-settings-menu-button").click();
+      await qualityRow.click();
+    };
+    const engineState = () => player.evaluate((element: ChunkifyPlayer) => {
+      const media = element.media as HTMLVideoElement & {
+        api?: { autoLevelEnabled: boolean; capLevelToPlayerSize: boolean };
+        videoRenditions?: { selectedIndex: number };
+      };
+      return { auto: media.api?.autoLevelEnabled, level: media.videoRenditions?.selectedIndex,
+        capped: media.api?.capLevelToPlayerSize, height: media.videoHeight };
+    });
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+    await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+    await openQuality();
+    await expect(quality.getByRole("menuitemradio")).toHaveText(["2160p 4K", "720p HD", "144p", /Auto/]);
+    const playerBounds = (await player.boundingBox())!;
+    const menuBounds = (await settings.boundingBox())!;
+    expect(menuBounds.y).toBeGreaterThanOrEqual(playerBounds.y);
+    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(playerBounds.y + playerBounds.height);
+    await quality.getByRole("menuitemradio", { name: "2160p 4K", exact: true }).click();
+    await expect.poll(engineState).toMatchObject({ auto: false, level: 2, capped: true, height: 2160 });
+    await openQuality();
+    await expect(quality.getByRole("menuitemradio", { name: "2160p 4K", exact: true })).toHaveAttribute("aria-checked", "true");
+    await quality.getByRole("menuitemradio", { name: "720p HD", exact: true }).click();
+    await expect.poll(engineState).toMatchObject({ auto: false, level: 1, height: 720 });
+    await openQuality();
+    await quality.getByRole("menuitemradio", { name: /^Auto/ }).click();
+    await expect.poll(engineState).toMatchObject({ auto: true, capped: true });
+    await qualityRow.press("Escape");
+    await expect(settings).toBeHidden();
+    await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
+    await player.locator("media-settings-menu-button").click();
+    await expect(qualityRow).toBeHidden();
+    await expect(settings.getByRole("menuitem", { name: /Subtitles/ })).toBeHidden();
+  });
+}
+
+for (const source of ["master.m3u8", "video.mp4"] as const) {
+  test(`keeps settings subtitles and the captions button in sync for ${source}`, async ({ page }) => {
+    await page.evaluate((source) => {
+      document.body.innerHTML = `<chunkify-player controls muted style="width:320px;aspect-ratio:16/9"
+        src="/tests/fixtures/media/${source}">
+        <track kind="captions" srclang="en" label="English" src="/tests/fixtures/media/captions-en.vtt">
+        <track kind="subtitles" srclang="fr" label="Français" src="/tests/fixtures/media/captions-fr.vtt">
+      </chunkify-player>`;
+    }, source);
+    const player = page.locator("chunkify-player");
+    const settings = player.locator("chunkify-settings-menu");
+    const subtitles = settings.locator("media-captions-menu");
+    const captions = player.locator("#captions-menu");
+    const subtitleRow = settings.getByRole("menuitem", { name: /^Subtitles/ });
+    const showing = () => player.evaluate((element: ChunkifyPlayer) =>
+      Array.from(element.media.textTracks).filter((track) => track.mode === "showing").map((track) => track.label));
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+      .toBeGreaterThanOrEqual(source === "video.mp4" ? 1 : 2);
+    await player.locator("media-settings-menu-button").click();
+    await subtitleRow.click();
+    await subtitles.getByRole("menuitemradio", { name: "Français", exact: true }).click();
+    await expect.poll(showing).toEqual(["Français"]);
+    await subtitleRow.press("Escape");
+    await expect(settings).toBeHidden();
+    await player.locator("media-captions-menu-button").click();
+    await expect(captions.getByRole("menuitemradio", { name: "Français", exact: true })).toHaveAttribute("aria-checked", "true");
+    await captions.getByRole("menuitemradio", { name: "English", exact: true }).click();
+    await expect.poll(showing).toEqual(["English"]);
+    await player.locator("media-settings-menu-button").click();
+    await expect(subtitleRow).toHaveAccessibleName(/Subtitles.*English/);
+    await subtitleRow.click();
+    await expect(subtitles.getByRole("menuitemradio", { name: "English", exact: true })).toHaveAttribute("aria-checked", "true");
+    await subtitles.getByRole("menuitemradio", { name: "Off", exact: true }).click();
+    await expect.poll(showing).toEqual([]);
+    await subtitleRow.press("Escape");
+    await expect(settings).toBeHidden();
+    await player.locator("media-captions-menu-button").click();
+    await expect(captions.getByRole("menuitemradio", { name: "Off", exact: true })).toHaveAttribute("aria-checked", "true");
+  });
+}
 
 test("disables automatic live seeking by default and supports an explicit opt-in", async ({ page }) => {
   await page.evaluate(() => {
@@ -792,7 +887,7 @@ for (const source of ["master.m3u8", "video.mp4"] as const) {
     }, source);
     const player = page.locator("chunkify-player");
     const button = player.locator("media-captions-menu-button");
-    const menu = player.locator("media-captions-menu");
+    const menu = player.locator("#captions-menu");
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
       .toBeGreaterThanOrEqual(source === "video.mp4" ? 1 : 2);
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
@@ -827,7 +922,7 @@ test("keeps the basic example toolbar near the bottom with caption tracks", asyn
   });
   expect(await bottomGap()).toBeLessThan(0.2);
   await player.locator("media-captions-menu-button").click();
-  await expect(player.locator("media-captions-menu")).toBeVisible();
+  await expect(player.locator("#captions-menu")).toBeVisible();
   expect(await bottomGap()).toBeLessThan(0.2);
 });
 
