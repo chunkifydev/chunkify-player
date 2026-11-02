@@ -11,6 +11,7 @@ class RenditionMenu extends MediaRenditionMenu {
 
   constructor() {
     super();
+    // Add badges before the settings row reads the selected item's description.
     this.addEventListener("addmenuitem", (event) => {
       const item = (event as CustomEvent<MediaChromeMenuItem>).detail;
       const rendition = this.mediaRenditionList.find((entry) => entry.id === item.value);
@@ -26,7 +27,7 @@ class RenditionMenu extends MediaRenditionMenu {
       suffix.textContent = ` ${badge}`;
       label.append(suffix);
       item.dataset.description = item.text;
-    });
+    }, { capture: true });
   }
 }
 

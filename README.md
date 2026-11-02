@@ -97,6 +97,9 @@ and listen for `ratechange`, or `onRateChange` in React.
 Settings also includes **Quality** when the playback engine exposes renditions.
 Choose a resolution to force it, or **Auto** to restore adaptive selection. HD
 and 4K badges identify resolutions of at least 720p and 2160p, respectively.
+Auto shows the resolution currently playing and updates when it changes.
+Manual selection overrides the automatic player-size cap and preserves whether
+playback is paused or playing.
 **Subtitles** lists available caption/subtitle tracks and an **Off** option.
 The captions button in the control bar provides the same choices; both menus
 stay in sync. Settings without available options are hidden.

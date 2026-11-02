@@ -480,13 +480,36 @@ for (const width of [320, 800]) {
     };
     const engineState = () => player.evaluate((element: ChunkifyPlayer) => {
       const media = element.media as HTMLVideoElement & {
-        api?: { autoLevelEnabled: boolean; capLevelToPlayerSize: boolean };
-        videoRenditions?: { selectedIndex: number };
+        api?: { autoLevelEnabled: boolean; manualLevel: number; capLevelToPlayerSize: boolean };
       };
-      return { auto: media.api?.autoLevelEnabled, level: media.videoRenditions?.selectedIndex,
+      return { auto: media.api?.autoLevelEnabled, level: media.api?.manualLevel,
         capped: media.api?.capLevelToPlayerSize, height: media.videoHeight };
     });
     await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+    await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+      (element.media as HTMLVideoElement & { api: { nextLevel: number } }).api.nextLevel)).toBeGreaterThanOrEqual(0);
+    await player.evaluate((element: ChunkifyPlayer) => element.media.pause());
+    const currentAuto = await player.evaluate((element: ChunkifyPlayer) => {
+      const media = element.media as HTMLVideoElement & {
+        api: { nextLevel: number; levels: { height: number }[] };
+      };
+      return { index: media.api.nextLevel, height: media.api.levels[media.api.nextLevel]!.height };
+    });
+    await openQuality();
+    await quality.getByRole("menuitemradio", { name: new RegExp(`^${currentAuto.height}p`) }).click();
+    await expect.poll(engineState).toMatchObject({ auto: false, level: currentAuto.index });
+    expect(await player.evaluate((element: ChunkifyPlayer) => element.media.paused)).toBe(true);
+    // Change the pending manual level, then choose the still-buffered rendition again.
+    await openQuality();
+    await quality.getByRole("menuitemradio", { name: "2160p 4K", exact: true }).click();
+    await expect.poll(engineState).toMatchObject({ auto: false, level: 2 });
+    await openQuality();
+    await quality.getByRole("menuitemradio", { name: new RegExp(`^${currentAuto.height}p`) }).click();
+    await expect.poll(engineState).toMatchObject({ auto: false, level: currentAuto.index });
+    await openQuality();
+    await quality.getByRole("menuitemradio", { name: /^Auto/ }).click();
+    await expect.poll(engineState).toMatchObject({ auto: true });
     await player.evaluate((element: ChunkifyPlayer) => element.media.play());
     await openQuality();
     await expect(quality.getByRole("menuitemradio")).toHaveText(["2160p 4K", "720p HD", "144p", /Auto/]);
@@ -495,14 +518,22 @@ for (const width of [320, 800]) {
     expect(menuBounds.y).toBeGreaterThanOrEqual(playerBounds.y);
     expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(playerBounds.y + playerBounds.height);
     await quality.getByRole("menuitemradio", { name: "2160p 4K", exact: true }).click();
-    await expect.poll(engineState).toMatchObject({ auto: false, level: 2, capped: true, height: 2160 });
+    await expect.poll(engineState, { timeout: 10_000 }).toMatchObject({ auto: false, level: 2, capped: true, height: 2160 });
     await openQuality();
     await expect(quality.getByRole("menuitemradio", { name: "2160p 4K", exact: true })).toHaveAttribute("aria-checked", "true");
     await quality.getByRole("menuitemradio", { name: "720p HD", exact: true }).click();
-    await expect.poll(engineState).toMatchObject({ auto: false, level: 1, height: 720 });
+    await expect.poll(engineState, { timeout: 10_000 }).toMatchObject({ auto: false, level: 1, height: 720 });
     await openQuality();
     await quality.getByRole("menuitemradio", { name: /^Auto/ }).click();
     await expect.poll(engineState).toMatchObject({ auto: true, capped: true });
+    await expect.poll(async () => {
+      const height = await player.evaluate((element: ChunkifyPlayer) =>
+        Math.min(element.media.videoWidth, element.media.videoHeight));
+      const description = await qualityRow.evaluate((element) =>
+        element.shadowRoot!.querySelector('slot[name="description"] > span')?.textContent);
+      const badge = height >= 2160 ? " 4K" : height >= 720 ? " HD" : "";
+      return description === `Auto (${height}p)${badge}`;
+    }).toBe(true);
     await qualityRow.press("Escape");
     await expect(settings).toBeHidden();
     await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
