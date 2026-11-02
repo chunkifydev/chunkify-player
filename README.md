@@ -89,6 +89,11 @@ The player forwards standard media events such as `play`, `pause`, `timeupdate`,
 `ended`, and `error`. It also emits `mediachange` when it replaces the active
 media element.
 
+With `controls` enabled, the default theme includes a playback speed menu with
+0.5×, 0.75×, 1×, 1.25×, 1.5×, 1.75×, and 2× options. The button shows the current
+speed. You can also set `player.media.playbackRate` directly and listen for
+`ratechange`, or `onRateChange` in React.
+
 For HLS playback through hls.js, automatic rendition selection is capped to
 the displayed media size. Use `cap-rendition-to-player-size="false"` in HTML or
 `capRenditionToPlayerSize={false}` in React to remove that cap. This attribute
@@ -204,7 +209,7 @@ Button visibility uses CSS variables set to `none`:
 ```
 
 Supported variables are `--play-button`, `--mute-button`,
-`--captions-button`, `--pip-button`, `--fullscreen-button`,
+`--captions-button`, `--playback-rate-button`, `--pip-button`, `--fullscreen-button`,
 `--airplay-button`, and `--cast-button`.
 
 The media defaults to `object-fit: contain`, so its ratio is preserved. Common

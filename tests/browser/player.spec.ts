@@ -307,6 +307,7 @@ test("the bundled theme supports player-level control visibility variables", asy
       play: displays("media-play-button"),
       mute: displays("media-mute-button"),
       captions: displays("media-captions-menu-button"),
+      playbackRate: displays("media-playback-rate-menu-button"),
       pip: displays("media-pip-button"),
       fullscreen: displays("media-fullscreen-button"),
       airplay: displays("media-airplay-button"),
@@ -315,7 +316,7 @@ test("the bundled theme supports player-level control visibility variables", asy
   });
 
   await player.evaluate((element) => {
-    for (const name of ["play", "mute", "captions", "pip", "fullscreen", "airplay", "cast"] as const) {
+    for (const name of ["play", "mute", "captions", "playback-rate", "pip", "fullscreen", "airplay", "cast"] as const) {
       element.style.setProperty(`--${name}-button`, "none");
     }
   });
@@ -323,6 +324,7 @@ test("the bundled theme supports player-level control visibility variables", asy
     play: ["none", "none"],
     mute: ["none"],
     captions: ["none"],
+    playbackRate: ["none"],
     pip: ["none"],
     fullscreen: ["none"],
     airplay: ["none"],
@@ -338,11 +340,95 @@ test("the bundled theme supports player-level control visibility variables", asy
     play: ["none", "none"],
     mute: ["none"],
     captions: ["none"],
+    playbackRate: ["none"],
     pip: ["none"],
     fullscreen: ["none"],
     airplay: ["none"],
     cast: ["none"],
   });
+});
+
+for (const source of ["master.m3u8", "video.mp4"] as const) {
+  for (const width of [320, 800]) {
+    test(`changes playback speed in ${source} at ${width}px`, async ({ page }) => {
+      await page.evaluate(({ source, width }) => {
+        document.body.innerHTML = `<chunkify-player controls muted playsinline
+          style="width:${width}px;aspect-ratio:16/9"
+          src="/tests/fixtures/media/${source}"></chunkify-player>`;
+        const player = document.querySelector("chunkify-player")!;
+        player.addEventListener("ratechange", () => {
+          player.dataset.rate = String(player.media.playbackRate);
+        });
+      }, { source, width });
+      const player = page.locator("chunkify-player");
+      const button = player.locator("media-playback-rate-menu-button");
+      const menu = player.locator("media-playback-rate-menu");
+      await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+        .toBeGreaterThanOrEqual(source === "video.mp4" ? 1 : 2);
+      await expect(button).toBeVisible();
+      await expect(menu).toBeHidden();
+      await button.click();
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole("menuitemradio")).toHaveText([
+        "0.5x", "0.75x", "1x", "1.25x", "1.5x", "1.75x", "2x",
+      ]);
+      await expect(menu.getByRole("menuitemradio", { name: "1x", exact: true }))
+        .toHaveAttribute("aria-checked", "true");
+
+      const playerBounds = await player.boundingBox();
+      const menuBounds = await menu.boundingBox();
+      expect(menuBounds!.y).toBeGreaterThanOrEqual(playerBounds!.y);
+      expect(menuBounds!.y + menuBounds!.height).toBeLessThanOrEqual(playerBounds!.y + playerBounds!.height);
+      expect(menuBounds!.x).toBeGreaterThanOrEqual(playerBounds!.x);
+      expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(playerBounds!.x + playerBounds!.width);
+
+      for (const rate of [2, 0.5, 1]) {
+        await menu.getByRole("menuitemradio", { name: `${rate}x`, exact: true }).click();
+        await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(rate);
+        await expect(player).toHaveAttribute("data-rate", String(rate));
+        await expect(button).toHaveAttribute("mediaplaybackrate", String(rate));
+        await expect(menu).toBeHidden();
+        await button.click();
+        await expect(menu.getByRole("menuitemradio", { name: `${rate}x`, exact: true }))
+          .toHaveAttribute("aria-checked", "true");
+      }
+
+      await player.evaluate((element: ChunkifyPlayer) => { element.media.playbackRate = 1.5; });
+      await expect(button).toHaveAttribute("mediaplaybackrate", "1.5");
+      await expect(menu.getByRole("menuitemradio", { name: "1.5x", exact: true }))
+        .toHaveAttribute("aria-checked", "true");
+      await player.evaluate((element: ChunkifyPlayer) => { element.controls = false; });
+      await expect(button).toBeHidden();
+      await expect(menu).toBeHidden();
+    });
+  }
+}
+
+test("operates the playback speed menu with the keyboard", async ({ page }) => {
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player controls muted
+      style="width:800px;aspect-ratio:16/9" src="/tests/fixtures/media/video.mp4"></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  const button = player.locator("media-playback-rate-menu-button");
+  const menu = player.locator("media-playback-rate-menu");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+    .toBeGreaterThanOrEqual(1);
+  await button.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitemradio").first()).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(menu.getByRole("menuitemradio", { name: "2x", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.playbackRate)).toBe(2);
+  await expect(menu).toBeHidden();
+  await expect(button).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(menu.getByRole("menuitemradio").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(button).toBeFocused();
 });
 
 test("disables automatic live seeking by default and supports an explicit opt-in", async ({ page }) => {
@@ -513,7 +599,8 @@ test("keeps the theme and controls inside a fixed player box", async ({ page }) 
       .map((button) => {
         const buttonBounds = button.getBoundingClientRect();
         const icon = Array.from(button.children)
-          .find((child) => child.getBoundingClientRect().width > 0);
+          .find((child) => child.getBoundingClientRect().width > 0)
+          ?? button.shadowRoot?.querySelector('slot[name="icon"]');
         const iconBounds = icon?.getBoundingClientRect();
         return iconBounds
           ? Math.round(((iconBounds.left + iconBounds.width / 2)
@@ -526,8 +613,9 @@ test("keeps the theme and controls inside a fixed player box", async ({ page }) 
       controlsInside: Boolean(controlBounds
         && controlBounds.top >= playerBounds.top
         && controlBounds.bottom <= playerBounds.bottom),
+      // Text labels can be centered on fractional pixels across browser engines.
       iconsCentered: iconCenterOffsets.length > 0
-        && iconCenterOffsets.every((offset) => offset === 0),
+        && iconCenterOffsets.every((offset) => offset !== null && Math.abs(offset) < 0.1),
     };
   })).toEqual({
     themeHeight: 225,
