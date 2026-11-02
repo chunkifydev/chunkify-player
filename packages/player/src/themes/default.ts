@@ -94,14 +94,17 @@ export const defaultThemeMarkup = String.raw`
   chunkify-settings-menu {
     z-index: 2;
     width: 300px;
+    /* Keep Media Chrome's submenu minimum width within the responsive width. */
+    min-width: 0 !important;
     border-radius: 12px;
     --media-settings-menu-min-width: 0;
     --media-icon-color: var(--media-text-color, white);
-    --media-menu-max-height: calc(100% - 88px);
+    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 88px);
   }
 
   chunkify-settings-menu [slot="submenu"] {
-    --media-menu-max-height: none;
+    min-height: 0;
+    --media-menu-max-height: inherit;
   }
 
   media-settings-menu-item > [slot="description"] {
@@ -309,7 +312,7 @@ export const defaultThemeMarkup = String.raw`
     bottom: auto;
     right: 12px;
     width: min(300px, calc(100% - 24px));
-    --media-menu-max-height: calc(100% - 24px);
+    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);
   }
 
   media-controller:not([breakpointsm]) media-captions-menu-button.small-button {
