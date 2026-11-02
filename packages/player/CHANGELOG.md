@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.2...player-v1.3.3) (2026-11-02)
+
+
+### Bug Fixes
+
+* **player:** recover delayed background pauses ([#29](https://github.com/chunkifydev/chunkify-player/issues/29)) ([9021b7d](https://github.com/chunkifydev/chunkify-player/commit/9021b7d3a9cac48dd8c8bfba457cfae3a8981c70))
+
 ## [1.3.2](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.1...player-v1.3.2) (2026-10-31)
 
 
