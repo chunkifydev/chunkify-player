@@ -89,6 +89,21 @@ The player forwards standard media events such as `play`, `pause`, `timeupdate`,
 `ended`, and `error`. It also emits `mediachange` when it replaces the active
 media element.
 
+With `controls` enabled, open the settings gear, then **Playback speed**, to
+adjust the slider from 0.5× to 2× in 0.05× steps. **Reset** restores 1×. The menu
+shows the current speed. You can also set `player.media.playbackRate` directly
+and listen for `ratechange`, or `onRateChange` in React.
+
+Settings also includes **Quality** when the playback engine exposes renditions.
+Choose a resolution to force it, or **Auto** to restore adaptive selection. HD
+and 4K badges identify resolutions of at least 720p and 2160p, respectively.
+Auto shows the resolution currently playing and updates when it changes.
+Manual selection overrides the automatic player-size cap and preserves whether
+playback is paused or playing.
+**Subtitles** lists available caption/subtitle tracks and an **Off** option.
+The captions button in the control bar provides the same choices; both menus
+stay in sync. Settings without available options are hidden.
+
 For HLS playback through hls.js, automatic rendition selection is capped to
 the displayed media size. Use `cap-rendition-to-player-size="false"` in HTML or
 `capRenditionToPlayerSize={false}` in React to remove that cap. This attribute
@@ -204,8 +219,10 @@ Button visibility uses CSS variables set to `none`:
 ```
 
 Supported variables are `--play-button`, `--mute-button`,
-`--captions-button`, `--pip-button`, `--fullscreen-button`,
+`--captions-button`, `--settings-button`, `--pip-button`, `--fullscreen-button`,
 `--airplay-button`, and `--cast-button`.
+The settings gear also accepts `--playback-rate-button` as a fallback when
+`--settings-button` is not set.
 
 The media defaults to `object-fit: contain`, so its ratio is preserved. Common
 player ratios have attribute shortcuts:

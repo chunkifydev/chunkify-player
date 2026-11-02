@@ -73,12 +73,60 @@ export const defaultThemeMarkup = String.raw`
     display: var(--captions-button, flex);
   }
 
-  media-captions-menu {
+  media-settings-menu-button.small-button {
+    display: var(--settings-button, var(--playback-rate-button, flex));
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  media-controller > media-captions-menu,
+  chunkify-settings-menu {
     position: absolute;
     bottom: 76px;
-    right: 80px;
     --media-menu-background: rgb(20 20 30 / 0.95);
     --media-menu-border-radius: 12px;
+  }
+
+  media-controller > media-captions-menu {
+    right: 80px;
+  }
+
+  chunkify-settings-menu {
+    z-index: 2;
+    width: 300px;
+    /* Keep Media Chrome's submenu minimum width within the responsive width. */
+    min-width: 0 !important;
+    border-radius: 12px;
+    --media-settings-menu-min-width: 0;
+    --media-icon-color: var(--media-text-color, white);
+    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 88px);
+  }
+
+  chunkify-settings-menu [slot="submenu"] {
+    min-height: 0;
+    --media-menu-max-height: inherit;
+  }
+
+  media-settings-menu-item > [slot="description"] {
+    margin-left: 16px;
+    font-variant-numeric: tabular-nums;
+    opacity: .7;
+  }
+
+  media-settings-menu-item > svg[slot="prefix"] {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  media-settings-menu-item:has(chunkify-rendition-menu[mediarenditionunavailable]),
+  media-settings-menu-item:has(media-captions-menu:not([mediasubtitleslist])) {
+    display: none;
   }
 
   media-pip-button.small-button {
@@ -255,6 +303,18 @@ export const defaultThemeMarkup = String.raw`
     display: var(--mute-button, flex);
   }
 
+  media-controller:not([breakpointsm]) media-settings-menu-button.small-button {
+    display: var(--settings-button, var(--playback-rate-button, flex));
+  }
+
+  media-controller:not([breakpointsm]) chunkify-settings-menu {
+    top: 12px;
+    bottom: auto;
+    right: 12px;
+    width: min(300px, calc(100% - 24px));
+    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);
+  }
+
   media-controller:not([breakpointsm]) media-captions-menu-button.small-button {
     display: var(--captions-button, flex);
     position: absolute;
@@ -262,7 +322,7 @@ export const defaultThemeMarkup = String.raw`
     left: 16px;
   }
 
-  media-controller:not([breakpointsm]) media-captions-menu {
+  media-controller:not([breakpointsm]) > media-captions-menu {
     z-index: 2;
     top: 12px;
     left: 82px;
@@ -296,6 +356,10 @@ export const defaultThemeMarkup = String.raw`
   :host(:not([controls])) [slot="centered-chrome"],
   :host(:not([controls])) .player-gradient-bottom {
     display: none;
+  }
+
+  :host(:not([controls])) chunkify-settings-menu {
+    --media-menu-display: none;
   }
 
   .small-button { padding: 0; }
@@ -351,7 +415,10 @@ export const defaultThemeMarkup = String.raw`
       <media-preview-thumbnail slot="preview"></media-preview-thumbnail>
       <media-preview-time-display slot="preview"></media-preview-time-display>
     </media-time-range>
-    <media-captions-menu-button class="small-button">
+    <media-settings-menu-button class="small-button" invoketarget="settings-menu">
+      <svg slot="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m19.14 12.94.04-.94-.04-.94 2.03-1.58a.49.49 0 0 0 .12-.64l-1.92-3.32a.49.49 0 0 0-.61-.22l-2.39.96a7.1 7.1 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.42h-3.82a.48.48 0 0 0-.48.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.61.22L2.71 8.84a.49.49 0 0 0 .12.64l2.03 1.58-.04.94.04.94-2.03 1.58a.49.49 0 0 0-.12.64l1.92 3.32c.12.22.38.31.61.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.24.42.48.42h3.82c.24 0 .44-.18.48-.42l.36-2.54a7.1 7.1 0 0 0 1.62-.94l2.39.96c.23.09.49 0 .61-.22l1.92-3.32a.49.49 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
+    </media-settings-menu-button>
+    <media-captions-menu-button class="small-button" invoketarget="captions-menu">
       <svg slot="off" viewBox="0 0 16 16"><path d="M12.6 13.7H3.4C2 13.7.8 12.6.8 11.1V4.9c0-1.4 1.1-2.6 2.6-2.6h9.3c1.4 0 2.6 1.1 2.6 2.6v6.2c-.1 1.5-1.3 2.6-2.7 2.6z"/><path fill="#fff" d="M4.7 8H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h1.5c.2 0 .4.2.4.4s-.2.4-.4.4zM12.5 8H6.7c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h5.7c.2 0 .4.2.4.4s-.1.4-.3.4zM7.7 10.2H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h4.6c.2 0 .4.2.4.4-.1.2-.3.4-.5.4zM12.5 10.2H9.8c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h2.7c.2 0 .4.2.4.4s-.2.4-.4.4z"/></svg>
       <svg slot="on" viewBox="0 0 16 16"><path d="M4.7 8H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h1.5c.2 0 .4.2.4.4s-.2.4-.4.4zM12.5 8H6.7c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h5.7c.2 0 .4.2.4.4s-.1.4-.3.4zM7.7 10.2H3.2c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h4.6c.2 0 .4.2.4.4-.1.2-.3.4-.5.4zM12.5 10.2H9.8c-.2 0-.4-.2-.4-.4s.2-.4.4-.4h2.7c.2 0 .4.2.4.4s-.2.4-.4.4z"/></svg>
     </media-captions-menu-button>
@@ -364,6 +431,30 @@ export const defaultThemeMarkup = String.raw`
       <svg slot="exit" viewBox="0 0 16 16"><path d="M2.9 6.6c-.4 0-.7-.3-.7-.7v-3c0-.4.3-.7.7-.7h3c.4 0 .7.3.7.7s-.2.7-.6.7H3.6V6c0 .3-.3.6-.7.6zM13.1 6.6c-.4 0-.7-.3-.7-.7V3.6H10c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h3c.4 0 .7.3.7.7v3c.1.4-.2.7-.6.7zM6 13.8H3c-.4 0-.7-.3-.7-.7v-3c0-.4.3-.7.7-.7.4 0 .7.3.7.7v2.4H6c.4 0 .7.3.7.7-.1.3-.4.6-.7.6zM13.1 13.8h-3c-.4 0-.7-.3-.7-.7 0-.4.3-.7.7-.7h2.4V10c0-.4.3-.7.7-.7.4 0 .7.3.7.7v3c-.1.5-.4.8-.8.8z"/></svg>
     </media-fullscreen-button>
   </media-control-bar>
-  <media-captions-menu hidden></media-captions-menu>
+  <media-captions-menu id="captions-menu" hidden></media-captions-menu>
+  <chunkify-settings-menu id="settings-menu" hidden anchor="auto" aria-label="Settings">
+    <media-settings-menu-item>
+      <svg slot="prefix" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 9a9 9 0 1 0 1 5M12 12l8-6"/><circle cx="12" cy="12" r="1"/></svg>
+      Playback speed
+      <span slot="description">Normal</span>
+      <chunkify-playback-rate-menu slot="submenu" hidden aria-label="Playback speed">
+        <span slot="title">Playback speed</span>
+      </chunkify-playback-rate-menu>
+    </media-settings-menu-item>
+    <media-settings-menu-item>
+      <svg slot="prefix" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h3m4 0h11M3 12h11m4 0h3M3 18h3m4 0h11"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></svg>
+      Quality
+      <chunkify-rendition-menu slot="submenu" hidden aria-label="Quality">
+        <span slot="title">Quality</span>
+      </chunkify-rendition-menu>
+    </media-settings-menu-item>
+    <media-settings-menu-item>
+      <svg slot="prefix" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10h3m3 0h4M7 14h6m3 0h1"/></svg>
+      Subtitles
+      <media-captions-menu slot="submenu" hidden aria-label="Subtitles">
+        <span slot="title">Subtitles</span>
+      </media-captions-menu>
+    </media-settings-menu-item>
+  </chunkify-settings-menu>
 </media-controller>
 `;

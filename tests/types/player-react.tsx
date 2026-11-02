@@ -12,6 +12,8 @@ const ref = createRef<ChunkifyPlayerRef>();
     "--media-object-fit": "cover",
     "--media-object-position": "center",
     "--pip-button": "none",
+    "--playback-rate-button": "none",
+    "--settings-button": "none",
   }}
   aria-label="Product video" />;
 <ChunkifyPlayer src={null} />;

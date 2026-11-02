@@ -90,7 +90,7 @@ export class ChunkifyPlayer extends HTMLElement {
   #theme: ReturnType<typeof createPlayerTheme>;
   #themeName = defaultPlayerTheme;
   #pendingHlsSource: number | undefined;
-  #hlsErrorCleanup: (() => void) | null = null;
+  #hlsCleanup: (() => void) | null = null;
   #failedMedia: ChunkifyMediaElement | null = null;
   #playbackGeneration = 0;
   #firstHlsPlayPending = false;
@@ -312,7 +312,7 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#visibilityDocument = null;
     this.#trackObserver.disconnect();
     this.#cancelPendingHlsSource();
-    this.#detachHlsErrors();
+    this.#detachHlsEvents();
     this.#clearMirroredTracks();
     this.#clearMedia(this.#media);
   }
@@ -376,9 +376,9 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#pendingHlsSource = undefined;
   }
 
-  #detachHlsErrors() {
-    this.#hlsErrorCleanup?.();
-    this.#hlsErrorCleanup = null;
+  #detachHlsEvents() {
+    this.#hlsCleanup?.();
+    this.#hlsCleanup = null;
   }
 
   #engineFor(media: ChunkifyMediaElement): PlaybackEngine {
@@ -400,14 +400,17 @@ export class ChunkifyPlayer extends HTMLElement {
     if (hlsMedia.api) hlsMedia.api.capLevelToPlayerSize = this.capRenditionToPlayerSize;
   }
 
-  #attachHlsErrors(media: ChunkifyMediaElement) {
+  #attachHlsEvents(media: ChunkifyMediaElement) {
     const generation = this.#playbackGeneration;
     queueMicrotask(() => {
       if (!this.isConnected || this.#playbackGeneration !== generation
         || this.#media !== media || media.localName !== "hls-video") return;
-      const hls = (media as ChunkifyMediaElement & Pick<HlsVideoElement, "api">).api;
+      const hlsMedia = media as ChunkifyMediaElement & Pick<HlsVideoElement, "api"> & {
+        videoRenditions?: EventTarget & { selectedIndex?: number };
+      };
+      const hls = hlsMedia.api;
       if (!hls) return;
-      this.#detachHlsErrors();
+      this.#detachHlsEvents();
       const onError = (_event: string, data: { fatal: boolean; type: string; details: string }) => {
         if (!data.fatal || this.#playbackGeneration !== generation
           || this.#media !== media || this.#failedMedia === media) return;
@@ -421,8 +424,20 @@ export class ChunkifyPlayer extends HTMLElement {
             && this.#media === media && this.#failedMedia !== media) this.#fail(code, "hlsjs");
         }, 0);
       };
+      const renditions = hlsMedia.videoRenditions;
+      const onRenditionChange = () => {
+        if (this.#playbackGeneration !== generation || this.#media !== media || hlsMedia.api !== hls) return;
+        const index = renditions?.selectedIndex;
+        // hls-video-element skips nextLevel assignments when the buffered level matches.
+        // An explicit choice must still update the requested level, including Auto (-1).
+        if (typeof index === "number" && hls.manualLevel !== index) hls.nextLevel = index;
+      };
       hls.on(Hls.Events.ERROR, onError);
-      this.#hlsErrorCleanup = () => hls.off(Hls.Events.ERROR, onError);
+      renditions?.addEventListener("change", onRenditionChange);
+      this.#hlsCleanup = () => {
+        hls.off(Hls.Events.ERROR, onError);
+        renditions?.removeEventListener("change", onRenditionChange);
+      };
     });
   }
 
@@ -431,7 +446,7 @@ export class ChunkifyPlayer extends HTMLElement {
     if (this.#failedMedia === media) return;
     this.#failedMedia = media;
     this.#cancelPendingHlsSource();
-    this.#detachHlsErrors();
+    this.#detachHlsEvents();
     this.#clearMedia(media);
     const detail: PlaybackErrorDetail = { code, message: errorMessages[code], engine };
     this.dispatchEvent(new CustomEvent<PlaybackErrorDetail>("playback-error", { detail }));
@@ -532,7 +547,7 @@ export class ChunkifyPlayer extends HTMLElement {
         this.#pendingHlsSource = undefined;
         if (this.isConnected && this.#media === media && this.src === value) {
           media.setAttribute("src", value);
-          this.#attachHlsErrors(media);
+          this.#attachHlsEvents(media);
         }
       });
       return;
@@ -591,7 +606,7 @@ export class ChunkifyPlayer extends HTMLElement {
     let replaced = false;
     if (this.#media.localName !== tagName || changedAttribute === "credentials") {
       this.#cancelPendingHlsSource();
-      this.#detachHlsErrors();
+      this.#detachHlsEvents();
       for (const event of mediaEvents) this.#media.removeEventListener(event, this.#forwardMediaEvent);
       const previous = this.#media;
       this.#clearMedia(previous);
