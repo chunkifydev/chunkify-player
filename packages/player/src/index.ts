@@ -95,15 +95,14 @@ export class ChunkifyPlayer extends HTMLElement {
   #playbackGeneration = 0;
   #firstHlsPlayPending = false;
   #soughtBeforeFirstHlsPlay = false;
-  #backgroundPauseDeadline: number | null = null;
+  #backgroundPlayback = false;
+  #backgroundResumePosition: number | null = null;
+  #backgroundResumeAttempt = 0;
   #visibilityDocument: Document | null = null;
   #onVisibilityChange = () => {
-    this.#backgroundPauseDeadline = null;
-    if (this.ownerDocument.hidden && !this.#media.paused && !this.#media.ended
-      && !this.#media.error && this.#media.readyState >= 2) {
-      // Only recover the immediate browser pause caused by hiding the tab.
-      this.#backgroundPauseDeadline = performance.now() + 250;
-    }
+    this.#cancelBackgroundPlayback();
+    this.#backgroundPlayback = this.ownerDocument.hidden && !this.#media.paused
+      && !this.#media.ended && !this.#media.error;
   };
   #mirroredTracks = new Map<HTMLTrackElement, HTMLTrackElement>();
   #thumbnailTrack = document.createElement("track");
@@ -136,10 +135,13 @@ export class ChunkifyPlayer extends HTMLElement {
   #forwardMediaEvent = (event: Event) => {
     const media = event.currentTarget as ChunkifyMediaElement;
     if (media !== this.#media) return;
+    if (event.type === "play" && !media.paused && this.ownerDocument.hidden) {
+      this.#backgroundPlayback = true;
+    }
     if (event.type === "pause") this.#resumeBackgroundPlayback(media);
     if (event.type === "emptied" || event.type === "loadstart"
       || event.type === "ended" || event.type === "error") {
-      this.#backgroundPauseDeadline = null;
+      this.#cancelBackgroundPlayback();
     }
     if (event.type === "seeking" && this.#firstHlsPlayPending && media.paused) {
       this.#soughtBeforeFirstHlsPlay = true;
@@ -305,7 +307,7 @@ export class ChunkifyPlayer extends HTMLElement {
 
   disconnectedCallback() {
     this.#playbackGeneration++;
-    this.#backgroundPauseDeadline = null;
+    this.#cancelBackgroundPlayback();
     this.#visibilityDocument?.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.#visibilityDocument = null;
     this.#trackObserver.disconnect();
@@ -329,7 +331,7 @@ export class ChunkifyPlayer extends HTMLElement {
     const pause = media.pause;
     media.pause = () => {
       // Controls and application calls must always override background recovery.
-      if (media === this.#media) this.#backgroundPauseDeadline = null;
+      if (media === this.#media) this.#cancelBackgroundPlayback();
       pause.call(media);
     };
     media.setAttribute("part", "media");
@@ -339,14 +341,27 @@ export class ChunkifyPlayer extends HTMLElement {
     return media;
   }
 
+  #cancelBackgroundPlayback() {
+    this.#backgroundPlayback = false;
+    this.#backgroundResumePosition = null;
+    this.#backgroundResumeAttempt++;
+  }
+
   #resumeBackgroundPlayback(media: ChunkifyMediaElement) {
-    const deadline = this.#backgroundPauseDeadline;
-    this.#backgroundPauseDeadline = null;
-    if (deadline === null || performance.now() > deadline || !this.isConnected
+    if (!this.#backgroundPlayback || !this.isConnected
       || !this.ownerDocument.hidden || !media.paused || media.ended || media.error) return;
-    // A single play request continues muted/audio-free video in browsers that
-    // pause it on tab changes. A rejected request leaves the browser in control.
-    void media.play().catch(() => {});
+    // Browsers can pause again well after hiding the tab. Require playback
+    // progress between attempts to avoid a loop if playback stays suspended.
+    if (this.#backgroundResumePosition !== null
+      && media.currentTime === this.#backgroundResumePosition) {
+      this.#cancelBackgroundPlayback();
+      return;
+    }
+    this.#backgroundResumePosition = media.currentTime;
+    const attempt = ++this.#backgroundResumeAttempt;
+    void media.play().catch(() => {
+      if (this.#backgroundResumeAttempt === attempt) this.#cancelBackgroundPlayback();
+    });
   }
 
   #clearMedia(media: ChunkifyMediaElement) {
@@ -555,7 +570,7 @@ export class ChunkifyPlayer extends HTMLElement {
     }
     if (changedAttribute === undefined || changedAttribute === "src"
       || changedAttribute === "type" || changedAttribute === "credentials") {
-      this.#backgroundPauseDeadline = null;
+      this.#cancelBackgroundPlayback();
     }
     if (this.hasAttribute("credentials") && this.credentials === null) {
       this.#fail("invalid-credentials", null);
