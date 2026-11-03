@@ -5,13 +5,13 @@
     "jsx": "react-jsx",
     "paths": {
       "@chunkify/player": ["./packages/player/src/index.ts"],
-      "@chunkify/analytics": ["./packages/analytics/src/index.ts"],
-      "@chunkify/analytics/chunkify": ["./packages/analytics/src/chunkify.ts"],
-      "@chunkify/analytics/datadog": ["./packages/analytics/src/datadog.ts"],
-      "@chunkify/analytics/posthog": ["./packages/analytics/src/posthog.ts"],
-      "@chunkify/analytics/http": ["./packages/analytics/src/http.ts"],
-      "@chunkify/analytics/player": ["./packages/analytics/src/player.ts"],
-      "@chunkify/analytics/hlsjs": ["./packages/analytics/src/hlsjs.ts"],
+      "@chunkify/player-analytics": ["./packages/analytics/src/index.ts"],
+      "@chunkify/player-analytics/chunkify": ["./packages/analytics/src/chunkify.ts"],
+      "@chunkify/player-analytics/datadog": ["./packages/analytics/src/datadog.ts"],
+      "@chunkify/player-analytics/posthog": ["./packages/analytics/src/posthog.ts"],
+      "@chunkify/player-analytics/http": ["./packages/analytics/src/http.ts"],
+      "@chunkify/player-analytics/player": ["./packages/analytics/src/player.ts"],
+      "@chunkify/player-analytics/hlsjs": ["./packages/analytics/src/hlsjs.ts"],
       "@chunkify/player-react": ["./packages/player-react/src/index.ts"]
     },
     "types": ["node"]

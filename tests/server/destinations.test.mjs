@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createEventMapper } from "@chunkify/analytics";
-import { createDatadogAdapter } from "@chunkify/analytics/datadog";
-import { createHttpAdapter } from "@chunkify/analytics/http";
-import { createOtlpAdapter } from "@chunkify/analytics/otlp";
-import { createPostHogAdapter } from "@chunkify/analytics/posthog";
+import { createEventMapper } from "@chunkify/player-analytics";
+import { createDatadogAdapter } from "@chunkify/player-analytics/datadog";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
+import { createOtlpAdapter } from "@chunkify/player-analytics/otlp";
+import { createPostHogAdapter } from "@chunkify/player-analytics/posthog";
 
 test("Datadog adapter sends one action per event with optional context mapping", () => {
   const actions = [];
@@ -126,7 +126,7 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
 
     const request = JSON.parse(requests[0].init.body);
     const scopeLogs = request.resourceLogs[0].scopeLogs[0];
-    assert.deepEqual(scopeLogs.scope, { name: "@chunkify/analytics", version: "0.0.0" });
+    assert.deepEqual(scopeLogs.scope, { name: "@chunkify/player-analytics", version: "0.0.0" });
     const log = scopeLogs.logRecords[0];
     assert.equal(log.timeUnixNano, String(BigInt(Date.parse(event.occurred_at)) * 1_000_000n));
     assert.equal(log.eventName, event.event_name);

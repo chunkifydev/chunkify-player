@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createChunkifyAdapter } from "@chunkify/analytics/chunkify";
+import { createChunkifyAdapter } from "@chunkify/player-analytics/chunkify";
 
 test("Chunkify imports and sends unchanged events without a browser, and reports delivery failures", async (t) => {
   const requests = [];

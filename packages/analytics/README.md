@@ -1,9 +1,9 @@
-# @chunkify/analytics
+# @chunkify/player-analytics
 
 Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. It has no runtime dependency on `@chunkify/player` and no built-in analytics endpoint. Each event goes to the destinations supplied by the application.
 
 ```sh
-npm install @chunkify/analytics
+npm install @chunkify/player-analytics
 ```
 
 ## Monitor Chunkify Player or a video element
@@ -18,7 +18,7 @@ Replace the example URL with your playback URL. In your application JavaScript, 
 
 ```js
 import "@chunkify/player";
-import { monitor } from "@chunkify/analytics";
+import { monitor } from "@chunkify/player-analytics";
 
 const player = document.querySelector("#player");
 const session = monitor(player, {
@@ -36,7 +36,7 @@ The same function also accepts a native video element without importing `@chunki
 ```
 
 ```js
-import { monitor } from "@chunkify/analytics";
+import { monitor } from "@chunkify/player-analytics";
 
 const video = document.querySelector("#video");
 const session = monitor(video, {
@@ -88,7 +88,7 @@ For a separate player that gives you its `Hls` instance, use the optional hls.js
 
 ```ts
 import Hls from "hls.js";
-import { monitorHlsJs } from "@chunkify/analytics";
+import { monitorHlsJs } from "@chunkify/player-analytics";
 
 const video = document.querySelector("video")!;
 const hls = new Hls();
@@ -119,7 +119,7 @@ For Video.js 10 HLS media (`<hls-video>`, `<hlsjs-video>`, or `<native-hls-video
 import "@videojs/html/video/player";
 import "@videojs/html/video/skin";
 import "@videojs/html/media/hlsjs-video";
-import { monitorVideoJs } from "@chunkify/analytics";
+import { monitorVideoJs } from "@chunkify/player-analytics";
 
 const media = document.querySelector("hlsjs-video")!;
 const session = monitorVideoJs(media, {
@@ -137,7 +137,7 @@ For Shaka Player, use a page with `<video controls>`, attach Shaka to it, then c
 
 ```ts
 import shaka from "shaka-player";
-import { monitorShaka } from "@chunkify/analytics";
+import { monitorShaka } from "@chunkify/player-analytics";
 
 shaka.polyfill.installAll();
 const video = document.querySelector("video")!;
@@ -187,7 +187,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "occurred_at": "2026-09-28T07:35:10.879Z",
   "view_id": "8267fd81-ecf6-4fb1-83d9-4d1fba46b1b6",
   "video_id": "video_123",
-  "sdk_name": "@chunkify/analytics",
+  "sdk_name": "@chunkify/player-analytics",
   "sdk_version": "0.2.0",
   "connector_name": "hls.js",
   "connector_version": "1.7.3",
@@ -326,8 +326,8 @@ Player size is sampled when these events are emitted; the collector does not rec
 Use `createEventMapper()` when a destination needs fewer fields, different field names, or calculated values. Each output key is a field in the destination payload. A string selector such as `videoId: "video_id"` copies the raw event's `video_id` value under the new `videoId` key. Only fields listed in the mapping are sent; the mapper returns a new object and leaves the original event unchanged:
 
 ```ts
-import { createEventMapper, monitor } from "@chunkify/analytics";
-import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createEventMapper, monitor } from "@chunkify/player-analytics";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
 
 const mapForEndpoint = createEventMapper({
   videoId: "video_id",
@@ -349,8 +349,8 @@ The mapping runs for each event passed to the destination. A field absent from a
 Select a mapper based on the event name when different event types need different payloads. This HTTP example keeps all other events unchanged:
 
 ```js
-import { createEventMapper, monitor } from "@chunkify/analytics";
-import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createEventMapper, monitor } from "@chunkify/player-analytics";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
 
 const mapStateChange = createEventMapper({
   videoId: "video_id",
@@ -390,8 +390,8 @@ repository. The client adapter is part of this SDK.
 Pass its full native ingestion URL and public ingest key:
 
 ```js
-import { monitor } from "@chunkify/analytics";
-import { createChunkifyAdapter } from "@chunkify/analytics/chunkify";
+import { monitor } from "@chunkify/player-analytics";
+import { createChunkifyAdapter } from "@chunkify/player-analytics/chunkify";
 
 monitor(video, {
   videoId: "video_123",
@@ -419,7 +419,7 @@ use the original event. Inaccessible APIs produce null fields instead of failing
 #### Browser context fields
 
 `BrowserContext` and `ChunkifyCollectorEvent` are exported types from
-`@chunkify/analytics/chunkify`. Context has its own `schema_version: 1` and does not
+`@chunkify/player-analytics/chunkify`. Context has its own `schema_version: 1` and does not
 change the core playback event type.
 
 | Fields | Source and meaning |
@@ -501,8 +501,8 @@ Install `@datadog/browser-rum` in your application. Initialize it with your RUM 
 ```js
 import "@chunkify/player";
 import { datadogRum } from "@datadog/browser-rum";
-import { monitor } from "@chunkify/analytics";
-import { createDatadogAdapter } from "@chunkify/analytics/datadog";
+import { monitor } from "@chunkify/player-analytics";
+import { createDatadogAdapter } from "@chunkify/player-analytics/datadog";
 
 datadogRum.init({
   applicationId: "YOUR_DATADOG_APPLICATION_ID",
@@ -525,8 +525,8 @@ Install `posthog-js` in your application. Initialize it with your project token 
 ```js
 import "@chunkify/player";
 import posthog from "posthog-js";
-import { monitor } from "@chunkify/analytics";
-import { createPostHogAdapter } from "@chunkify/analytics/posthog";
+import { monitor } from "@chunkify/player-analytics";
+import { createPostHogAdapter } from "@chunkify/player-analytics/posthog";
 
 posthog.init("YOUR_POSTHOG_PROJECT_TOKEN", {
   api_host: "https://us.i.posthog.com", // Use your project's ingestion host.
@@ -545,8 +545,8 @@ The application controls PostHog's automatic collection and persistence settings
 The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter omits browser credentials and cookies. Use `headers` in the options object for a public ingest key. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Use `mapAttributes` in the options object to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
 
 ```ts
-import { createEventMapper } from "@chunkify/analytics";
-import { createOtlpAdapter } from "@chunkify/analytics/otlp";
+import { createEventMapper } from "@chunkify/player-analytics";
+import { createOtlpAdapter } from "@chunkify/player-analytics/otlp";
 
 const attributes = createEventMapper({
   video_id: "video_id",
@@ -591,7 +591,7 @@ Passing the old function argument throws a `TypeError`.
 The HTTP adapter posts each event as JSON to a customer-owned endpoint using `fetch`. Its optional second argument accepts `mapEvent` for a different payload, `headers` for a public ingest key, and `retry` to enable bounded retries. Without a mapper it sends the complete Chunkify event. It accepts an HTTPS URL or root-relative path; loopback HTTP is allowed for local tests. It rejects credentials and query parameters in the endpoint, sends no cookies, and sends no page referrer. The endpoint must support browser CORS when cross-origin and perform its own aggregation. Failed delivery rejects the adapter's `send()` promise after any enabled retries; the analytics session isolates that rejection from playback and other destinations. The final event uses `fetch` keepalive as a best-effort page-exit delivery, subject to browser limits:
 
 ```ts
-import { createHttpAdapter } from "@chunkify/analytics/http";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
 
 monitor(video, {
   videoId: "video_123",

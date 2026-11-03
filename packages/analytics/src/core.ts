@@ -64,7 +64,7 @@ export interface AnalyticsEventEnvelope {
   occurred_at: string;
   view_id: string;
   video_id: string;
-  sdk_name: "@chunkify/analytics";
+  sdk_name: "@chunkify/player-analytics";
   sdk_version: string;
   connector_name: string;
   connector_version: string | null;
@@ -494,7 +494,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     return {
       schema_version: 1, event_name, event_id: crypto.randomUUID(), sequence: ++current.sequence,
       occurred_at: new Date().toISOString(), view_id: current.id, video_id: videoId,
-      sdk_name: "@chunkify/analytics", sdk_version: sdkVersion,
+      sdk_name: "@chunkify/player-analytics", sdk_version: sdkVersion,
       connector_name: connector?.name ?? "html-media", connector_version: connector?.version ?? sdkVersion,
       player_name: connector?.playerName ?? null, player_version: connector?.playerVersion ?? null,
       visibility_state: visibility,

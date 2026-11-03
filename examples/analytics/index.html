@@ -22,10 +22,10 @@
       {
         "imports": {
           "@chunkify/player": "../../packages/player/dist/index.js",
-          "@chunkify/analytics": "../../packages/analytics/dist/index.js",
-          "@chunkify/analytics/datadog": "../../packages/analytics/dist/datadog.js",
-          "@chunkify/analytics/posthog": "../../packages/analytics/dist/posthog.js",
-          "@chunkify/analytics/hlsjs": "../../packages/analytics/dist/hlsjs.js",
+          "@chunkify/player-analytics": "../../packages/analytics/dist/index.js",
+          "@chunkify/player-analytics/datadog": "../../packages/analytics/dist/datadog.js",
+          "@chunkify/player-analytics/posthog": "../../packages/analytics/dist/posthog.js",
+          "@chunkify/player-analytics/hlsjs": "../../packages/analytics/dist/hlsjs.js",
           "posthog-js": "../../node_modules/posthog-js/dist/module.no-external.js",
           "hls.js": "../../node_modules/hls.js/dist/hls.mjs",
           "hls.js/": "../../node_modules/hls.js/",
@@ -84,10 +84,10 @@
       import "@chunkify/player";
       import Hls from "hls.js";
       import posthog from "posthog-js";
-      import { monitor, monitorShaka } from "@chunkify/analytics";
-      import { createDatadogAdapter } from "@chunkify/analytics/datadog";
-      import { createPostHogAdapter } from "@chunkify/analytics/posthog";
-      import { monitorHlsJs } from "@chunkify/analytics/hlsjs";
+      import { monitor, monitorShaka } from "@chunkify/player-analytics";
+      import { createDatadogAdapter } from "@chunkify/player-analytics/datadog";
+      import { createPostHogAdapter } from "@chunkify/player-analytics/posthog";
+      import { monitorHlsJs } from "@chunkify/player-analytics/hlsjs";
 
       const form = document.querySelector("#setup");
       const container = document.querySelector("#player-container");
