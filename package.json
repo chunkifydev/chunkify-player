@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "npm run build --workspaces",
-    "typecheck": "npm run build --workspace @chunkify/player && npm run build --workspace @chunkify/analytics && tsc --noEmit && npm run typecheck --workspaces",
+    "typecheck": "npm run build --workspace @chunkify/player && npm run build --workspace @chunkify/player-analytics && tsc --noEmit && npm run typecheck --workspaces",
     "serve": "http-server . -a 127.0.0.1 -p 4173 -c-1 --silent",
     "build:react-fixtures": "node scripts/build-react-fixtures.mjs",
     "test": "npm run build && node --test tests/server/*.test.mjs && npm run build:react-fixtures && playwright test",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { monitorHlsJs, createHlsJsConnector } from "@chunkify/analytics/hlsjs";
+import { monitorHlsJs, createHlsJsConnector } from "@chunkify/player-analytics/hlsjs";
 
 class FakeHls {
   static version = "1.7.3";

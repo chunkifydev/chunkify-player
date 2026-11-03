@@ -1118,7 +1118,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   for (const event of events) {
     expect(event).toMatchObject({
       schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test",
-      sdk_name: "@chunkify/analytics", sdk_version: analyticsPackage.version,
+      sdk_name: "@chunkify/player-analytics", sdk_version: analyticsPackage.version,
       connector_name: "html-media", connector_version: analyticsPackage.version,
       player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",
       media_duration_seconds: null, startup_time_ms: null, playing_time_ms: 0,

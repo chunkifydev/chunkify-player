@@ -11,7 +11,7 @@ async function startVideo(page: Page, source: string, analytics = false) {
     player.src = source;
     document.body.append(player);
     if (analytics) {
-      const { monitor } = await import("@chunkify/analytics");
+      const { monitor } = await import("@chunkify/player-analytics");
       monitor(player, {
         videoId: "background-test",
         snapshotIntervalMs: 1000,

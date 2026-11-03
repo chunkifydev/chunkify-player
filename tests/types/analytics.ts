@@ -1,9 +1,9 @@
-import { attachAnalytics, createEventMapper, monitorVideoJs, monitorShaka, type AnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/analytics";
-import { createDatadogAdapter } from "@chunkify/analytics/datadog";
-import { createHttpAdapter } from "@chunkify/analytics/http";
-import { createOtlpAdapter } from "@chunkify/analytics/otlp";
-import { createPostHogAdapter } from "@chunkify/analytics/posthog";
-import { createChunkifyAdapter, type ChunkifyCollectorEvent } from "@chunkify/analytics/chunkify";
+import { attachAnalytics, createEventMapper, monitorVideoJs, monitorShaka, type AnalyticsConfig, type ChunkifyPlayerAnalyticsEvent, type AnalyticsErrorCategory, type AnalyticsStartupOutcome } from "@chunkify/player-analytics";
+import { createDatadogAdapter } from "@chunkify/player-analytics/datadog";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
+import { createOtlpAdapter } from "@chunkify/player-analytics/otlp";
+import { createPostHogAdapter } from "@chunkify/player-analytics/posthog";
+import { createChunkifyAdapter, type ChunkifyCollectorEvent } from "@chunkify/player-analytics/chunkify";
 
 const mapEvent = createEventMapper({
   videoId: "video_id",

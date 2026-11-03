@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { BrowserContext } from "@chunkify/analytics/chunkify";
+import type { BrowserContext } from "@chunkify/player-analytics/chunkify";
 
 test.use({ locale: "fr-FR", timezoneId: "Europe/Paris", viewport: { width: 960, height: 540 },
   contextOptions: { screen: { width: 1920, height: 1080 } }, deviceScaleFactor: 2 });

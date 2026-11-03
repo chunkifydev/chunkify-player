@@ -1,5 +1,5 @@
 {
-  "name": "@chunkify/analytics",
+  "name": "@chunkify/player-analytics",
   "version": "0.8.0",
   "description": "Standalone playback analytics for HTML media and Chunkify Player",
   "license": "MIT",

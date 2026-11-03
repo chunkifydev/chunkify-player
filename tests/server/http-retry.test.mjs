@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
-import { createHttpAdapter } from "@chunkify/analytics/http";
-import { createOtlpAdapter } from "@chunkify/analytics/otlp";
-import { createChunkifyAdapter } from "@chunkify/analytics/chunkify";
+import { createHttpAdapter } from "@chunkify/player-analytics/http";
+import { createOtlpAdapter } from "@chunkify/player-analytics/otlp";
+import { createChunkifyAdapter } from "@chunkify/player-analytics/chunkify";
 
 const event = Object.freeze({
   event_name: "chunkify.video.view_ended", event_id: "event-1", view_id: "view-1",

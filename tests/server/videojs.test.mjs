@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { monitorVideoJs } from "@chunkify/analytics/videojs";
+import { monitorVideoJs } from "@chunkify/player-analytics/videojs";
 
 class FakeMedia extends EventTarget {
   constructor(localName = "hlsjs-video") {

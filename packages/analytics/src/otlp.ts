@@ -43,7 +43,7 @@ function toOtlpLogRequest(event: ChunkifyPlayerAnalyticsEvent, attributes: objec
   return {
     resourceLogs: [{
       scopeLogs: [{
-        scope: { name: "@chunkify/analytics", version: event.sdk_version },
+        scope: { name: "@chunkify/player-analytics", version: event.sdk_version },
         logRecords: [{
           timeUnixNano: String(BigInt(occurredAtMs) * 1_000_000n),
           eventName: event.event_name,

@@ -7,7 +7,7 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
 
   const result = await page.evaluate(async () => {
-    const { monitor } = await import("@chunkify/analytics");
+    const { monitor } = await import("@chunkify/player-analytics");
     const videoEvents: ChunkifyPlayerAnalyticsEvent[] = [];
     const playerEvents: ChunkifyPlayerAnalyticsEvent[] = [];
     const video = document.createElement("video");
@@ -59,7 +59,7 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
 
   const result = await page.evaluate(async () => {
-    const { attachPlayerAnalytics } = await import("@chunkify/analytics/player");
+    const { attachPlayerAnalytics } = await import("@chunkify/player-analytics/player");
     const events: ChunkifyPlayerAnalyticsEvent[] = [];
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
     player.preload = "none";
@@ -102,7 +102,7 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
   await page.evaluate(async () => {
-    const { attachPlayerAnalytics } = await import("@chunkify/analytics/player");
+    const { attachPlayerAnalytics } = await import("@chunkify/player-analytics/player");
     const state = window as typeof window & {
       analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
       analyticsSession: ReturnType<typeof attachPlayerAnalytics>;
@@ -177,7 +177,7 @@ test("an external hls.js instance enriches an ordinary video", async ({ page, br
 
   await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/player-analytics/hlsjs");
     const state = window as typeof window & {
       externalVideo: HTMLVideoElement;
       externalHls: InstanceType<typeof Hls>;
@@ -245,7 +245,7 @@ test("the hls.js adapter follows media that was attached earlier or changes late
 
   const events = await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/player-analytics/hlsjs");
     const first = document.createElement("video");
     const second = document.createElement("video");
     document.body.append(first, second);
@@ -285,7 +285,7 @@ test("hls.js recovery on the same video keeps one view", async ({ page, browserN
 
   const events = await page.evaluate(async () => {
     const { Hls } = await import("hls-video-element");
-    const { monitorHlsJs } = await import("@chunkify/analytics/hlsjs");
+    const { monitorHlsJs } = await import("@chunkify/player-analytics/hlsjs");
     const video = document.createElement("video");
     document.body.append(video);
     const hls = new Hls();
@@ -311,7 +311,7 @@ test("hls.js recovery on the same video keeps one view", async ({ page, browserN
 test("Shaka load boundaries keep one view per attempt and restore quality observation", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   const result = await page.evaluate(async () => {
-    const { monitorShaka } = await import("@chunkify/analytics/shaka");
+    const { monitorShaka } = await import("@chunkify/player-analytics/shaka");
     const video = document.createElement("video");
     video.style.cssText = "width:480px;height:270px";
     document.body.append(video);

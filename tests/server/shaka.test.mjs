@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createShakaConnector } from "@chunkify/analytics/shaka";
+import { createShakaConnector } from "@chunkify/player-analytics/shaka";
 
 function player() {
   const listeners = new Map();

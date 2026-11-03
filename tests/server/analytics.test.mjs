@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("analytics imports without a DOM and reports its package version", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   const pkg = JSON.parse(await readFile(new URL("../../packages/analytics/package.json", import.meta.url)));
   // HTML media is the external boundary. EventTarget suffices to inspect an
   // explicitly started attempt without constructing a browser DOM in Node.
@@ -19,7 +19,7 @@ test("analytics imports without a DOM and reports its package version", async ()
 });
 
 test("unavailable visibility does not prevent delivery", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   for (const document of [{ defaultView: null }, {
     defaultView: null, get visibilityState() { throw new Error("unavailable"); },
   }]) {
@@ -34,7 +34,7 @@ test("unavailable visibility does not prevent delivery", async () => {
 });
 
 test("event mapper selects, renames, and calculates fields without changing the source event", async () => {
-  const { attachAnalytics, createEventMapper } = await import("@chunkify/analytics");
+  const { attachAnalytics, createEventMapper } = await import("@chunkify/player-analytics");
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const events = [];
   const session = attachAnalytics(media, { videoId: "asset-map", destinations: [{ send: (event) => { events.push(event); } }] });
@@ -72,7 +72,7 @@ test("event mapper selects, renames, and calculates fields without changing the 
 });
 
 test("one failing destination does not prevent other destinations receiving the view", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   const media = Object.assign(new EventTarget(), { duration: NaN, src: "", currentSrc: "", ownerDocument: { defaultView: null } });
   const delivered = [];
   const session = attachAnalytics(media, {
@@ -90,7 +90,7 @@ test("one failing destination does not prevent other destinations receiving the 
 });
 
 test("played ranges exclude seeks and pauses, merge replays, and reset per attempt", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 0,
     seeking: false, src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
   const events = [];
@@ -119,7 +119,7 @@ test("played ranges exclude seeks and pauses, merge replays, and reset per attem
 });
 
 test("initial rendition is emitted for each attempt at its actual media position", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 12,
     src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
   const events = [];
@@ -140,7 +140,7 @@ test("initial rendition is emitted for each attempt at its actual media position
 });
 
 test("a source change clears its rendition even between attempts", async () => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
   const media = Object.assign(new EventTarget(), { duration: 100, currentTime: 0,
     src: "one.mp4", currentSrc: "one.mp4", ownerDocument: { defaultView: null } });
   const events = [];
@@ -162,8 +162,8 @@ test("a source change clears its rendition even between attempts", async () => {
 });
 
 test("played range limit leaves room for final JSON and OTLP delivery", async (t) => {
-  const { attachAnalytics } = await import("@chunkify/analytics");
-  const { createOtlpAdapter } = await import("@chunkify/analytics/otlp");
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
+  const { createOtlpAdapter } = await import("@chunkify/player-analytics/otlp");
   const media = Object.assign(new EventTarget(), { duration: 1000, currentTime: 0,
     src: "video.mp4", currentSrc: "video.mp4", ownerDocument: { defaultView: null } });
   const events = [];
