@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.8.0...analytics-v0.9.0) (2026-11-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **analytics:** install and import @chunkify/player-analytics and its adapter subpaths. Events and OTLP scope use the new package name.
+
+### Features
+
+* **analytics:** rename browser tracker to @chunkify/player-analytics ([3b7a52c](https://github.com/chunkifydev/chunkify-player/commit/3b7a52c46cd9f654760eb8248e26f952ecac867e))
+
 ## [0.8.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.7.0...analytics-v0.8.0) (2026-10-31)
 
 
