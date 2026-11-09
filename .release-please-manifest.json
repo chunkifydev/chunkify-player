@@ -1,5 +1,5 @@
 {
   "packages/player": "1.4.0",
   "packages/player-react": "1.3.0",
-  "packages/analytics": "0.9.0"
+  "packages/analytics": "0.10.0"
 }
