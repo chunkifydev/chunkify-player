@@ -40,8 +40,10 @@ export function assertAnalyticsOptions(options: AnalyticsOptions): void {
       (options.videoTitle != null && typeof options.videoTitle !== "string")) {
     throw new TypeError("Analytics environment, userId and videoTitle must be strings or null when provided.");
   }
-  if (typeof options.userId === "string" && codePointLength(options.userId) > maxIdentityLength) {
-    throw new TypeError(`Analytics userId must be at most ${maxIdentityLength} characters.`);
+  // The collector rejects empty identity strings; whitespace counts as characters, as on the server.
+  if (typeof options.userId === "string" &&
+      (options.userId.length === 0 || codePointLength(options.userId) > maxIdentityLength)) {
+    throw new TypeError(`Analytics userId must be 1 to ${maxIdentityLength} characters.`);
   }
   if (options.persistViewerId !== undefined && typeof options.persistViewerId !== "boolean") {
     throw new TypeError("Analytics persistViewerId must be a boolean when provided.");

@@ -79,7 +79,7 @@ export interface AnalyticsEventEnvelope {
   viewer_id: string;
   /** Your own user ID from the `userId` option, or null. */
   user_id: string | null;
-  /** The `videoTitle` option, truncated to 256 Unicode characters, or null. */
+  /** The `videoTitle` option, truncated to 256 Unicode characters, or null when unset or empty. */
   video_title: string | null;
   reason: AnalyticsEndReason | null;
   startup_outcome: AnalyticsStartupOutcome | null;
@@ -137,7 +137,7 @@ export interface AnalyticsConfig {
   destinations: readonly AnalyticsDestination[];
   /** Application environment, sent as `environment`; null means not specified. */
   environment?: string | null | undefined;
-  /** Your own user ID, sent as `user_id`. At most 256 Unicode characters; null means no user. */
+  /** Your own user ID, sent as `user_id`. 1 to 256 Unicode characters; null means no user. */
   userId?: string | null | undefined;
   /**
    * Keep the generated `viewer_id` in page localStorage across page loads. Defaults to true.
@@ -151,7 +151,7 @@ export interface AnalyticsConfig {
 }
 export interface AnalyticsOptions extends AnalyticsConfig {
   videoId: string;
-  /** Human-readable video title, sent as `video_title`. Truncated to 256 Unicode characters. */
+  /** Human-readable video title, sent as `video_title`. Truncated to 256 Unicode characters; empty is sent as null. */
   videoTitle?: string | null | undefined;
 }
 export interface AnalyticsConnectorSnapshot {
@@ -412,7 +412,9 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
   const { videoId, environment = null, userId = null, snapshotIntervalMs = 30000 } = options;
-  const videoTitle = options.videoTitle == null ? null : truncateCodePoints(options.videoTitle, maxIdentityLength);
+  // An empty title is sent as null: the collector rejects empty strings.
+  const videoTitle = options.videoTitle == null || options.videoTitle === "" ? null
+    : truncateCodePoints(options.videoTitle, maxIdentityLength);
   const viewerId = resolveViewerId(options.persistViewerId !== false);
   const destinations = [...options.destinations];
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)

@@ -1209,7 +1209,7 @@ test("invalid configuration fails before installing listeners or calling a desti
     for (const invalid of [{ videoId: "" }, { videoId: "  " }, { destinations: null },
       { destinations: [] }, { destinations: [null] }, { destinations: [{ send: null }] },
       { environment: { authorization: "secret" } }, { userId: { email: "private@example.test" } },
-      { userId: 42 }, { userId: "a".repeat(257) }, { userId: "\u{1F600}".repeat(257) },
+      { userId: 42 }, { userId: "" }, { userId: "a".repeat(257) }, { userId: "\u{1F600}".repeat(257) },
       { videoTitle: 42 }, { persistViewerId: "false" }, { persistViewerId: 0 },
       { snapshotIntervalMs: 0 }, { snapshotIntervalMs: 999 }, { snapshotIntervalMs: 1500.5 },
       { snapshotIntervalMs: Infinity }, { snapshotIntervalMs: Number.MAX_SAFE_INTEGER },
@@ -1225,7 +1225,7 @@ test("invalid configuration fails before installing listeners or calling a desti
     f.video.dispatchEvent(new Event("play"));
     return { failures, events: f.events };
   });
-  expect(result).toEqual({ failures: Array(22).fill(true), events: [] });
+  expect(result).toEqual({ failures: Array(23).fill(true), events: [] });
 });
 
 /** Start and end one view in the page; return its first event. */
@@ -1317,8 +1317,8 @@ test("persistViewerId false never reads or writes storage", async ({ page }) => 
   expect(await page.evaluate((key) => localStorage.getItem(key), viewerIdKey)).toBe(stored);
 });
 
-test("userId is sent as user_id, accepts 256 Unicode characters, and accepts null", async ({ page }) => {
-  for (const userId of ["a".repeat(256), "\u{1F600}".repeat(256)]) {
+test("userId is sent as user_id, accepts 1 to 256 Unicode characters, and accepts null", async ({ page }) => {
+  for (const userId of ["a", "   ", "a".repeat(256), "\u{1F600}".repeat(256)]) {
     expect((await page.evaluate(recordView, { userId })).user_id).toBe(userId);
   }
   expect((await page.evaluate(recordView, { userId: null })).user_id).toBeNull();
@@ -1329,13 +1329,15 @@ test("environment accepts null as not specified", async ({ page }) => {
   expect((await page.evaluate(recordView, { environment: "staging" })).environment).toBe("staging");
 });
 
-test("videoTitle is truncated to 256 Unicode characters without splitting surrogate pairs", async ({ page }) => {
+test("videoTitle is truncated to 256 Unicode characters without splitting surrogate pairs, and empty is sent as null", async ({ page }) => {
   const cases = [
     ["Short title", "Short title"],
     ["a".repeat(300), "a".repeat(256)],
     ["\u{1F600}".repeat(300), "\u{1F600}".repeat(256)],
     ["a".repeat(255) + "\u{1F600}\u{1F600}", "a".repeat(255) + "\u{1F600}"],
     [null, null],
+    ["", null],
+    ["   ", "   "],
   ];
   for (const [videoTitle, expected] of cases) {
     expect((await page.evaluate(recordView, { videoTitle })).video_title).toBe(expected);

@@ -62,8 +62,8 @@ The second argument to `monitor()` has the same options as `monitorHlsJs()`, `mo
 | `snapshotIntervalMs` | `30000` | Active playing time between cumulative snapshots, in milliseconds. Must be an integer from `1000` to `2147483647`. |
 | `includeEvents` | All seven event types | Exact list of event types sent to destinations: `view_started`, `view_snapshot`, `playback_error`, `view_ended`, `playback_state_changed`, `rendition_changed`, and `seek_completed`. |
 | `environment` | `null` | Optional application environment string included in events. `null` is the same as omitting it. |
-| `videoTitle` | `null` | Optional human-readable title included in events as `video_title`. Longer titles are truncated to 256 Unicode characters. `null` is the same as omitting it. |
-| `userId` | `null` | Optional ID of the signed-in user in your application, included in events as `user_id`. Use a pseudonymous ID, not an email address. At most 256 Unicode characters; longer values throw. Pass `null` (or omit it) for viewers who are not signed in. |
+| `videoTitle` | `null` | Optional human-readable title included in events as `video_title`. Longer titles are truncated to 256 Unicode characters. `null` is the same as omitting it, and an empty string is sent as `null`. |
+| `userId` | `null` | Optional ID of the signed-in user in your application, included in events as `user_id`. Use a pseudonymous ID, not an email address. Must be 1 to 256 Unicode characters; an empty or longer string throws. Pass `null` (or omit it) for viewers who are not signed in. |
 | `persistViewerId` | `true` | Keep the generated `viewer_id` in page `localStorage` so it is reused on later page loads. Set `false` until the viewer consents to storage; each page load then gets a new ID and storage is never read or written. |
 
 Once monitoring is attached, each destination receives all event types that occur by default. An empty `includeEvents` array sends nothing. Excluding `view_snapshot` stops its timer but still collects the final view metrics. Rapid seeks within 400 ms of the last `seeked` are grouped into one `seek_completed` record; seek-related state changes are withheld while that record is enabled.
@@ -322,7 +322,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `view_id`, `video_id` | Ephemeral playback-attempt ID and the `videoId` supplied by your application. A new attempt gets a new `view_id`. |
 | `sdk_name`, `sdk_version`, `connector_name`, `connector_version`, `player_name`, `player_version` | The collector, connector, and player that produced the record. Player fields can be `null`. |
 | `delivery_hostname`, `environment` | Delivery host when available and optional application environment. No complete URL is included. |
-| `viewer_id`, `user_id`, `video_title` | Generated anonymous browser ID (see [viewer identity](#viewer-identity)), your optional `userId`, and your optional `videoTitle` (at most 256 Unicode characters). |
+| `viewer_id`, `user_id`, `video_title` | Generated anonymous browser ID (see [viewer identity](#viewer-identity)), your optional `userId` (1 to 256 Unicode characters), and your optional `videoTitle` (truncated to 256 Unicode characters; empty becomes `null`). |
 | `reason`, `startup_outcome` | End reason and startup result on `view_ended`; `null` on other events. Ending before startup does not establish why the viewer left. |
 | `error_category`, `error_code`, `error_fatal`, `error_playhead_seconds` | Normalized error details on `playback_error`; otherwise `null`. Raw error messages and URLs are not included. |
 | `media_duration_seconds`, `startup_time_ms`, `first_video_frame_time_ms`, `playing_time_ms` | Media duration; time from attempt to first `playing`; time to the first frame callback; cumulative actual playing time. The two startup measurements can differ. |
