@@ -14,6 +14,9 @@ declare global {
   }
 }
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const viewerIdKey = "chunkify_analytics_viewer_id";
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/tests/fixtures/analytics.html");
   await page.waitForFunction(() => Boolean(window.analyticsFixture));
@@ -1105,7 +1108,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
     f.video.src = "https://media.example.test/private/path/master.m3u8?token=must-not-leak";
     const options = {
       videoId: "asset-private",
-      environment: "test", viewerId: "viewer-pseudonym",
+      environment: "test", userId: "user-pseudonym", videoTitle: "Private title",
       authorization: "must-not-leak", rawError: "must-not-leak",
       destinations: [{ send: (event: import("../../packages/analytics/src/index.js").ChunkifyPlayerAnalyticsEvent) => { f.events.push(event); } }],
     };
@@ -1120,7 +1123,8 @@ test("records use the versioned contract and exclude URLs and unrelated configur
       schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test",
       sdk_name: "@chunkify/player-analytics", sdk_version: analyticsPackage.version,
       connector_name: "html-media", connector_version: analyticsPackage.version,
-      player_name: null, player_version: null, environment: "test", viewer_id: "viewer-pseudonym",
+      player_name: null, player_version: null, environment: "test", viewer_id: expect.stringMatching(uuidPattern),
+      user_id: "user-pseudonym", video_title: "Private title",
       media_duration_seconds: null, startup_time_ms: null, playing_time_ms: 0,
     });
     expect(event).toHaveProperty("occurred_at", expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
@@ -1204,7 +1208,9 @@ test("invalid configuration fails before installing listeners or calling a desti
     const failures: boolean[] = [];
     for (const invalid of [{ videoId: "" }, { videoId: "  " }, { destinations: null },
       { destinations: [] }, { destinations: [null] }, { destinations: [{ send: null }] },
-      { environment: { authorization: "secret" } }, { viewerId: { email: "private@example.test" } },
+      { environment: { authorization: "secret" } }, { userId: { email: "private@example.test" } },
+      { userId: 42 }, { userId: "a".repeat(257) }, { userId: "\u{1F600}".repeat(257) },
+      { videoTitle: 42 }, { persistViewerId: "false" }, { persistViewerId: 0 },
       { snapshotIntervalMs: 0 }, { snapshotIntervalMs: 999 }, { snapshotIntervalMs: 1500.5 },
       { snapshotIntervalMs: Infinity }, { snapshotIntervalMs: Number.MAX_SAFE_INTEGER },
       { snapshotIntervalMs: "10000" },
@@ -1219,7 +1225,121 @@ test("invalid configuration fails before installing listeners or calling a desti
     f.video.dispatchEvent(new Event("play"));
     return { failures, events: f.events };
   });
-  expect(result).toEqual({ failures: Array(16).fill(true), events: [] });
+  expect(result).toEqual({ failures: Array(22).fill(true), events: [] });
+});
+
+/** Start and end one view in the page; return its first event. */
+function recordView(options: Record<string, unknown>) {
+  const f = window.analyticsFixture;
+  const events: ChunkifyPlayerAnalyticsEvent[] = [];
+  const session = f.attachSummaryAnalytics(f.video, {
+    videoId: "asset-identity", destinations: [{ send: (event) => { events.push(event); } }], ...options,
+  });
+  session.startAttempt();
+  session.destroy();
+  return events[0]!;
+}
+
+test("generated viewer ID persists in localStorage across page loads", async ({ page }) => {
+  const first = await page.evaluate(recordView, {});
+  expect(first.viewer_id).toMatch(uuidPattern);
+  expect(first).toMatchObject({ user_id: null, video_title: null });
+  expect(await page.evaluate((key) => localStorage.getItem(key), viewerIdKey)).toBe(first.viewer_id);
+  const sameLoad = await page.evaluate(recordView, {});
+  expect(sameLoad.viewer_id).toBe(first.viewer_id);
+  expect(sameLoad.view_id).not.toBe(first.view_id);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.analyticsFixture));
+  const reloaded = await page.evaluate(recordView, {});
+  expect(reloaded.viewer_id).toBe(first.viewer_id);
+});
+
+test("an invalid stored viewer ID is replaced with a generated one", async ({ page }) => {
+  await page.evaluate((key) => localStorage.setItem(key, "not-a-uuid"), viewerIdKey);
+  const event = await page.evaluate(recordView, {});
+  expect(event.viewer_id).toMatch(uuidPattern);
+  expect(await page.evaluate((key) => localStorage.getItem(key), viewerIdKey)).toBe(event.viewer_id);
+});
+
+test("storage errors fall back to an in-memory viewer ID for the page load", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.evaluate(() => {
+    for (const method of ["getItem", "setItem"] as const) {
+      Storage.prototype[method] = () => { throw new DOMException("blocked", "SecurityError"); };
+    }
+  });
+  const first = await page.evaluate(recordView, {});
+  const second = await page.evaluate(recordView, {});
+  expect(first.event_name).toBe("chunkify.video.view_started");
+  expect(first.viewer_id).toMatch(uuidPattern);
+  expect(second.viewer_id).toBe(first.viewer_id);
+
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.analyticsFixture));
+  await page.evaluate(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true, get() { throw new DOMException("blocked", "SecurityError"); },
+    });
+  });
+  const blocked = await page.evaluate(recordView, {});
+  expect(blocked.viewer_id).toMatch(uuidPattern);
+  expect(blocked.viewer_id).not.toBe(first.viewer_id);
+  expect(errors).toEqual([]);
+});
+
+test("persistViewerId false never reads or writes storage", async ({ page }) => {
+  const stored = "00000000-0000-4000-8000-000000000000";
+  await page.evaluate(([key, value]) => {
+    localStorage.setItem(key!, value!);
+    const state = window as typeof window & { storageCalls: string[] };
+    state.storageCalls = [];
+    for (const method of ["getItem", "setItem", "removeItem"] as const) {
+      const original = Storage.prototype[method] as (...args: unknown[]) => unknown;
+      Storage.prototype[method] = function (this: Storage, ...args: unknown[]) {
+        state.storageCalls.push(method);
+        return original.apply(this, args);
+      } as never;
+    }
+  }, [viewerIdKey, stored]);
+  const first = await page.evaluate(recordView, { persistViewerId: false });
+  const second = await page.evaluate(recordView, { persistViewerId: false });
+  expect(first.viewer_id).toMatch(uuidPattern);
+  expect(first.viewer_id).not.toBe(stored);
+  expect(second.viewer_id).toBe(first.viewer_id);
+  expect(await page.evaluate(() => (window as typeof window & { storageCalls: string[] }).storageCalls)).toEqual([]);
+
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.analyticsFixture));
+  const reloaded = await page.evaluate(recordView, { persistViewerId: false });
+  expect(reloaded.viewer_id).toMatch(uuidPattern);
+  expect(reloaded.viewer_id).not.toBe(first.viewer_id);
+  expect(await page.evaluate((key) => localStorage.getItem(key), viewerIdKey)).toBe(stored);
+});
+
+test("userId is sent as user_id, accepts 256 Unicode characters, and accepts null", async ({ page }) => {
+  for (const userId of ["a".repeat(256), "\u{1F600}".repeat(256)]) {
+    expect((await page.evaluate(recordView, { userId })).user_id).toBe(userId);
+  }
+  expect((await page.evaluate(recordView, { userId: null })).user_id).toBeNull();
+});
+
+test("environment accepts null as not specified", async ({ page }) => {
+  expect((await page.evaluate(recordView, { environment: null })).environment).toBeNull();
+  expect((await page.evaluate(recordView, { environment: "staging" })).environment).toBe("staging");
+});
+
+test("videoTitle is truncated to 256 Unicode characters without splitting surrogate pairs", async ({ page }) => {
+  const cases = [
+    ["Short title", "Short title"],
+    ["a".repeat(300), "a".repeat(256)],
+    ["\u{1F600}".repeat(300), "\u{1F600}".repeat(256)],
+    ["a".repeat(255) + "\u{1F600}\u{1F600}", "a".repeat(255) + "\u{1F600}"],
+    [null, null],
+  ];
+  for (const [videoTitle, expected] of cases) {
+    expect((await page.evaluate(recordView, { videoTitle })).video_title).toBe(expected);
+  }
 });
 
 test("real video playback records source replacement, replay and cleanup without loading an engine or transport", async ({ page }) => {
