@@ -116,6 +116,11 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
         { width: 640, height: 360, playing_time_ms: 10000 },
         { width: null, height: 720, playing_time_ms: 2500 },
       ],
+      playback_rate: 1,
+      playhead_seconds: 42,
+      custom: { rate: 5, plan: "premium" },
+      subtitle_playing_time: [{ language: null, playing_time_ms: 2000 }, { language: "fr", playing_time_ms: 500 }],
+      playback_rate_playing_time: [{ rate: 1, playing_time_ms: 2000 }, { rate: 1.5, playing_time_ms: 500 }],
     };
     await createOtlpAdapter("https://collector.example.com/v1/logs").send(event);
     assert.equal(requests[0].url, "https://collector.example.com/v1/logs");
@@ -143,10 +148,24 @@ test("OTLP adapter sends typed log attributes without unavailable values", async
         { key: "playing_time_ms", value: { intValue: "10000" } },
       ] } },
       { kvlistValue: { values: [
+        { key: "width", value: {} },
         { key: "height", value: { intValue: "720" } },
         { key: "playing_time_ms", value: { intValue: "2500" } },
       ] } },
     ] } });
+    // Nested unavailable values keep their key as an empty value; rates, ratios and seconds are doubles.
+    assert.deepEqual(attributes.playback_rate, { doubleValue: 1 });
+    assert.deepEqual(attributes.playhead_seconds, { doubleValue: 42 });
+    assert.deepEqual(attributes.custom, { kvlistValue: { values: [
+      { key: "rate", value: { intValue: "5" } }, { key: "plan", value: { stringValue: "premium" } },
+    ] } });
+    assert.deepEqual(attributes.subtitle_playing_time.arrayValue.values[0], { kvlistValue: { values: [
+      { key: "language", value: {} }, { key: "playing_time_ms", value: { intValue: "2000" } },
+    ] } });
+    assert.deepEqual(attributes.playback_rate_playing_time.arrayValue.values.map(
+      (entry) => entry.kvlistValue.values[0]), [
+      { key: "rate", value: { doubleValue: 1 } }, { key: "rate", value: { doubleValue: 1.5 } },
+    ]);
     const mapAttributes = createEventMapper({
       video_id: "video_id",
       view_id: "view_id",

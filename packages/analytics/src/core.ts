@@ -1,5 +1,6 @@
 import { analyticsEventTypes, type AnalyticsEventType } from "./event-types.js";
-import { assertAnalyticsOptions, truncateCodePoints, maxIdentityLength } from "./options.js";
+import { fixedAnalyticsOptions, truncateCodePoints, maxIdentityLength, toWellFormed,
+  type AnalyticsOptionsInput } from "./options.js";
 import { resolveViewerId } from "./viewer-id.js";
 
 export type { AnalyticsEventType } from "./event-types.js";
@@ -22,6 +23,15 @@ export interface RenditionPlayingTime {
   playing_time_ms: number;
 }
 export type AnalyticsRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
+export interface SubtitlePlayingTime {
+  /** Language of the showing subtitle or caption track, `"und"` when it has none, or null when off. */
+  language: string | null;
+  playing_time_ms: number;
+}
+export interface PlaybackRatePlayingTime {
+  rate: number;
+  playing_time_ms: number;
+}
 export interface PlayedRange {
   start_seconds: number;
   end_seconds: number;
@@ -53,6 +63,20 @@ export interface ViewMetrics {
   selected_rendition_bitrate_bps: number | null;
   rendition_switch_count: number | null;
   rendition_playing_time: RenditionPlayingTime[] | null;
+  /** Language of the showing subtitle or caption track, `"und"` when it has none, or null when off. */
+  subtitle_language: string | null;
+  /** `playbackRate` rounded to 2 decimals; null outside the supported range above 0 and up to 16. */
+  playback_rate: number | null;
+  /**
+   * Cumulative playing time by subtitle language, including null for off or not detectable. At most 32
+   * entries. Only on `view_snapshot` and `view_ended`.
+   */
+  subtitle_playing_time?: SubtitlePlayingTime[];
+  /**
+   * Cumulative playing time by playback rate; time at an unsupported rate is excluded. At most 32 entries.
+   * Only on `view_snapshot` and `view_ended`.
+   */
+  playback_rate_playing_time?: PlaybackRatePlayingTime[];
   delivery_request_count: number | null;
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
@@ -88,9 +112,18 @@ export interface AnalyticsEventEnvelope {
   error_fatal: boolean | null;
   error_playhead_seconds: number | null;
 }
+/** Application-defined dimensions from the `custom` option. */
+export type AnalyticsCustomDimensions = Readonly<Record<string, string | number | boolean>>;
+/**
+ * The shape the `custom` option accepts: every property a string, number or boolean. As a constraint
+ * (`Custom extends AnalyticsCustomValues<Custom>`) it also accepts interface types, which have no index signature.
+ */
+export type AnalyticsCustomValues<Custom> = { readonly [Key in keyof Custom]: string | number | boolean };
 export interface AnalyticsViewEvent extends AnalyticsEventEnvelope, ViewMetrics {
   event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" |
     "chunkify.video.playback_error" | "chunkify.video.view_ended";
+  /** The `custom` option, unchanged. Only on `view_started`, and omitted when the option is absent, null or empty. */
+  custom?: Partial<AnalyticsCustomDimensions>;
 }
 export interface AnalyticsPlaybackStateEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
   event_name: "chunkify.video.playback_state_changed";
@@ -128,12 +161,24 @@ export interface AnalyticsSeekEvent extends AnalyticsEventEnvelope, Partial<View
   seek_resume_wait_ms: number | null;
   seek_outcome: "resumed" | "paused" | "interrupted";
 }
+export interface AnalyticsSubtitleEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.subtitle_changed";
+  playhead_seconds: number | null;
+  previous_subtitle_language: string | null;
+  subtitle_language: string | null;
+}
+export interface AnalyticsPlaybackRateEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.playback_rate_changed";
+  playhead_seconds: number | null;
+  previous_playback_rate: number | null;
+  playback_rate: number | null;
+}
 export type ChunkifyPlayerAnalyticsEvent = AnalyticsViewEvent | AnalyticsPlaybackStateEvent |
-  AnalyticsRenditionEvent | AnalyticsSeekEvent;
+  AnalyticsRenditionEvent | AnalyticsSeekEvent | AnalyticsSubtitleEvent | AnalyticsPlaybackRateEvent;
 export interface AnalyticsDestination {
   send(event: ChunkifyPlayerAnalyticsEvent): void | Promise<void>;
 }
-export interface AnalyticsConfig {
+export interface AnalyticsConfig<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions> {
   destinations: readonly AnalyticsDestination[];
   /** Application environment, sent as `environment`; null means not specified. */
   environment?: string | null | undefined;
@@ -144,12 +189,19 @@ export interface AnalyticsConfig {
    * Set false (for example before consent) to generate a new ID for each page load without storage.
    */
   persistViewerId?: boolean | undefined;
+  /**
+   * Your own dimensions, sent unchanged as `custom` on each `view_started`. At most 10 keys matching
+   * `^[a-z0-9_]{1,40}$`; values are strings of 1 to 256 Unicode characters, finite numbers, or booleans.
+   * Fixed for the session; null means not specified. Do not put personal data here; use `userId` for user identity.
+   */
+  custom?: Custom | null | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
-  /** Event types passed to destinations. Defaults to all seven types. */
+  /** Event types passed to destinations. Defaults to all nine types. */
   includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
-export interface AnalyticsOptions extends AnalyticsConfig {
+export interface AnalyticsOptions<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>
+  extends AnalyticsConfig<Custom> {
   videoId: string;
   /** Human-readable video title, sent as `video_title`. Truncated to 256 Unicode characters; empty is sent as null. */
   videoTitle?: string | null | undefined;
@@ -178,6 +230,14 @@ export interface AnalyticsConnector {
   subscribeToErrors(listener: (error: AnalyticsConnectorError) => void): () => void;
   /** Fires with the rendition currently reaching playback, including the initial selection. */
   subscribeToRenditions?(listener: (rendition: AnalyticsRendition | null) => void): () => void;
+  /**
+   * The playback rate the viewer chose, for engines that change the media element's rate themselves
+   * (Shaka sets it to 0 while buffering). Replaces the media element's `playbackRate` when present;
+   * null means the engine has no rate now, so the media element's is used.
+   */
+  playbackRate?(): number | null;
+  /** Fires when `playbackRate()` may have changed. */
+  subscribeToPlaybackRate?(listener: () => void): () => void;
 }
 export interface AnalyticsSession {
   /** Call immediately before play() to include attempts that reject before a play event. */
@@ -225,11 +285,18 @@ interface View {
   frameMetricsValid: boolean;
   connectorBaseline: AnalyticsConnectorSnapshot | null;
   renditionTrackingAvailable: boolean;
-  renditionTimes: Map<string, RenditionPlayingTime>;
-  activeRendition: AnalyticsRendition | null;
-  activeRenditionSince: number | null;
+  /** Playing time by rendition key; `renditions` maps each key back to its rendition. */
+  renditionTime: PlayingTimeTracker<string>;
+  renditions: Map<string, AnalyticsRendition>;
+  subtitleTime: PlayingTimeTracker<string | null>;
+  playbackRateTime: PlayingTimeTracker<number>;
   playbackState: AnalyticsPlaybackState;
   playbackStateSince: number;
+}
+
+interface PlayingTimeTracker<Value> {
+  totals: Map<Value, number>;
+  active: { value: Value; since: number } | null;
 }
 
 interface SeekInteraction {
@@ -311,14 +378,86 @@ function renditionKey(rendition: AnalyticsRendition): string {
 
 function renditionPlayingTime(current: View, now: number): RenditionPlayingTime[] | null {
   if (!current.renditionTrackingAvailable) return null;
-  const times = new Map([...current.renditionTimes].map(([key, value]) => [key, { ...value }]));
-  if (current.activeRendition && current.activeRenditionSince !== null) {
-    const key = renditionKey(current.activeRendition);
-    const entry = times.get(key) ?? { ...current.activeRendition, playing_time_ms: 0 };
-    entry.playing_time_ms += Math.max(0, now - current.activeRenditionSince);
-    times.set(key, entry);
+  return playingTimeTotals(current.renditionTime, now)
+    .map(([key, playing_time_ms]) => ({ ...current.renditions.get(key)!, playing_time_ms }));
+}
+
+/** The collector accepts BCP 47 language tags of 1 to 35 characters. */
+const maxSubtitleLanguageLength = 35;
+/** The collector accepts finite playback rates above 0 and up to 16. */
+const maxPlaybackRate = 16;
+/**
+ * Each playing-time breakdown keeps at most this many distinct values so event payloads stay bounded.
+ * Once it holds 32 values, playing time in a further new value is not added (existing values keep
+ * accumulating), so the entries can sum to less than `playing_time_ms`.
+ */
+const maxPlayingTimeEntries = 32;
+
+/** The first showing subtitle or caption track's language; `"und"` when it has none, null when none shows. */
+function subtitleLanguage(media: HTMLMediaElement): string | null {
+  try {
+    const tracks = media.textTracks;
+    for (let index = 0; index < (tracks?.length ?? 0); index++) {
+      const track = tracks[index];
+      if (!track || track.mode !== "showing" || (track.kind !== "subtitles" && track.kind !== "captions")) continue;
+      // Trim Unicode White_Space, as the collector does; JavaScript's trim() keeps U+0085, for example.
+      const language = typeof track.language === "string"
+        ? toWellFormed(track.language).replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "") : "";
+      // Truncation must not leave a trailing subtag separator or space.
+      const tag = truncateCodePoints(language, maxSubtitleLanguageLength).replace(/[-\p{White_Space}]+$/u, "");
+      // "und" (BCP 47 "undetermined") keeps "on without a language" distinct from "off".
+      return tag || "und";
+    }
+  } catch {
+    // Text tracks are optional; an inaccessible list is reported as no showing subtitles.
   }
-  return [...times.values()];
+  return null;
+}
+
+function normalizedPlaybackRate(read: () => unknown): number | null {
+  let rate: unknown;
+  try { rate = read(); } catch { return null; }
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return null;
+  const rounded = Math.round(rate * 100) / 100;
+  return rounded > 0 && rounded <= maxPlaybackRate ? rounded : null;
+}
+
+function addPlayingTime<Value>(totals: Map<Value, number>, value: Value, elapsed: number) {
+  const total = totals.get(value);
+  if (total === undefined) {
+    // A value left at the instant it was selected gets no entry, so it doesn't use up the limit.
+    if (elapsed <= 0) return;
+    if (totals.size >= maxPlayingTimeEntries) {
+      // A full list may still replace a value that has under 1 ms, which would not be reported anyway.
+      let replaced = false;
+      for (const [key, time] of totals) {
+        if (time >= 1) continue;
+        totals.delete(key);
+        replaced = true;
+        break;
+      }
+      if (!replaced) return;
+    }
+  }
+  totals.set(value, (total ?? 0) + Math.max(0, elapsed));
+}
+
+function startPlayingTime<Value>(tracker: PlayingTimeTracker<Value>, value: Value, now: number) {
+  tracker.active ??= { value, since: now };
+}
+
+function stopPlayingTime<Value>(tracker: PlayingTimeTracker<Value>, now: number) {
+  if (!tracker.active) return;
+  addPlayingTime(tracker.totals, tracker.active.value, now - tracker.active.since);
+  tracker.active = null;
+}
+
+function playingTimeTotals<Value>(tracker: PlayingTimeTracker<Value>, now: number): [Value, number][] {
+  const totals = new Map(tracker.totals);
+  if (tracker.active) addPlayingTime(totals, tracker.active.value, now - tracker.active.since);
+  // Round down so the whole-millisecond entries never sum to more than `playing_time_ms`; drop 0 ms entries.
+  return [...totals].map(([value, total]): [Value, number] => [value, Math.floor(total)])
+    .filter(([, time]) => time > 0);
 }
 
 const emptyConnectorMetrics = {
@@ -397,26 +536,29 @@ function frameCounts(media: HTMLMediaElement): FrameCounts | null {
   return { dropped: webkit.webkitDroppedFrameCount!, total: webkit.webkitDecodedFrameCount! };
 }
 
-export function attachAnalytics(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+export function attachAnalytics<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>(
+  media: HTMLMediaElement, options: AnalyticsOptions<Custom>): AnalyticsSession {
   return createAnalyticsSession(media, options, false);
 }
 
 /** Engine adapters call this when they own source-change events. */
-export function attachAnalyticsWithManagedSource(media: HTMLMediaElement, options: AnalyticsOptions): AnalyticsSession {
+export function attachAnalyticsWithManagedSource(media: HTMLMediaElement, options: AnalyticsOptionsInput): AnalyticsSession {
   return createAnalyticsSession(media, options, true);
 }
 
-function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptions,
+function createAnalyticsSession(media: HTMLMediaElement, initialOptions: AnalyticsOptionsInput,
   sourceManagedByEngine: boolean): AnalyticsSession {
-  assertAnalyticsOptions(options);
+  // Copied at init so later changes to the caller's objects cannot alter this session's views.
+  const options = fixedAnalyticsOptions(initialOptions);
   const frameVideo = media as HTMLMediaElement & Partial<Pick<HTMLVideoElement,
     "requestVideoFrameCallback" | "cancelVideoFrameCallback">>;
   const { videoId, environment = null, userId = null, snapshotIntervalMs = 30000 } = options;
   // An empty title is sent as null: the collector rejects empty strings.
   const videoTitle = options.videoTitle == null || options.videoTitle === "" ? null
-    : truncateCodePoints(options.videoTitle, maxIdentityLength);
+    // A title often comes from content, so a lone surrogate is repaired rather than rejected.
+    : toWellFormed(truncateCodePoints(options.videoTitle, maxIdentityLength));
   const viewerId = resolveViewerId(options.persistViewerId !== false);
-  const destinations = [...options.destinations];
+  const { custom, destinations } = options;
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
     .map((event) => `chunkify.video.${event}`));
   let view: View | null = null;
@@ -430,6 +572,14 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
   let selectedRendition: AnalyticsRendition | null = null;
+  let selectedSubtitle = subtitleLanguage(media);
+  let unsubscribePlaybackRate: (() => void) | null = null;
+  let selectedPlaybackRate = currentPlaybackRate();
+
+  function currentPlaybackRate(): number | null {
+    const engine = connector;
+    return normalizedPlaybackRate(() => engine?.playbackRate?.() ?? media.playbackRate);
+  }
 
   function refreshIntrinsicVideoSize(current: View) {
     const intrinsic = intrinsicVideoSize(media);
@@ -474,28 +624,81 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     }
   }
 
-  function closeActiveRendition(now: number) {
-    if (!view || !view.activeRendition || view.activeRenditionSince === null) return;
-    const key = renditionKey(view.activeRendition);
-    const entry = view.renditionTimes.get(key) ?? { ...view.activeRendition, playing_time_ms: 0 };
-    entry.playing_time_ms += Math.max(0, now - view.activeRenditionSince);
-    view.renditionTimes.set(key, entry);
-    view.activeRendition = null;
-    view.activeRenditionSince = null;
+  /** Attribute playing time from `now` to the current rendition, subtitle language and playback rate. */
+  function startSelectionPlayingTime(current: View, now: number) {
+    if (selectedRendition) {
+      const key = renditionKey(selectedRendition);
+      current.renditions.set(key, selectedRendition);
+      startPlayingTime(current.renditionTime, key, now);
+    }
+    startPlayingTime(current.subtitleTime, selectedSubtitle, now);
+    // Time at an unsupported rate is not attributed, like time before a rendition is known.
+    if (selectedPlaybackRate !== null) startPlayingTime(current.playbackRateTime, selectedPlaybackRate, now);
+  }
+
+  function stopSelectionPlayingTime(current: View, now: number) {
+    stopPlayingTime(current.renditionTime, now);
+    stopPlayingTime(current.subtitleTime, now);
+    stopPlayingTime(current.playbackRateTime, now);
+  }
+
+  /** After any selection change, move playing time to the new selections; unchanged values keep accumulating. */
+  function restartSelectionPlayingTime() {
+    if (!view || view.playingSince === null) return;
+    const now = performance.now();
+    stopSelectionPlayingTime(view, now);
+    startSelectionPlayingTime(view, now);
   }
 
   function onRenditionChanged(rendition: AnalyticsRendition | null) {
     const next = normalizedRendition(rendition);
     const previous = selectedRendition;
     if (previous && next && renditionKey(previous) === renditionKey(next)) return;
-    const now = performance.now();
-    closeActiveRendition(now);
     selectedRendition = next;
-    if (view && view.playingSince !== null && selectedRendition) {
-      view.activeRendition = selectedRendition;
-      view.activeRenditionSince = now;
-    }
+    restartSelectionPlayingTime();
     if (view && next) emitRenditionChange(view, previous, next);
+  }
+
+  // Mode changes fire `change`; removing a showing track fires only `removetrack`.
+  const textTrackEvents = ["change", "addtrack", "removetrack"];
+  let textTracks: TextTrackList | null = null;
+  /** Retried at each attempt: a custom media element may expose its text tracks only after it upgrades. */
+  function bindTextTracks() {
+    if (textTracks || destroyed) return;
+    try {
+      const tracks = media.textTracks;
+      if (tracks && typeof tracks.addEventListener === "function") textTracks = tracks;
+    } catch {
+      // Subtitle tracking is optional; media without a text track list reports subtitles as off.
+    }
+    for (const name of textTrackEvents) textTracks?.addEventListener(name, onSubtitleChanged);
+  }
+
+  type SelectionChange =
+    Pick<AnalyticsSubtitleEvent, "event_name" | "previous_subtitle_language" | "subtitle_language"> |
+    Pick<AnalyticsPlaybackRateEvent, "event_name" | "previous_playback_rate" | "playback_rate">;
+
+  function emitSelectionChange(change: SelectionChange) {
+    if (!view || !includedEvents.has(change.event_name)) return;
+    deliver({ ...envelope(view, change.event_name), playhead_seconds: playheadSeconds(), ...change });
+  }
+
+  function onSubtitleChanged() {
+    const previous = selectedSubtitle;
+    selectedSubtitle = subtitleLanguage(media);
+    if (selectedSubtitle === previous) return;
+    restartSelectionPlayingTime();
+    emitSelectionChange({ event_name: "chunkify.video.subtitle_changed",
+      previous_subtitle_language: previous, subtitle_language: selectedSubtitle });
+  }
+
+  function onPlaybackRateChanged() {
+    const previous = selectedPlaybackRate;
+    selectedPlaybackRate = currentPlaybackRate();
+    if (selectedPlaybackRate === previous) return;
+    restartSelectionPlayingTime();
+    emitSelectionChange({ event_name: "chunkify.video.playback_rate_changed",
+      previous_playback_rate: previous, playback_rate: selectedPlaybackRate });
   }
 
   function playheadSeconds(): number | null {
@@ -639,7 +842,9 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     refreshIntrinsicVideoSize(current);
     refreshPlayerSize(current);
     const event: AnalyticsViewEvent = {
-      ...envelope(current, event_name), event_name, reason, startup_outcome: startupOutcome,
+      ...envelope(current, event_name),
+      ...(custom && event_name === "chunkify.video.view_started" ? { custom: { ...custom } } : {}),
+      event_name, reason, startup_outcome: startupOutcome,
       error_category: error?.category ?? null,
       error_code: error?.code ?? null,
       error_fatal: error?.fatal ?? null,
@@ -665,6 +870,15 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       total_video_frames: viewFrames?.total ?? null,
       ...engineMetrics,
       rendition_playing_time: renditionPlayingTime(current, now),
+      subtitle_language: selectedSubtitle,
+      playback_rate: selectedPlaybackRate,
+      // The contract has these breakdowns only on snapshots and the final record.
+      ...(event_name === "chunkify.video.view_snapshot" || event_name === "chunkify.video.view_ended" ? {
+        subtitle_playing_time: playingTimeTotals(current.subtitleTime, now)
+          .map(([language, playing_time_ms]) => ({ language, playing_time_ms })),
+        playback_rate_playing_time: playingTimeTotals(current.playbackRateTime, now)
+          .map(([rate, playing_time_ms]) => ({ rate, playing_time_ms })),
+      } : {}),
     };
     deliver(event);
   }
@@ -679,6 +893,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     const initialVideoSize = intrinsicVideoSize(media);
     const initialPlayerSize = playerSize(media);
     const startedAt = performance.now();
+    // Change listeners keep these current; re-read in case the media changed without an event.
+    bindTextTracks();
+    selectedSubtitle = subtitleLanguage(media);
+    selectedPlaybackRate = currentPlaybackRate();
     const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt,
       startup: null, firstVideoFrame: null, frameCallbackId: null,
       playing: 0, playingSince: null,
@@ -699,7 +917,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       frameMetricsValid: initialFrames !== null,
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
-      renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null,
+      renditionTime: { totals: new Map(), active: null }, renditions: new Map(),
+      subtitleTime: { totals: new Map(), active: null }, playbackRateTime: { totals: new Map(), active: null },
       playbackState: "startup", playbackStateSince: startedAt };
     view = current;
     if (includedEvents.size > 0) observeFirstVideoFrame(current);
@@ -734,7 +953,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     recordPlayedRange(includeCurrentPosition && !media.seeking ? playheadSeconds() : view.lastPlayhead);
     view.rangeStart = null;
     const now = performance.now();
-    closeActiveRendition(now);
+    stopSelectionPlayingTime(view, now);
     view.playing += now - view.playingSince;
     view.playingSince = null;
   }
@@ -803,10 +1022,13 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     if (destroyed) return;
     const previousUnsubscribe = unsubscribeConnector;
     const previousRenditionUnsubscribe = unsubscribeRenditions;
+    const previousPlaybackRateUnsubscribe = unsubscribePlaybackRate;
     unsubscribeConnector = null;
     unsubscribeRenditions = null;
+    unsubscribePlaybackRate = null;
     try { previousUnsubscribe?.(); } catch {}
     try { previousRenditionUnsubscribe?.(); } catch {}
+    try { previousPlaybackRateUnsubscribe?.(); } catch {}
     if (destroyed) return;
     onRenditionChanged(null);
     connector = next;
@@ -817,14 +1039,20 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       try { unsubscribe = connector.subscribeToErrors(reportConnectorError); } catch {}
       let unsubscribeRendition: (() => void) | null = null;
       try { unsubscribeRendition = connector.subscribeToRenditions?.(onRenditionChanged) ?? null; } catch {}
+      let unsubscribeRate: (() => void) | null = null;
+      try { unsubscribeRate = connector.subscribeToPlaybackRate?.(onPlaybackRateChanged) ?? null; } catch {}
       if (destroyed) {
         try { unsubscribe?.(); } catch {}
         try { unsubscribeRendition?.(); } catch {}
+        try { unsubscribeRate?.(); } catch {}
         return;
       }
       unsubscribeConnector = unsubscribe;
       unsubscribeRenditions = unsubscribeRendition;
+      unsubscribePlaybackRate = unsubscribeRate;
     }
+    // The rate's source can change with the connector.
+    onPlaybackRateChanged();
   }
   function scheduleSnapshot() {
     if (!view || !includedEvents.has("chunkify.video.view_snapshot") || snapshotTimer !== null) return;
@@ -854,10 +1082,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     stopRebuffering();
     view.playingSince ??= now;
     view.rangeStart ??= playheadSeconds();
-    if (view.activeRenditionSince === null && selectedRendition) {
-      view.activeRendition = selectedRendition;
-      view.activeRenditionSince = now;
-    }
+    startSelectionPlayingTime(view, now);
     changePlaybackState("playing");
     if (seekInteraction?.view === view) {
       if (seekInteraction.resumedAt === null) {
@@ -917,12 +1142,17 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (view.resourceStarted || (view.source && view.source !== (media.src || media.currentSrc))) finish("source_changed");
     },
     loadstart() {
-      if (!view) return;
-      const source = media.src || media.currentSrc;
-      if (!sourceManagedByEngine && view.source && view.source !== source) { finish("source_changed"); return; }
-      // <source> selection can first expose the URL after the initial attempt.
-      view.source = source;
-      view.resourceStarted = true;
+      if (view) {
+        const source = media.src || media.currentSrc;
+        if (!sourceManagedByEngine && view.source && view.source !== source) finish("source_changed");
+        else {
+          // <source> selection can first expose the URL after the initial attempt.
+          view.source = source;
+          view.resourceStarted = true;
+        }
+      }
+      // Loading resets playbackRate to defaultPlaybackRate without a ratechange event.
+      onPlaybackRateChanged();
     },
     pause() {
       // A queued pause can arrive after play() has already resumed the media.
@@ -965,8 +1195,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     },
     timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,
+    ratechange: onPlaybackRateChanged,
   };
   for (const [name, listener] of Object.entries(listeners)) media.addEventListener(name, listener);
+  bindTextTracks();
   const page = media.ownerDocument.defaultView;
   const visibilitychange = () => {
     if (!view) return;
@@ -985,11 +1217,14 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (destroyed) return;
       destroyed = true;
       for (const [name, listener] of Object.entries(listeners)) media.removeEventListener(name, listener);
+      for (const name of textTrackEvents) textTracks?.removeEventListener(name, onSubtitleChanged);
       media.ownerDocument.removeEventListener?.("visibilitychange", visibilitychange);
       page?.removeEventListener("pagehide", pagehide);
       finish("destroyed");
       try { unsubscribeConnector?.(); } catch {}
       try { unsubscribeRenditions?.(); } catch {}
+      try { unsubscribePlaybackRate?.(); } catch {}
+      unsubscribePlaybackRate = null;
       unsubscribeConnector = null;
       unsubscribeRenditions = null;
       connector = null;

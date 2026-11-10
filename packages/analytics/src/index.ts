@@ -1,7 +1,8 @@
 export { attachAnalytics } from "./core.js";
 export type { AnalyticsEventType, AnalyticsEndReason, AnalyticsErrorCategory, AnalyticsStartupOutcome,
   AnalyticsPlaybackState, AnalyticsVisibilityState, AnalyticsEventEnvelope, AnalyticsViewEvent, AnalyticsPlaybackStateEvent,
-  AnalyticsRenditionEvent, AnalyticsSeekEvent, RenditionPlayingTime, AnalyticsRendition, PlayedRange, ViewMetrics,
+  AnalyticsRenditionEvent, AnalyticsSeekEvent, AnalyticsSubtitleEvent, AnalyticsPlaybackRateEvent, AnalyticsCustomDimensions, RenditionPlayingTime,
+  SubtitlePlayingTime, PlaybackRatePlayingTime, AnalyticsRendition, PlayedRange, ViewMetrics,
   ChunkifyPlayerAnalyticsEvent,
   AnalyticsDestination, AnalyticsConfig, AnalyticsOptions, AnalyticsConnectorSnapshot,
   AnalyticsConnectorError, AnalyticsConnector, AnalyticsSession } from "./core.js";

@@ -1,8 +1,8 @@
 import type Hls from "hls.js";
 import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorSnapshot,
-  type AnalyticsOptions, type AnalyticsSession } from "./core.js";
+  type AnalyticsCustomDimensions, type AnalyticsCustomValues, type AnalyticsOptions, type AnalyticsSession } from "./core.js";
 import { createHlsJsConnector, type HlsJsAnalyticsConnector } from "./hlsjs.js";
-import { assertAnalyticsOptions } from "./options.js";
+import { fixedAnalyticsOptions } from "./options.js";
 
 /** Video.js 10 HTML media components expose the media API on the custom element. */
 export type VideoJsMediaElement = HTMLElement & {
@@ -35,9 +35,10 @@ function videoJsConnector(engine: Hls | null): AnalyticsConnector & { destroy():
 }
 
 /** Monitor a Video.js 10 HTML media component, including its hls.js engine when active. */
-export function monitorVideoJs(media: VideoJsMediaElement, options: AnalyticsOptions):
+export function monitorVideoJs<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>(
+  media: VideoJsMediaElement, initialOptions: AnalyticsOptions<Custom>):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
-  assertAnalyticsOptions(options);
+  const options = fixedAnalyticsOptions(initialOptions);
   if (!media || !videoJsMediaTags.has(media.localName)
     || typeof (media as { play?: unknown }).play !== "function"
     || typeof media.adapter !== "object" || media.adapter === null) {

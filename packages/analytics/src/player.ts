@@ -1,4 +1,6 @@
-import { attachAnalytics, type AnalyticsOptions, type AnalyticsSession } from "./core.js";
+import { attachAnalytics, type AnalyticsCustomDimensions, type AnalyticsCustomValues, type AnalyticsOptions,
+  type AnalyticsSession } from "./core.js";
+import { fixedAnalyticsOptions } from "./options.js";
 import { createHlsJsConnector, type HlsJsAnalyticsConnector } from "./hlsjs.js";
 import type Hls from "hls.js";
 
@@ -8,10 +10,12 @@ export interface MediaPlayerHost extends HTMLElement {
 }
 
 /** Attach the standalone media collector to a Chunkify Player. */
-export function attachPlayerAnalytics(
+export function attachPlayerAnalytics<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>(
   player: MediaPlayerHost,
-  options: AnalyticsOptions,
+  initialOptions: AnalyticsOptions<Custom>,
 ): Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
+  // Sessions for later media elements reuse the options as they were at startup.
+  const options = fixedAnalyticsOptions(initialOptions);
   let media = player.media;
   let session = attachAnalytics(media, options);
   let destroyed = false;
