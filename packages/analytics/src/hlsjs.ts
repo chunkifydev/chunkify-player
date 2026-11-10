@@ -6,7 +6,7 @@ import type {
 import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
   type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
-import { assertAnalyticsOptions, customDimensions } from "./options.js";
+import { fixedAnalyticsOptions } from "./options.js";
 
 export interface HlsJsAnalyticsConnector extends AnalyticsConnector {
   destroy(): void;
@@ -117,9 +117,8 @@ export function createHlsJsConnector(hls: Hls): HlsJsAnalyticsConnector {
 /** Follow an hls.js instance as it attaches to or detaches from media. */
 export function monitorHlsJs(hls: Hls, initialOptions: AnalyticsOptions):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
-  assertAnalyticsOptions(initialOptions);
-  // Sessions for later media elements reuse the custom dimensions as they were at startup.
-  const options = { ...initialOptions, custom: customDimensions(initialOptions.custom) ?? undefined };
+  // Sessions for later media elements reuse the options as they were at startup.
+  const options = fixedAnalyticsOptions(initialOptions);
   const HlsClass = hls.constructor as typeof Hls;
   let media: HTMLMediaElement | null = null;
   let session: AnalyticsSession | null = null;

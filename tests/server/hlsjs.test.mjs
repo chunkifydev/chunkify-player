@@ -80,7 +80,7 @@ test("hls.js analytics validates options before an engine attaches media", () =>
   assert.equal(hls.listeners.size, 0);
 });
 
-test("hls.js analytics keeps the startup custom dimensions when hls.js attaches new media", () => {
+test("hls.js analytics keeps the startup options when hls.js attaches new media", () => {
   class AttachingHls extends FakeHls {
     static Events = { ...FakeHls.Events, MEDIA_ATTACHING: "attaching", MEDIA_DETACHING: "detaching", DESTROYING: "destroying" };
   }
@@ -90,9 +90,18 @@ test("hls.js analytics keeps the startup custom dimensions when hls.js attaches 
   hls.media = fakeMedia();
   const custom = { plan: "premium", seats: 5 };
   const events = [];
-  const session = monitorHlsJs(hls, { videoId: "hls-custom", custom, destinations: [{ send(event) { events.push(event); } }] });
+  const late = [];
+  const destinations = [{ send(event) { events.push(event); } }];
+  const includeEvents = ["view_started"];
+  // Each field is read once and validated once, even across media changes.
+  let reads = 0;
+  const options = { videoId: "hls-custom", custom, destinations, get includeEvents() { reads++; return includeEvents; } };
+  const session = monitorHlsJs(hls, options);
   session.startAttempt();
-  custom.plan = ""; // Invalid now, and the option is fixed at startup anyway.
+  custom.plan = ""; // Invalid now, and the options are fixed at startup anyway.
+  destinations.push({ send(event) { late.push(event); } });
+  includeEvents.push("view_ended");
+  options.videoId = "changed";
   hls.media = fakeMedia();
   hls.emit(AttachingHls.Events.MEDIA_ATTACHING, {});
   session.startAttempt();
@@ -100,4 +109,8 @@ test("hls.js analytics keeps the startup custom dimensions when hls.js attaches 
   const started = events.filter((event) => event.event_name === "chunkify.video.view_started");
   assert.equal(started.length, 2);
   for (const event of started) assert.deepEqual(event.custom, { plan: "premium", seats: 5 });
+  assert.deepEqual(events.map((event) => [event.event_name, event.video_id]),
+    [["chunkify.video.view_started", "hls-custom"], ["chunkify.video.view_started", "hls-custom"]]);
+  assert.deepEqual(late, []);
+  assert.equal(reads, 1);
 });

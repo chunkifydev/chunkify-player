@@ -1,7 +1,7 @@
 import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
   type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
-import { assertAnalyticsOptions } from "./options.js";
+import { fixedAnalyticsOptions } from "./options.js";
 
 interface ShakaMediaQuality {
   contentType?: string;
@@ -136,9 +136,9 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
 }
 
 /** Monitor an attached Shaka Player before loading and playing content. */
-export function monitorShaka(player: ShakaPlayer, options: AnalyticsOptions):
+export function monitorShaka(player: ShakaPlayer, initialOptions: AnalyticsOptions):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
-  assertAnalyticsOptions(options);
+  const options = fixedAnalyticsOptions(initialOptions);
   const media = player.getMediaElement();
   const Media = media?.ownerDocument?.defaultView?.HTMLMediaElement;
   if (!Media || !(media instanceof Media)) {

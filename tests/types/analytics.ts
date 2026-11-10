@@ -63,7 +63,9 @@ const config: AnalyticsConfig = {
     const category: AnalyticsErrorCategory | null = record.error_category;
     const outcome: AnalyticsStartupOutcome | null = record.startup_outcome;
     const custom: string | number | boolean | undefined = record.custom?.["plan"];
-    void custom;
+    // @ts-expect-error A custom key may be absent from the event.
+    const required: string | number | boolean = record.custom!["plan"];
+    void custom; void required;
     const subtitle: string | null = record.subtitle_language;
     const rate: number | null = record.playback_rate;
     const subtitleTime: { language: string | null; playing_time_ms: number }[] = record.subtitle_playing_time;

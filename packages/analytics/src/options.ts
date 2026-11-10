@@ -25,7 +25,7 @@ export function truncateCodePoints(value: string, max: number): string {
   return value;
 }
 
-/** Limits of the `custom` option, matching the collector. */
+/** Limits of the `custom` option, from the collector's event contract. */
 export const maxCustomKeys = 10;
 const customKeyPattern = /^[a-z0-9_]{1,40}$/;
 
@@ -67,8 +67,34 @@ export function customDimensions(custom: unknown): AnalyticsCustomDimensions | n
   return keys.length === 0 ? null : Object.freeze(copy);
 }
 
-/** Validate options before installing any media or engine listeners. */
-export function assertAnalyticsOptions(options: AnalyticsOptions): void {
+/** Options after validation: a frozen copy with `custom` validated, copied, and null when unset or empty. */
+export type FixedAnalyticsOptions = Readonly<AnalyticsOptions> & { readonly custom: AnalyticsCustomDimensions | null };
+
+const fixedOptions = new WeakSet<object>();
+
+/**
+ * Validate options and return a frozen copy, before installing any media or engine listeners. Each field
+ * is read once. Monitors that start a new session on a media change reuse the copy, so every session uses
+ * the values given at startup even if the caller later changes its objects. A copy is returned as is.
+ */
+export function fixedAnalyticsOptions(options: AnalyticsOptions): FixedAnalyticsOptions {
+  if (fixedOptions.has(options)) return options as FixedAnalyticsOptions;
+  const { videoId, videoTitle, destinations, environment, userId, persistViewerId, custom, snapshotIntervalMs,
+    includeEvents } = options;
+  const copy = { videoId, videoTitle, destinations, environment, userId, persistViewerId, snapshotIntervalMs,
+    includeEvents };
+  assertAnalyticsOptions(copy);
+  const fixed: FixedAnalyticsOptions = Object.freeze({
+    ...copy,
+    destinations: Object.freeze([...copy.destinations]),
+    includeEvents: copy.includeEvents && Object.freeze([...copy.includeEvents]),
+    custom: customDimensions(custom),
+  });
+  fixedOptions.add(fixed);
+  return fixed;
+}
+
+function assertAnalyticsOptions(options: Omit<AnalyticsOptions, "custom">): void {
   if (typeof options.videoId !== "string" || !options.videoId.trim()) {
     throw new TypeError("Analytics requires a non-empty videoId.");
   }
@@ -87,7 +113,6 @@ export function assertAnalyticsOptions(options: AnalyticsOptions): void {
       (options.userId.length === 0 || codePointLength(options.userId) > maxIdentityLength)) {
     throw new TypeError(`Analytics userId must be 1 to ${maxIdentityLength} characters.`);
   }
-  customDimensions(options.custom);
   if (options.persistViewerId !== undefined && typeof options.persistViewerId !== "boolean") {
     throw new TypeError("Analytics persistViewerId must be a boolean when provided.");
   }

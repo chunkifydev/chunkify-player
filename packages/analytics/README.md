@@ -69,6 +69,8 @@ The second argument to `monitor()` has the same options as `monitorHlsJs()`, `mo
 
 Once monitoring is attached, each destination receives all event types that occur by default. An empty `includeEvents` array sends nothing. Excluding `view_snapshot` stops its timer but still collects the final view metrics. Rapid seeks within 400 ms of the last `seeked` are grouped into one `seek_completed` record; seek-related state changes are withheld while that record is enabled.
 
+`subtitle_changed` and `playback_rate_changed` are new in 0.11.0 and sent by default. A collector that only accepts the event names it knows, such as an older Chunkify collector, rejects them: upgrade the collector first, or leave both out of `includeEvents` until it accepts them. The other events and their measurements are unaffected.
+
 For playback-attempt counts and final view measurements, send only the start and final records. This configuration sends no interim snapshots or separate state, rendition, seek, or error events:
 
 ```js
@@ -109,7 +111,7 @@ monitor(player, {
 });
 ```
 
-These limits match the Chunkify collector. Monitoring throws a `TypeError` at startup, before listening to the media, when `custom` breaks them:
+These limits are part of the event contract for `custom`. Monitoring checks them at startup and throws a `TypeError`, before listening to the media, when `custom` breaks them, so a mistake shows up in development instead of as events a collector rejects:
 
 - `custom` is a plain object with at most 10 keys.
 - Each key matches `^[a-z0-9_]{1,40}$`: lowercase ASCII letters, digits and underscores.
@@ -389,7 +391,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `media_width_px`, `media_height_px`, `dropped_video_frames`, `total_video_frames` | The video element's intrinsic width and height (`videoWidth` and `videoHeight`) in CSS pixels, plus browser frame counters when exposed. These are not the player box dimensions or necessarily the encoded frame dimensions. |
 | `player_width_px`, `player_height_px` | The monitored media element's displayed box in CSS pixels. Present on view and rendition-change events; `null` when it has no measurable size. A final event retains the last measured size if the media element was removed first. |
 | `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
-| `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
+| `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms` (a whole number). It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. It keeps at most 32 renditions, like the subtitle and rate lists. |
 | `subtitle_language` | Language of the showing subtitle or caption track (`kind` is `subtitles` or `captions`), read from the media element's `textTracks`. The track's `language` is trimmed and truncated to 35 characters; a showing track without a language is `"und"` (BCP 47 "undetermined"), so "on without a language" stays distinct from `null` (off). If several such tracks are showing, the first in the list is used. Subtitles rendered without a showing text track, such as a player's own overlay, are not detected. |
 | `playback_rate` | The media element's `playbackRate`, rounded to 2 decimals. `null` when the rounded value is not above 0 and up to 16. |
 | `subtitle_playing_time`, `playback_rate_playing_time` | Cumulative wall-clock milliseconds by subtitle language (entries have `language` and `playing_time_ms`; `language: null` is time with subtitles off) and by playback rate (entries have `rate` and `playing_time_ms`). `playing_time_ms` is a whole number. `[]` before any playing time. Each list keeps at most 32 distinct values; once full, playing time in a new value is not added. Time at a `null` playback rate is not attributed to a rate. |
@@ -397,7 +399,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 
 `reason` can be `ended`, `destroyed`, `source_changed`, or `page_exit`. `startup_outcome` can be `started`, `failed_before_start`, or `ended_before_start`. Error categories are `aborted`, `network`, `decode`, `unsupported`, or `unknown`.
 
-`first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. `subtitle_playing_time` and `playback_rate_playing_time` use the same accounting; their sums can also be lower after the 32-value limit or, for the rate, while the rate is unsupported. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
+`first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. `subtitle_playing_time` and `playback_rate_playing_time` use the same accounting. Any of the three sums can also be lower after its 32-value limit or, for the rate, while the rate is unsupported. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
 
 Player size is sampled when these events are emitted; the collector does not record every resize. For Chunkify Player, this is the internal media box, not the outer control theme. Other supported monitors measure the media element passed to them.
 
