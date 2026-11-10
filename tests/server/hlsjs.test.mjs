@@ -79,3 +79,25 @@ test("hls.js analytics validates options before an engine attaches media", () =>
   }), /non-empty videoId/);
   assert.equal(hls.listeners.size, 0);
 });
+
+test("hls.js analytics keeps the startup custom dimensions when hls.js attaches new media", () => {
+  class AttachingHls extends FakeHls {
+    static Events = { ...FakeHls.Events, MEDIA_ATTACHING: "attaching", MEDIA_DETACHING: "detaching", DESTROYING: "destroying" };
+  }
+  const fakeMedia = () => Object.assign(new EventTarget(), { duration: 10, currentTime: 0, src: "", currentSrc: "",
+    ownerDocument: { defaultView: null } });
+  const hls = new AttachingHls();
+  hls.media = fakeMedia();
+  const custom = { plan: "premium", seats: 5 };
+  const events = [];
+  const session = monitorHlsJs(hls, { videoId: "hls-custom", custom, destinations: [{ send(event) { events.push(event); } }] });
+  session.startAttempt();
+  custom.plan = ""; // Invalid now, and the option is fixed at startup anyway.
+  hls.media = fakeMedia();
+  hls.emit(AttachingHls.Events.MEDIA_ATTACHING, {});
+  session.startAttempt();
+  session.destroy();
+  const started = events.filter((event) => event.event_name === "chunkify.video.view_started");
+  assert.equal(started.length, 2);
+  for (const event of started) assert.deepEqual(event.custom, { plan: "premium", seats: 5 });
+});

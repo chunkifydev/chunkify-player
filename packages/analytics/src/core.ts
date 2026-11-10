@@ -1,5 +1,5 @@
 import { analyticsEventTypes, type AnalyticsEventType } from "./event-types.js";
-import { assertAnalyticsOptions, truncateCodePoints, maxIdentityLength } from "./options.js";
+import { assertAnalyticsOptions, customDimensions, truncateCodePoints, maxIdentityLength } from "./options.js";
 import { resolveViewerId } from "./viewer-id.js";
 
 export type { AnalyticsEventType } from "./event-types.js";
@@ -105,9 +105,13 @@ export interface AnalyticsEventEnvelope {
   error_fatal: boolean | null;
   error_playhead_seconds: number | null;
 }
+/** Application-defined dimensions from the `custom` option. */
+export type AnalyticsCustomDimensions = Readonly<Record<string, string | number | boolean>>;
 export interface AnalyticsViewEvent extends AnalyticsEventEnvelope, ViewMetrics {
   event_name: "chunkify.video.view_started" | "chunkify.video.view_snapshot" |
     "chunkify.video.playback_error" | "chunkify.video.view_ended";
+  /** The `custom` option, unchanged. Only on `view_started`, and omitted when the option is absent, null or empty. */
+  custom?: AnalyticsCustomDimensions;
 }
 export interface AnalyticsPlaybackStateEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
   event_name: "chunkify.video.playback_state_changed";
@@ -173,6 +177,12 @@ export interface AnalyticsConfig {
    * Set false (for example before consent) to generate a new ID for each page load without storage.
    */
   persistViewerId?: boolean | undefined;
+  /**
+   * Your own dimensions, sent unchanged as `custom` on each `view_started`. At most 10 keys matching
+   * `^[a-z0-9_]{1,40}$`; values are strings of 1 to 256 Unicode characters, finite numbers, or booleans.
+   * Fixed for the session; null means not specified. Do not put personal data here; use `userId` for user identity.
+   */
+  custom?: AnalyticsCustomDimensions | null | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
   /** Event types passed to destinations. Defaults to all nine types. */
@@ -514,6 +524,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   const videoTitle = options.videoTitle == null || options.videoTitle === "" ? null
     : truncateCodePoints(options.videoTitle, maxIdentityLength);
   const viewerId = resolveViewerId(options.persistViewerId !== false);
+  // Copied at init so later changes to the caller's object cannot alter this session's views.
+  const custom = customDimensions(options.custom);
   const destinations = [...options.destinations];
   const includedEvents = new Set((options.includeEvents ?? analyticsEventTypes)
     .map((event) => `chunkify.video.${event}`));
@@ -794,7 +806,9 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     refreshIntrinsicVideoSize(current);
     refreshPlayerSize(current);
     const event: AnalyticsViewEvent = {
-      ...envelope(current, event_name), event_name, reason, startup_outcome: startupOutcome,
+      ...envelope(current, event_name),
+      ...(custom && event_name === "chunkify.video.view_started" ? { custom: { ...custom } } : {}),
+      event_name, reason, startup_outcome: startupOutcome,
       error_category: error?.category ?? null,
       error_code: error?.code ?? null,
       error_fatal: error?.fatal ?? null,

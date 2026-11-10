@@ -62,6 +62,8 @@ const config: AnalyticsConfig = {
     const frames: number | null = record.total_video_frames;
     const category: AnalyticsErrorCategory | null = record.error_category;
     const outcome: AnalyticsStartupOutcome | null = record.startup_outcome;
+    const custom: string | number | boolean | undefined = record.custom?.["plan"];
+    void custom;
     const subtitle: string | null = record.subtitle_language;
     const rate: number | null = record.playback_rate;
     const subtitleTime: { language: string | null; playing_time_ms: number }[] = record.subtitle_playing_time;
@@ -121,5 +123,11 @@ attachAnalytics(video, { videoId: "asset-types" });
 attachAnalytics(video, { ...config, videoId: "asset-types", authorization: "secret" });
 // @ts-expect-error Snapshot intervals are numeric.
 attachAnalytics(video, { ...config, videoId: "asset-types", snapshotIntervalMs: "10000" });
+attachAnalytics(video, { ...config, videoId: "asset-types", custom: { plan: "premium", seats: 5, trial: false } });
+attachAnalytics(video, { ...config, videoId: "asset-types", custom: null });
+// @ts-expect-error Custom values are strings, numbers or booleans.
+attachAnalytics(video, { ...config, videoId: "asset-types", custom: { plan: { tier: "premium" } } });
+// @ts-expect-error Custom values cannot be null.
+attachAnalytics(video, { ...config, videoId: "asset-types", custom: { plan: null } });
 // @ts-expect-error Event names are from the supported set.
 attachAnalytics(video, { ...config, videoId: "asset-types", includeEvents: ["unknown"] });

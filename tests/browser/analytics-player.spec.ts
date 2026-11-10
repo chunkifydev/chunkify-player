@@ -64,13 +64,15 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     const player: ChunkifyPlayer = document.createElement("chunkify-player");
     player.preload = "none";
     document.body.append(player);
+    const custom = { plan: "premium", seats: 5 };
     const session = attachPlayerAnalytics(player, {
-      videoId: "asset-adapter",
+      videoId: "asset-adapter", custom,
       includeEvents: ["view_started", "view_snapshot", "playback_error", "view_ended"], destinations: [{ send(event) { events.push(event); } }],
     });
 
     const first = player.media;
     first.dispatchEvent(new Event("play"));
+    custom.plan = ""; // Later media keeps the startup dimensions, even after an invalid change.
     player.src = "/video.m3u8";
     const second = player.media;
     second.dispatchEvent(new Event("play"));
@@ -84,6 +86,8 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     return {
       mediaKinds: [first.localName, second.localName, third.localName],
       events: events.map((event) => ({ name: event.event_name, reason: event.reason, video: event.video_id })),
+      custom: events.filter((event) => event.event_name === "chunkify.video.view_started")
+        .map((event) => "custom" in event ? event.custom : undefined),
     };
   });
 
@@ -96,6 +100,7 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
     { name: "chunkify.video.view_started", reason: null, video: "asset-adapter" },
     { name: "chunkify.video.view_ended", reason: "destroyed", video: "asset-adapter" },
   ]);
+  expect(result.custom).toEqual(Array(3).fill({ plan: "premium", seats: 5 }));
 });
 
 test("the adapter records real HLS playback and then MP4 playback", async ({ page }) => {
