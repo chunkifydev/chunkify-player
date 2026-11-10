@@ -612,6 +612,42 @@ test("rendition playing time follows playback, switches and view boundaries", as
   expect(replay.rendition_playing_time).toEqual([{ ...low, playing_time_ms: 1000 }]);
 });
 
+test("browser text track and playback rate changes are reported", async ({ page }) => {
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.addTextTrack("metadata", "Chapters", "en").mode = "hidden";
+    const french = f.video.addTextTrack("subtitles", "Français", "fr");
+    f.video.addTextTrack("captions", "Unlabelled", "");
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "asset-subtitles", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+    french.mode = "showing";
+    f.video.playbackRate = 1.234;
+  });
+  const changes = () => page.evaluate(() => window.analyticsFixture.events
+    .filter((event) => event.event_name === "chunkify.video.subtitle_changed" ||
+      event.event_name === "chunkify.video.playback_rate_changed"));
+  await expect.poll(changes).toEqual([
+    expect.objectContaining({ event_name: "chunkify.video.subtitle_changed",
+      previous_subtitle_language: null, subtitle_language: "fr" }),
+    expect.objectContaining({ event_name: "chunkify.video.playback_rate_changed",
+      previous_playback_rate: 1, playback_rate: 1.23 }),
+  ]);
+  await page.evaluate(() => {
+    const tracks = window.analyticsFixture.video.textTracks;
+    tracks[1]!.mode = "disabled";
+    tracks[2]!.mode = "showing";
+  });
+  await expect.poll(async () => (await changes()).length).toBe(3);
+  expect((await changes())[2]).toMatchObject({ previous_subtitle_language: "fr", subtitle_language: "und" });
+  await page.evaluate(() => window.analyticsFixture.session!.destroy());
+  expect(await page.evaluate(() => window.analyticsFixture.events.at(-1))).toMatchObject({
+    event_name: "chunkify.video.view_ended", subtitle_language: "und", playback_rate: 1.23,
+    subtitle_playing_time: [], playback_rate_playing_time: [],
+  });
+});
+
 test("final records contain cumulative buffering, seeking and furthest progress measurements", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));

@@ -49,7 +49,7 @@ Call `session.startAttempt()` before an application-initiated `video.play()` to 
 
 `monitor()` selects the direct video collector for `<video>` or the Chunkify adapter for `<chunkify-player>`. The adapter follows the player's active media element when switching between ordinary video and HLS. Other player types are not supported by this function. The lower-level `attachAnalytics()` and `attachPlayerAnalytics()` functions remain available for explicit use.
 
-When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work.
+When Chunkify Player uses hls.js, the adapter also records the selected rendition, rendition switches, playing time by rendition, HLS manifest and segment request totals, transferred bytes, aggregate throughput, and fatal hls.js errors. These measurements are unavailable when playback uses native HLS or ordinary video; the media-level measurements still work. Subtitle language and playback speed are media-level: they are read from the media element's text tracks and `playbackRate` with every engine, including the subtitle and speed choices in Chunkify Player's settings menu.
 
 ## Monitor options
 
@@ -60,7 +60,7 @@ The second argument to `monitor()` has the same options as `monitorHlsJs()`, `mo
 | `videoId` | Required | Your video ID or Chunkify asset ID. Every event includes it as `video_id`. |
 | `destinations` | Required, non-empty array | Adapters or objects with `send(event)`. Each included event goes to every destination. |
 | `snapshotIntervalMs` | `30000` | Active playing time between cumulative snapshots, in milliseconds. Must be an integer from `1000` to `2147483647`. |
-| `includeEvents` | All seven event types | Exact list of event types sent to destinations: `view_started`, `view_snapshot`, `playback_error`, `view_ended`, `playback_state_changed`, `rendition_changed`, and `seek_completed`. |
+| `includeEvents` | All nine event types | Exact list of event types sent to destinations: `view_started`, `view_snapshot`, `playback_error`, `view_ended`, `playback_state_changed`, `rendition_changed`, `seek_completed`, `subtitle_changed`, and `playback_rate_changed`. |
 | `environment` | `null` | Optional application environment string included in events. `null` is the same as omitting it. |
 | `videoTitle` | `null` | Optional human-readable title included in events as `video_title`. Longer titles are truncated to 256 Unicode characters. `null` is the same as omitting it, and an empty string is sent as `null`. |
 | `userId` | `null` | Optional ID of the signed-in user in your application, included in events as `user_id`. Use a pseudonymous ID, not an email address. Must be 1 to 256 Unicode characters; an empty or longer string throws. Pass `null` (or omit it) for viewers who are not signed in. |
@@ -177,7 +177,7 @@ See [Shaka's setup guide](https://github.com/shaka-project/shaka-player/blob/mai
 
 ## Events and metrics
 
-The seven event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, `chunkify.video.view_ended`, `chunkify.video.playback_state_changed`, `chunkify.video.rendition_changed`, and `chunkify.video.seek_completed`. All records share identifiers, a timestamp, and a sequence number within the `view_id`. The first four contain cumulative view measurements. Snapshots arrive after each 30 seconds of active playing time and when the tab visibility changes during an attempt. State, rendition, and seek records have smaller, event-specific payloads. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
+The nine event names are `chunkify.video.view_started`, `chunkify.video.view_snapshot`, `chunkify.video.playback_error`, `chunkify.video.view_ended`, `chunkify.video.playback_state_changed`, `chunkify.video.rendition_changed`, `chunkify.video.seek_completed`, `chunkify.video.subtitle_changed`, and `chunkify.video.playback_rate_changed`. All records share identifiers, a timestamp, and a sequence number within the `view_id`. The first four contain cumulative view measurements. Snapshots arrive after each 30 seconds of active playing time and when the tab visibility changes during an attempt. State, rendition, seek, subtitle, and playback-rate records have smaller, event-specific payloads. A value is `null` when it is unavailable or does not apply; the collector does not guess it.
 
 ### Choose events for reporting
 
@@ -186,7 +186,7 @@ The seven event names are `chunkify.video.view_started`, `chunkify.video.view_sn
 | Count playback attempts | `view_started` | Count distinct `view_id` values. An attempt can fail before any video plays. |
 | Count confirmed starts | `playback_state_changed` | Count each view's first transition to `playing`. If you collect only final records, count `view_ended` where `startup_outcome` is `started`, but that count depends on receiving the final record. |
 | Report view totals and playback quality | `view_started`, `view_ended`; add `view_snapshot` and `playback_error` when needed | Use each view's final cumulative measurements for playing time, buffering, seeks, and rendition use. Snapshots give interim measurements if the view is long or its final record is lost. Errors are sent immediately. |
-| Reconstruct a high-level playback timeline | All seven event types (the default) | Group by `view_id` and order by `sequence`. State changes show pauses and buffering; `seek_completed` summarizes rapid seeking; `rendition_changed` shows exposed quality switches; errors show failures. |
+| Reconstruct a high-level playback timeline | All nine event types (the default) | Group by `view_id` and order by `sequence`. State changes show pauses and buffering; `seek_completed` summarizes rapid seeking; `rendition_changed` shows exposed quality switches; `subtitle_changed` and `playback_rate_changed` show subtitle and speed changes; errors show failures. |
 
 `view_ended` means the monitored attempt closed, not necessarily that the video played to completion. Use `reason: "ended"` to identify playback that reached the media end. Distinct `view_id` values count attempts, not unique people; count distinct `viewer_id` values for approximate unique viewers per browser, or `user_id` for signed-in users. Deduplicate received records by `event_id`, and never sum cumulative snapshots together. Delivery of the final record on page exit is best effort, so an endpoint should not assume every start has an end.
 
@@ -256,6 +256,20 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
       "frame_rate": null,
       "playing_time_ms": 6085
     }
+  ],
+  "subtitle_language": null,
+  "playback_rate": 1,
+  "subtitle_playing_time": [
+    {
+      "language": null,
+      "playing_time_ms": 6085
+    }
+  ],
+  "playback_rate_playing_time": [
+    {
+      "rate": 1,
+      "playing_time_ms": 6085
+    }
   ]
 }
 ```
@@ -310,9 +324,29 @@ Every event includes `visibility_state`, either `"visible"`, `"hidden"`, or `nul
 }
 ```
 
+`subtitle_changed` reports a change of the showing subtitle or caption track, read from the media element's `textTracks` when a track's mode changes or a track is added or removed. `subtitle_language` is the track's `language` (see the [field guide](#field-guide)); `null` means subtitles are off. `playback_rate_changed` reports a change of `playbackRate` from the media element's `ratechange` event. Both fire only while a view is open and only when the normalized value changes, so a mode change on another track or a rate change that rounds to the same value sends nothing. The current values at the start of a view are in `view_started`, not in a change event. For example, turning on French subtitles and then switching to 1.5x speed produces these event-specific fields:
+
+```json
+{
+  "event_name": "chunkify.video.subtitle_changed",
+  "playhead_seconds": 42,
+  "previous_subtitle_language": null,
+  "subtitle_language": "fr"
+}
+```
+
+```json
+{
+  "event_name": "chunkify.video.playback_rate_changed",
+  "playhead_seconds": 57.5,
+  "previous_playback_rate": 1,
+  "playback_rate": 1.5
+}
+```
+
 `seek_count` in snapshots and `view_ended` counts these logical interactions. The collector still uses each media seek to measure playing and seeking time, even when it sends only one seek record.
 
-These are excerpts; actual timeline records also have the shared identifiers and timestamp. Playhead fields are media positions, not elapsed viewing time or universal timestamps for live video, and can be `null` when unavailable. `occurred_at` is when a record is sent to destinations; for a grouped seek, use its seek timestamps to place the interaction in the viewing timeline. `sequence` orders records within the view. Cumulative playing time by rendition remains in snapshots and `view_ended`.
+These are excerpts; actual timeline records also have the shared identifiers and timestamp. Playhead fields are media positions, not elapsed viewing time or universal timestamps for live video, and can be `null` when unavailable. `occurred_at` is when a record is sent to destinations; for a grouped seek, use its seek timestamps to place the interaction in the viewing timeline. `sequence` orders records within the view. Cumulative playing time by rendition, subtitle language, and playback rate remains in snapshots and `view_ended`.
 
 ### Field guide
 
@@ -334,11 +368,14 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `player_width_px`, `player_height_px` | The monitored media element's displayed box in CSS pixels. Present on view and rendition-change events; `null` when it has no measurable size. A final event retains the last measured size if the media element was removed first. |
 | `selected_rendition_width`, `selected_rendition_height`, `selected_rendition_codec`, `selected_rendition_bitrate_bps`, `rendition_switch_count` | Current video rendition and switches when an engine connector exposes them. Width and height are in pixels; bitrate is in bits per second. |
 | `rendition_playing_time` | Cumulative wall-clock milliseconds by rendition. Each entry has `width`, `height`, `codec`, `bitrate_bps`, `frame_rate`, and `playing_time_ms`. It is `null` without a rendition-aware connector and `[]` before one identifies a rendition. |
+| `subtitle_language` | Language of the showing subtitle or caption track (`kind` is `subtitles` or `captions`), read from the media element's `textTracks`. The track's `language` is trimmed and truncated to 35 characters; a showing track without a language is `"und"` (BCP 47 "undetermined"), so "on without a language" stays distinct from `null` (off). If several such tracks are showing, the first in the list is used. Subtitles rendered without a showing text track, such as a player's own overlay, are not detected. |
+| `playback_rate` | The media element's `playbackRate`, rounded to 2 decimals. `null` when the rounded value is not above 0 and up to 16. |
+| `subtitle_playing_time`, `playback_rate_playing_time` | Cumulative wall-clock milliseconds by subtitle language (entries have `language` and `playing_time_ms`; `language: null` is time with subtitles off) and by playback rate (entries have `rate` and `playing_time_ms`). `playing_time_ms` is a whole number. `[]` before any playing time. Each list keeps at most 32 distinct values; once full, playing time in a new value is not added. Time at a `null` playback rate is not attributed to a rate. |
 | `delivery_request_count`, `delivery_transferred_bytes`, `delivery_throughput_bps` | Aggregate requests, response bytes, and throughput where the engine exposes them. Throughput is in bits per second. |
 
 `reason` can be `ended`, `destroyed`, `source_changed`, or `page_exit`. `startup_outcome` can be `started`, `failed_before_start`, or `ended_before_start`. Error categories are `aborted`, `network`, `decode`, `unsupported`, or `unknown`.
 
-`first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
+`first_video_frame_time_ms` uses `requestVideoFrameCallback()` and may remain `null` or precede `startup_time_ms` for a preloaded frame. It is not proof that the viewer saw the frame. `rendition_playing_time` excludes pauses, buffering, seeks, and playback before a rendition is known, so its sum can be lower than `playing_time_ms`. `subtitle_playing_time` and `playback_rate_playing_time` use the same accounting; their sums can also be lower after the 32-value limit or, for the rate, while the rate is unsupported. Snapshots repeat cumulative totals: use the final record or differences between snapshots, not the sum of whole snapshots. This package does not aggregate across viewers.
 
 Player size is sampled when these events are emitted; the collector does not record every resize. For Chunkify Player, this is the internal media box, not the outer control theme. Other supported monitors measure the media element passed to them.
 
@@ -563,7 +600,7 @@ The application controls PostHog's automatic collection and persistence settings
 
 ### OTLP/HTTP logs
 
-The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter omits browser credentials and cookies. Use `headers` in the options object for a public ingest key. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time` remains a structured array. Use `mapAttributes` in the options object to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
+The OTLP adapter sends each event as an OTLP/HTTP JSON log record. Pass the full URL of a customer-owned `/v1/logs` gateway, or a root-relative path to one. The gateway must allow browser CORS when cross-origin and handle any private provider credentials. The adapter omits browser credentials and cookies. Use `headers` in the options object for a public ingest key. By default, all event fields become typed log attributes; unavailable values are omitted, and `rendition_playing_time`, `subtitle_playing_time`, and `playback_rate_playing_time` remain structured arrays. Use `mapAttributes` in the options object to choose or rename log attributes. The OTLP event name, timestamp, and scope still come from the original event. Snapshots contain cumulative values, so aggregate the final record or differences between snapshots rather than summing all records:
 
 ```ts
 import { createEventMapper } from "@chunkify/player-analytics";

@@ -1,8 +1,8 @@
-import type { AnalyticsPlaybackStateEvent, AnalyticsRenditionEvent, AnalyticsSeekEvent, AnalyticsViewEvent,
-  ChunkifyPlayerAnalyticsEvent } from "./core.js";
+import type { AnalyticsPlaybackRateEvent, AnalyticsPlaybackStateEvent, AnalyticsRenditionEvent, AnalyticsSeekEvent,
+  AnalyticsSubtitleEvent, AnalyticsViewEvent, ChunkifyPlayerAnalyticsEvent } from "./core.js";
 
 type EventField = keyof AnalyticsViewEvent | keyof AnalyticsPlaybackStateEvent | keyof AnalyticsRenditionEvent |
-  keyof AnalyticsSeekEvent;
+  keyof AnalyticsSeekEvent | keyof AnalyticsSubtitleEvent | keyof AnalyticsPlaybackRateEvent;
 type FieldSelector = EventField | ((event: ChunkifyPlayerAnalyticsEvent) => unknown);
 type EventFieldValue<Key extends EventField> = ChunkifyPlayerAnalyticsEvent extends infer Event
   ? Event extends unknown ? Key extends keyof Event ? Event[Key] : undefined : never

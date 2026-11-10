@@ -22,6 +22,15 @@ export interface RenditionPlayingTime {
   playing_time_ms: number;
 }
 export type AnalyticsRendition = Omit<RenditionPlayingTime, "playing_time_ms">;
+export interface SubtitlePlayingTime {
+  /** Language of the showing subtitle or caption track, `"und"` when it has none, or null when off. */
+  language: string | null;
+  playing_time_ms: number;
+}
+export interface PlaybackRatePlayingTime {
+  rate: number;
+  playing_time_ms: number;
+}
 export interface PlayedRange {
   start_seconds: number;
   end_seconds: number;
@@ -53,6 +62,14 @@ export interface ViewMetrics {
   selected_rendition_bitrate_bps: number | null;
   rendition_switch_count: number | null;
   rendition_playing_time: RenditionPlayingTime[] | null;
+  /** Language of the showing subtitle or caption track, `"und"` when it has none, or null when off. */
+  subtitle_language: string | null;
+  /** `playbackRate` rounded to 2 decimals; null outside the supported range above 0 and up to 16. */
+  playback_rate: number | null;
+  /** Cumulative playing time by subtitle language, including null for subtitles off. At most 32 entries. */
+  subtitle_playing_time: SubtitlePlayingTime[];
+  /** Cumulative playing time by playback rate. Time at an unsupported rate is excluded. At most 32 entries. */
+  playback_rate_playing_time: PlaybackRatePlayingTime[];
   delivery_request_count: number | null;
   delivery_transferred_bytes: number | null;
   delivery_throughput_bps: number | null;
@@ -128,8 +145,20 @@ export interface AnalyticsSeekEvent extends AnalyticsEventEnvelope, Partial<View
   seek_resume_wait_ms: number | null;
   seek_outcome: "resumed" | "paused" | "interrupted";
 }
+export interface AnalyticsSubtitleEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.subtitle_changed";
+  playhead_seconds: number | null;
+  previous_subtitle_language: string | null;
+  subtitle_language: string | null;
+}
+export interface AnalyticsPlaybackRateEvent extends AnalyticsEventEnvelope, Partial<ViewMetrics> {
+  event_name: "chunkify.video.playback_rate_changed";
+  playhead_seconds: number | null;
+  previous_playback_rate: number | null;
+  playback_rate: number | null;
+}
 export type ChunkifyPlayerAnalyticsEvent = AnalyticsViewEvent | AnalyticsPlaybackStateEvent |
-  AnalyticsRenditionEvent | AnalyticsSeekEvent;
+  AnalyticsRenditionEvent | AnalyticsSeekEvent | AnalyticsSubtitleEvent | AnalyticsPlaybackRateEvent;
 export interface AnalyticsDestination {
   send(event: ChunkifyPlayerAnalyticsEvent): void | Promise<void>;
 }
@@ -146,7 +175,7 @@ export interface AnalyticsConfig {
   persistViewerId?: boolean | undefined;
   /** Active playing time between cumulative snapshots. Defaults to 30,000 ms. */
   snapshotIntervalMs?: number | undefined;
-  /** Event types passed to destinations. Defaults to all seven types. */
+  /** Event types passed to destinations. Defaults to all nine types. */
   includeEvents?: readonly AnalyticsEventType[] | undefined;
 }
 export interface AnalyticsOptions extends AnalyticsConfig {
@@ -228,8 +257,15 @@ interface View {
   renditionTimes: Map<string, RenditionPlayingTime>;
   activeRendition: AnalyticsRendition | null;
   activeRenditionSince: number | null;
+  subtitleTime: PlayingTimeTracker<string | null>;
+  playbackRateTime: PlayingTimeTracker<number>;
   playbackState: AnalyticsPlaybackState;
   playbackStateSince: number;
+}
+
+interface PlayingTimeTracker<Value> {
+  totals: Map<Value, number>;
+  active: { value: Value; since: number } | null;
 }
 
 interface SeekInteraction {
@@ -319,6 +355,68 @@ function renditionPlayingTime(current: View, now: number): RenditionPlayingTime[
     times.set(key, entry);
   }
   return [...times.values()];
+}
+
+/** The collector accepts BCP 47 language tags of 1 to 35 characters. */
+const maxSubtitleLanguageLength = 35;
+/** The collector accepts finite playback rates above 0 and up to 16. */
+const maxPlaybackRate = 16;
+/**
+ * Each playing-time breakdown keeps at most this many distinct values so event payloads stay bounded.
+ * Once it holds 32 values, playing time in a further new value is not added (existing values keep
+ * accumulating), so the entries can sum to less than `playing_time_ms`.
+ */
+const maxPlayingTimeEntries = 32;
+
+/** The first showing subtitle or caption track's language; `"und"` when it has none, null when none shows. */
+function subtitleLanguage(media: HTMLMediaElement): string | null {
+  try {
+    const tracks = media.textTracks;
+    for (let index = 0; index < (tracks?.length ?? 0); index++) {
+      const track = tracks[index];
+      if (!track || track.mode !== "showing" || (track.kind !== "subtitles" && track.kind !== "captions")) continue;
+      const language = typeof track.language === "string" ? track.language.trim() : "";
+      // Truncation must not leave a trailing subtag separator or space.
+      const tag = truncateCodePoints(language, maxSubtitleLanguageLength).replace(/[-\s]+$/, "");
+      // "und" (BCP 47 "undetermined") keeps "on without a language" distinct from "off".
+      return tag || "und";
+    }
+  } catch {
+    // Text tracks are optional; an inaccessible list is reported as no showing subtitles.
+  }
+  return null;
+}
+
+function playbackRate(media: HTMLMediaElement): number | null {
+  let rate: unknown;
+  try { rate = media.playbackRate; } catch { return null; }
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return null;
+  const rounded = Math.round(rate * 100) / 100;
+  return rounded > 0 && rounded <= maxPlaybackRate ? rounded : null;
+}
+
+function addPlayingTime<Value>(totals: Map<Value, number>, value: Value, elapsed: number) {
+  const total = totals.get(value);
+  // A value left at the instant it was selected gets no entry, so it doesn't use up the limit.
+  if (total === undefined && (elapsed <= 0 || totals.size >= maxPlayingTimeEntries)) return;
+  totals.set(value, (total ?? 0) + Math.max(0, elapsed));
+}
+
+function startPlayingTime<Value>(tracker: PlayingTimeTracker<Value>, value: Value, now: number) {
+  tracker.active ??= { value, since: now };
+}
+
+function stopPlayingTime<Value>(tracker: PlayingTimeTracker<Value>, now: number) {
+  if (!tracker.active) return;
+  addPlayingTime(tracker.totals, tracker.active.value, now - tracker.active.since);
+  tracker.active = null;
+}
+
+function playingTimeTotals<Value>(tracker: PlayingTimeTracker<Value>, now: number): [Value, number][] {
+  const totals = new Map(tracker.totals);
+  if (tracker.active) addPlayingTime(totals, tracker.active.value, now - tracker.active.since);
+  // Round down so the whole-millisecond entries never sum to more than `playing_time_ms`.
+  return [...totals].map(([value, total]) => [value, Math.floor(total)]);
 }
 
 const emptyConnectorMetrics = {
@@ -430,6 +528,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
   let unsubscribeConnector: (() => void) | null = null;
   let unsubscribeRenditions: (() => void) | null = null;
   let selectedRendition: AnalyticsRendition | null = null;
+  let selectedSubtitle = subtitleLanguage(media);
+  let selectedPlaybackRate = playbackRate(media);
 
   function refreshIntrinsicVideoSize(current: View) {
     const intrinsic = intrinsicVideoSize(media);
@@ -496,6 +596,61 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.activeRenditionSince = now;
     }
     if (view && next) emitRenditionChange(view, previous, next);
+  }
+
+  // Mode changes fire `change`; removing a showing track fires only `removetrack`.
+  const textTrackEvents = ["change", "addtrack", "removetrack"];
+  let textTracks: TextTrackList | null = null;
+  /** Retried at each attempt: a custom media element may expose its text tracks only after it upgrades. */
+  function bindTextTracks() {
+    if (textTracks || destroyed) return;
+    try {
+      const tracks = media.textTracks;
+      if (tracks && typeof tracks.addEventListener === "function") textTracks = tracks;
+    } catch {
+      // Subtitle tracking is optional; media without a text track list reports subtitles as off.
+    }
+    for (const name of textTrackEvents) textTracks?.addEventListener(name, onSubtitleChanged);
+  }
+
+  function startSelectionPlayingTime(current: View, now: number) {
+    startPlayingTime(current.subtitleTime, selectedSubtitle, now);
+    if (selectedPlaybackRate !== null) startPlayingTime(current.playbackRateTime, selectedPlaybackRate, now);
+  }
+
+  function onSubtitleChanged() {
+    const next = subtitleLanguage(media);
+    const previous = selectedSubtitle;
+    if (next === previous) return;
+    selectedSubtitle = next;
+    if (!view) return;
+    if (view.playingSince !== null) {
+      const now = performance.now();
+      stopPlayingTime(view.subtitleTime, now);
+      startPlayingTime(view.subtitleTime, next, now);
+    }
+    if (!includedEvents.has("chunkify.video.subtitle_changed")) return;
+    deliver({ ...envelope(view, "chunkify.video.subtitle_changed"),
+      event_name: "chunkify.video.subtitle_changed", playhead_seconds: playheadSeconds(),
+      previous_subtitle_language: previous, subtitle_language: next });
+  }
+
+  function onPlaybackRateChanged() {
+    const next = playbackRate(media);
+    const previous = selectedPlaybackRate;
+    if (next === previous) return;
+    selectedPlaybackRate = next;
+    if (!view) return;
+    if (view.playingSince !== null) {
+      const now = performance.now();
+      stopPlayingTime(view.playbackRateTime, now);
+      // Time at an unsupported rate is not attributed, like time before a rendition is known.
+      if (next !== null) startPlayingTime(view.playbackRateTime, next, now);
+    }
+    if (!includedEvents.has("chunkify.video.playback_rate_changed")) return;
+    deliver({ ...envelope(view, "chunkify.video.playback_rate_changed"),
+      event_name: "chunkify.video.playback_rate_changed", playhead_seconds: playheadSeconds(),
+      previous_playback_rate: previous, playback_rate: next });
   }
 
   function playheadSeconds(): number | null {
@@ -665,6 +820,12 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       total_video_frames: viewFrames?.total ?? null,
       ...engineMetrics,
       rendition_playing_time: renditionPlayingTime(current, now),
+      subtitle_language: selectedSubtitle,
+      playback_rate: selectedPlaybackRate,
+      subtitle_playing_time: playingTimeTotals(current.subtitleTime, now)
+        .map(([language, playing_time_ms]) => ({ language, playing_time_ms })),
+      playback_rate_playing_time: playingTimeTotals(current.playbackRateTime, now)
+        .map(([rate, playing_time_ms]) => ({ rate, playing_time_ms })),
     };
     deliver(event);
   }
@@ -679,6 +840,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     const initialVideoSize = intrinsicVideoSize(media);
     const initialPlayerSize = playerSize(media);
     const startedAt = performance.now();
+    // Change listeners keep these current; re-read in case the media changed without an event.
+    bindTextTracks();
+    selectedSubtitle = subtitleLanguage(media);
+    selectedPlaybackRate = playbackRate(media);
     const current: View = { id: crypto.randomUUID(), sequence: 0, startedAt,
       startup: null, firstVideoFrame: null, frameCallbackId: null,
       playing: 0, playingSince: null,
@@ -700,6 +865,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       connectorBaseline: connector ? safeConnectorSnapshot(connector) : null,
       renditionTrackingAvailable: Boolean(connector?.subscribeToRenditions),
       renditionTimes: new Map(), activeRendition: null, activeRenditionSince: null,
+      subtitleTime: { totals: new Map(), active: null }, playbackRateTime: { totals: new Map(), active: null },
       playbackState: "startup", playbackStateSince: startedAt };
     view = current;
     if (includedEvents.size > 0) observeFirstVideoFrame(current);
@@ -735,6 +901,8 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     view.rangeStart = null;
     const now = performance.now();
     closeActiveRendition(now);
+    stopPlayingTime(view.subtitleTime, now);
+    stopPlayingTime(view.playbackRateTime, now);
     view.playing += now - view.playingSince;
     view.playingSince = null;
   }
@@ -858,6 +1026,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       view.activeRendition = selectedRendition;
       view.activeRenditionSince = now;
     }
+    startSelectionPlayingTime(view, now);
     changePlaybackState("playing");
     if (seekInteraction?.view === view) {
       if (seekInteraction.resumedAt === null) {
@@ -965,8 +1134,10 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
     },
     timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,
+    ratechange: onPlaybackRateChanged,
   };
   for (const [name, listener] of Object.entries(listeners)) media.addEventListener(name, listener);
+  bindTextTracks();
   const page = media.ownerDocument.defaultView;
   const visibilitychange = () => {
     if (!view) return;
@@ -985,6 +1156,7 @@ function createAnalyticsSession(media: HTMLMediaElement, options: AnalyticsOptio
       if (destroyed) return;
       destroyed = true;
       for (const [name, listener] of Object.entries(listeners)) media.removeEventListener(name, listener);
+      for (const name of textTrackEvents) textTracks?.removeEventListener(name, onSubtitleChanged);
       media.ownerDocument.removeEventListener?.("visibilitychange", visibilitychange);
       page?.removeEventListener("pagehide", pagehide);
       finish("destroyed");
