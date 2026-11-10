@@ -70,3 +70,73 @@ test("Shaka connector leaves transfer metrics unavailable if a download omits si
   }, { requests: 1, bytes: null, duration: null });
   connector.destroy();
 });
+
+test("Shaka's buffering rate of 0 is not reported as a speed change", async (t) => {
+  const { monitorShaka } = await import("@chunkify/player-analytics/shaka");
+  let clock = 0;
+  t.mock.method(performance, "now", () => clock);
+  class FakeMedia extends EventTarget {}
+  const media = Object.assign(new FakeMedia(), { duration: 100, currentTime: 0, playbackRate: 1, src: "",
+    currentSrc: "" });
+  media.ownerDocument = Object.assign(new EventTarget(), { defaultView: Object.assign(new EventTarget(),
+    { HTMLMediaElement: FakeMedia }) });
+  let shakaRate = 1;
+  const shaka = Object.assign(player(), {
+    getMediaElement: () => media,
+    getConfiguration: () => ({ streaming: { observeQualityChanges: true } }),
+    configure: () => true,
+    getPlaybackRate: () => shakaRate,
+  });
+  const events = [];
+  const session = monitorShaka(shaka, { videoId: "shaka-rate", snapshotIntervalMs: 2_147_483_647,
+    destinations: [{ send(event) { events.push(event); } }] });
+  // Shaka holds the element at 0 while it buffers, including at startup.
+  media.playbackRate = 0;
+  media.dispatchEvent(new Event("ratechange"));
+  shaka.emit("loading", {});
+  media.dispatchEvent(new Event("play"));
+  media.playbackRate = 1;
+  media.dispatchEvent(new Event("ratechange"));
+  media.dispatchEvent(new Event("playing"));
+  clock += 1000;
+  media.playbackRate = 0;
+  media.dispatchEvent(new Event("ratechange"));
+  media.dispatchEvent(new Event("waiting"));
+  clock += 500;
+  media.playbackRate = 1;
+  media.dispatchEvent(new Event("ratechange"));
+  media.dispatchEvent(new Event("playing"));
+  // A viewer's change: the element changes first, then Shaka accepts it and fires its own ratechange.
+  media.playbackRate = 1.5;
+  media.dispatchEvent(new Event("ratechange"));
+  shakaRate = 1.5;
+  shaka.emit("ratechange", {});
+  clock += 1000;
+  media.dispatchEvent(new Event("ended"));
+  session.destroy();
+  assert.equal(events[0].playback_rate, 1);
+  assert.deepEqual(events.filter((event) => event.event_name === "chunkify.video.playback_rate_changed")
+    .map((event) => [event.previous_playback_rate, event.playback_rate]), [[1, 1.5]]);
+  assert.deepEqual(events.find((event) => event.event_name === "chunkify.video.view_ended").playback_rate_playing_time,
+    [{ rate: 1, playing_time_ms: 1000 }, { rate: 1.5, playing_time_ms: 1000 }]);
+  assert.equal(shaka.listenerCount(), 0);
+});
+
+test("Shaka connector re-reads its rate after load and falls back without media", () => {
+  const shaka = player();
+  let rate = 1;
+  shaka.getPlaybackRate = () => rate;
+  const connector = createShakaConnector(shaka);
+  let notified = 0;
+  const unsubscribe = connector.subscribeToPlaybackRate(() => { notified++; });
+  // Shaka's controller adopts the element's rate during load without its own ratechange.
+  rate = 2;
+  shaka.emit("loaded", {});
+  assert.equal(notified, 1);
+  assert.equal(connector.playbackRate(), 2);
+  rate = 0; // Shaka's value with no media element.
+  assert.equal(connector.playbackRate(), null);
+  unsubscribe();
+  connector.destroy();
+  assert.equal(shaka.listenerCount(), 0);
+});

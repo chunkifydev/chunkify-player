@@ -12,6 +12,20 @@ function codePointLength(value: string): number {
   return length;
 }
 
+// In a `u` regex, a paired surrogate is one code point, so this matches only unpaired (lone) surrogates.
+const loneSurrogate = /\p{Surrogate}/u;
+const loneSurrogates = /\p{Surrogate}/gu;
+
+/** True when the string has a lone surrogate, which JSON parsers such as the collector's reject. */
+export function hasLoneSurrogate(value: string): boolean {
+  return loneSurrogate.test(value);
+}
+
+/** Replace lone surrogates with U+FFFD, like `String.prototype.toWellFormed()`. */
+export function toWellFormed(value: string): string {
+  return value.replace(loneSurrogates, "\uFFFD");
+}
+
 /** Keep at most `max` code points without splitting a surrogate pair. */
 export function truncateCodePoints(value: string, max: number): string {
   if (value.length <= max) return value;
@@ -37,7 +51,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isCustomValue(value: unknown): value is string | number | boolean {
-  if (typeof value === "string") return value.length > 0 && codePointLength(value) <= maxIdentityLength;
+  if (typeof value === "string") {
+    return value.length > 0 && codePointLength(value) <= maxIdentityLength && !hasLoneSurrogate(value);
+  }
   return typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value));
 }
 
@@ -59,16 +75,21 @@ export function customDimensions(custom: unknown): AnalyticsCustomDimensions | n
     }
     const descriptor = Object.getOwnPropertyDescriptor(custom, key);
     if (!descriptor || !descriptor.enumerable || !("value" in descriptor) || !isCustomValue(descriptor.value)) {
-      throw new TypeError(`Analytics custom.${key} must be a string of 1 to ${maxIdentityLength} characters, ` +
-        "a finite number, or a boolean.");
+      throw new TypeError(`Analytics custom.${key} must be a string of 1 to ${maxIdentityLength} characters ` +
+        "(without lone surrogates), a finite number, or a boolean.");
     }
-    copy[key] = descriptor.value;
+    // defineProperty keeps a "__proto__" key, which an assignment would treat as the prototype.
+    Object.defineProperty(copy, key, { value: descriptor.value, enumerable: true });
   }
   return keys.length === 0 ? null : Object.freeze(copy);
 }
 
+/** Options as monitors receive them: `custom` is checked at runtime, so any value is accepted here. */
+export type AnalyticsOptionsInput = Omit<AnalyticsOptions, "custom"> & { custom?: unknown };
+
 /** Options after validation: a frozen copy with `custom` validated, copied, and null when unset or empty. */
-export type FixedAnalyticsOptions = Readonly<AnalyticsOptions> & { readonly custom: AnalyticsCustomDimensions | null };
+export type FixedAnalyticsOptions = Readonly<Omit<AnalyticsOptions, "custom">> &
+  { readonly custom: AnalyticsCustomDimensions | null };
 
 const fixedOptions = new WeakSet<object>();
 
@@ -77,12 +98,14 @@ const fixedOptions = new WeakSet<object>();
  * is read once. Monitors that start a new session on a media change reuse the copy, so every session uses
  * the values given at startup even if the caller later changes its objects. A copy is returned as is.
  */
-export function fixedAnalyticsOptions(options: AnalyticsOptions): FixedAnalyticsOptions {
+export function fixedAnalyticsOptions(options: AnalyticsOptionsInput): FixedAnalyticsOptions {
   if (fixedOptions.has(options)) return options as FixedAnalyticsOptions;
-  const { videoId, videoTitle, destinations, environment, userId, persistViewerId, custom, snapshotIntervalMs,
-    includeEvents } = options;
-  const copy = { videoId, videoTitle, destinations, environment, userId, persistViewerId, snapshotIntervalMs,
-    includeEvents };
+  // Listing every option key is required here, so adding an option without copying it fails to compile.
+  const { custom, ...copy }: { [Key in keyof Required<AnalyticsOptionsInput>]: AnalyticsOptionsInput[Key] } = {
+    videoId: options.videoId, videoTitle: options.videoTitle, destinations: options.destinations,
+    environment: options.environment, userId: options.userId, persistViewerId: options.persistViewerId,
+    custom: options.custom, snapshotIntervalMs: options.snapshotIntervalMs, includeEvents: options.includeEvents,
+  };
   assertAnalyticsOptions(copy);
   const fixed: FixedAnalyticsOptions = Object.freeze({
     ...copy,
@@ -97,6 +120,13 @@ export function fixedAnalyticsOptions(options: AnalyticsOptions): FixedAnalytics
 function assertAnalyticsOptions(options: Omit<AnalyticsOptions, "custom">): void {
   if (typeof options.videoId !== "string" || !options.videoId.trim()) {
     throw new TypeError("Analytics requires a non-empty videoId.");
+  }
+  // The collector's JSON parser rejects a whole event that contains a lone surrogate.
+  for (const [name, value] of [["videoId", options.videoId], ["environment", options.environment],
+    ["userId", options.userId]] as const) {
+    if (typeof value === "string" && hasLoneSurrogate(value)) {
+      throw new TypeError(`Analytics ${name} must not contain lone surrogates.`);
+    }
   }
   if (!Array.isArray(options.destinations) || options.destinations.length === 0 ||
       !Array.from(options.destinations).every((destination) => destination && typeof destination.send === "function")) {

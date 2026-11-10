@@ -7,31 +7,49 @@ type OtlpValue =
   | { intValue: string }
   | { doubleValue: number }
   | { arrayValue: { values: OtlpValue[] } }
-  | { kvlistValue: { values: OtlpAttribute[] } };
+  | { kvlistValue: { values: OtlpAttribute[] } }
+  // An empty AnyValue: OTLP's null, used inside arrays and key-value lists.
+  | Record<string, never>;
 
 interface OtlpAttribute {
   key: string;
   value: OtlpValue;
 }
 
-function toOtlpValue(value: unknown): OtlpValue | null {
-  if (value == null) return null;
+/**
+ * Event fields measured in fractions (rates, ratios, seconds) are always doubles: encoding 1 as an integer
+ * and 1.5 as a double would split one field across two attribute types. Counts, bytes, pixels and
+ * milliseconds stay integers when whole. Values inside `custom` keep their natural type.
+ */
+const fractionalField = /(?:^|_)(?:rate|ratio|seconds)$/;
+
+function isFractionalField(path: readonly string[]): boolean {
+  return path[0] !== "custom" && fractionalField.test(path.at(-1) ?? "");
+}
+
+function toOtlpValue(value: unknown, path: readonly string[], nested: boolean): OtlpValue | null {
+  // Top-level unavailable values are omitted; nested ones stay as empty values so their key is kept,
+  // for example `language` on a subtitles-off entry.
+  if (value == null) return nested ? {} : null;
   if (typeof value === "string") return { stringValue: value };
   if (typeof value === "boolean") return { boolValue: value };
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) return null;
+    if (!Number.isFinite(value)) return nested ? {} : null;
+    if (isFractionalField(path)) return { doubleValue: value };
     return Number.isSafeInteger(value) ? { intValue: String(value) } : { doubleValue: value };
   }
   if (Array.isArray(value)) {
-    return { arrayValue: { values: value.map(toOtlpValue).filter((item): item is OtlpValue => item !== null) } };
+    // Array items keep their field's path: `start_seconds` inside `played_ranges` is still a field name.
+    return { arrayValue: { values: value.map((item) => toOtlpValue(item, path, true))
+      .filter((item): item is OtlpValue => item !== null) } };
   }
-  if (typeof value === "object") return { kvlistValue: { values: toOtlpAttributes(value) } };
+  if (typeof value === "object") return { kvlistValue: { values: toOtlpAttributes(value, path) } };
   return null;
 }
 
-function toOtlpAttributes(record: object): OtlpAttribute[] {
+function toOtlpAttributes(record: object, parent: readonly string[] = []): OtlpAttribute[] {
   return Object.entries(record).flatMap(([key, value]) => {
-    const encoded = toOtlpValue(value);
+    const encoded = toOtlpValue(value, [...parent, key], parent.length > 0);
     return encoded === null ? [] : [{ key, value: encoded }];
   });
 }

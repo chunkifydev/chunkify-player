@@ -114,3 +114,37 @@ test("emoji values count Unicode characters, not UTF-16 units", async () => {
   const value = "\u{1F600}".repeat(256); // 512 UTF-16 units.
   assert.equal((await record({ v: value }))[0].custom.v, value);
 });
+
+test("an own __proto__ key is kept, not treated as the prototype", async () => {
+  const custom = JSON.parse('{"__proto__": "x", "plan": "premium"}');
+  const event = (await record(custom))[0];
+  assert.equal(Object.hasOwn(event.custom, "__proto__"), true);
+  assert.equal(JSON.stringify(event.custom), '{"__proto__":"x","plan":"premium"}');
+  const only = (await record(JSON.parse('{"__proto__": 1}')))[0];
+  assert.equal(JSON.stringify(only.custom), '{"__proto__":1}');
+});
+
+test("strings with lone surrogates are rejected or repaired so every event is well-formed JSON", async () => {
+  const { attachAnalytics } = await import("@chunkify/player-analytics");
+  for (const [options, message] of [
+    [{ custom: { plan: "a\uD800" } }, /custom\.plan must be/], [{ custom: { plan: "\uDC00b" } }, /custom\.plan must be/],
+    [{ userId: "user\uD800" }, /userId must not contain lone surrogates/],
+    [{ videoId: "video\uDFFF" }, /videoId must not contain lone surrogates/],
+    [{ environment: "\uD800" }, /environment must not contain lone surrogates/],
+  ]) {
+    const { media, listeners } = fakeMedia();
+    assert.throws(() => attachAnalytics(media, { videoId: "custom", destinations: [{ send() {} }], ...options }),
+      message, JSON.stringify(options));
+    assert.deepEqual(listeners, []);
+  }
+  const { media } = fakeMedia();
+  const events = [];
+  // Paired surrogates are fine; a title from content is repaired instead of rejected.
+  const session = attachAnalytics(media, { videoId: "custom", userId: "\u{1F600}", videoTitle: "Title \uD800 end",
+    custom: { emoji: "\u{1F600}" }, destinations: [{ send(event) { events.push(event); } }] });
+  session.startAttempt();
+  session.destroy();
+  assert.equal(events[0].video_title, "Title � end");
+  assert.equal(events[0].user_id, "\u{1F600}");
+  assert.equal(events[0].custom.emoji, "\u{1F600}");
+});

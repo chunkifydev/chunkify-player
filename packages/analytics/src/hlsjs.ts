@@ -4,7 +4,7 @@ import type {
   LevelSwitchedData, LoaderStats, ManifestLoadedData, SubtitleTrackLoadedData,
 } from "hls.js";
 import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
-  type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
+  type AnalyticsConnectorSnapshot, type AnalyticsCustomDimensions, type AnalyticsCustomValues, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
 import { fixedAnalyticsOptions } from "./options.js";
 
@@ -115,7 +115,8 @@ export function createHlsJsConnector(hls: Hls): HlsJsAnalyticsConnector {
 }
 
 /** Follow an hls.js instance as it attaches to or detaches from media. */
-export function monitorHlsJs(hls: Hls, initialOptions: AnalyticsOptions):
+export function monitorHlsJs<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>(
+  hls: Hls, initialOptions: AnalyticsOptions<Custom>):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   // Sessions for later media elements reuse the options as they were at startup.
   const options = fixedAnalyticsOptions(initialOptions);

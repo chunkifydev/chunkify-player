@@ -1,5 +1,5 @@
 import { attachAnalyticsWithManagedSource, type AnalyticsConnector, type AnalyticsConnectorError,
-  type AnalyticsConnectorSnapshot, type AnalyticsOptions, type AnalyticsRendition,
+  type AnalyticsConnectorSnapshot, type AnalyticsCustomDimensions, type AnalyticsCustomValues, type AnalyticsOptions, type AnalyticsRendition,
   type AnalyticsSession } from "./core.js";
 import { fixedAnalyticsOptions } from "./options.js";
 
@@ -25,6 +25,8 @@ export interface ShakaPlayer {
   configure(config: { streaming: { observeQualityChanges: boolean } }): boolean;
   addEventListener(type: string, listener: (event: Event) => void): void;
   removeEventListener(type: string, listener: (event: Event) => void): void;
+  /** The rate Shaka plays at when not buffering; the media element's rate is 0 while it buffers. 0 without media. */
+  getPlaybackRate?(): number;
 }
 
 export interface ShakaAnalyticsConnector extends AnalyticsConnector {
@@ -40,6 +42,7 @@ function positive(value: unknown): number | null {
 export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnector {
   const errorListeners = new Set<(error: AnalyticsConnectorError) => void>();
   const renditionListeners = new Set<(rendition: AnalyticsRendition | null) => void>();
+  const rateListeners = new Set<() => void>();
   let rendition: AnalyticsRendition | null = null;
   let switches = 0;
   let requests = 0;
@@ -88,6 +91,15 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
   player.addEventListener("mediaqualitychanged", onQuality);
   player.addEventListener("error", onError);
   player.addEventListener("downloadcompleted", onDownload);
+  // Shaka fires its own ratechange after it accepts a new rate, but not for the 0 it sets while buffering.
+  // Its rate controller is created during load from the element's rate without a ratechange, so `loaded`
+  // is a change too.
+  const onRate = () => { for (const listener of rateListeners) listener(); };
+  const readsRate = typeof player.getPlaybackRate === "function";
+  if (readsRate) {
+    player.addEventListener("ratechange", onRate);
+    player.addEventListener("loaded", onRate);
+  }
 
   return {
     name: "shaka-player", version: playerVersion,
@@ -113,6 +125,14 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
       listener(rendition);
       return () => { renditionListeners.delete(listener); };
     },
+    ...(readsRate ? {
+      // Shaka returns 0 when it has no media element; the element's own rate applies then.
+      playbackRate: () => player.getPlaybackRate!() || null,
+      subscribeToPlaybackRate(listener: () => void) {
+        rateListeners.add(listener);
+        return () => { rateListeners.delete(listener); };
+      },
+    } : {}),
     reset() {
       rendition = null;
       switches = 0;
@@ -129,14 +149,20 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
       player.removeEventListener("mediaqualitychanged", onQuality);
       player.removeEventListener("error", onError);
       player.removeEventListener("downloadcompleted", onDownload);
+      if (readsRate) {
+        player.removeEventListener("ratechange", onRate);
+        player.removeEventListener("loaded", onRate);
+      }
       errorListeners.clear();
+      rateListeners.clear();
       renditionListeners.clear();
     },
   };
 }
 
 /** Monitor an attached Shaka Player before loading and playing content. */
-export function monitorShaka(player: ShakaPlayer, initialOptions: AnalyticsOptions):
+export function monitorShaka<Custom extends AnalyticsCustomValues<Custom> = AnalyticsCustomDimensions>(
+  player: ShakaPlayer, initialOptions: AnalyticsOptions<Custom>):
   Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   const options = fixedAnalyticsOptions(initialOptions);
   const media = player.getMediaElement();

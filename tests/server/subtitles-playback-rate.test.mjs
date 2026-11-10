@@ -84,7 +84,7 @@ test("media without text tracks or a playback rate reports subtitles off and an 
   assert.deepEqual(events.filter((event) => event.event_name !== "chunkify.video.playback_state_changed")
     .map(({ subtitle_language, playback_rate, subtitle_playing_time, playback_rate_playing_time }) =>
       ({ subtitle_language, playback_rate, subtitle_playing_time, playback_rate_playing_time })), [
-    { subtitle_language: null, playback_rate: null, subtitle_playing_time: [], playback_rate_playing_time: [] },
+    { subtitle_language: null, playback_rate: null, subtitle_playing_time: undefined, playback_rate_playing_time: undefined },
     { subtitle_language: null, playback_rate: null, subtitle_playing_time: [], playback_rate_playing_time: [] },
   ]);
 });
@@ -157,7 +157,7 @@ test("playing time by subtitle language and rate counts only actual playing time
   session.destroy();
 });
 
-test("view_started reports the current selection with empty playing-time totals", async (t) => {
+test("view_started reports the current selection without playing-time totals", async (t) => {
   const english = track("captions", "en");
   const fixture = setup(t, { tracks: [english], playbackRate: 2 });
   const session = await fixture.attach();
@@ -168,9 +168,11 @@ test("view_started reports the current selection with empty playing-time totals"
   assert.deepEqual(fixture.events.map((event) => event.event_name), ["chunkify.video.view_started"]);
   assert.equal(fixture.events[0].subtitle_language, "en");
   assert.equal(fixture.events[0].playback_rate, 1.25);
-  assert.deepEqual(fixture.events[0].subtitle_playing_time, []);
-  assert.deepEqual(fixture.events[0].playback_rate_playing_time, []);
+  // The breakdowns are only on snapshots and the final record, per the event contract.
+  assert.equal(Object.hasOwn(fixture.events[0], "subtitle_playing_time"), false);
+  assert.equal(Object.hasOwn(fixture.events[0], "playback_rate_playing_time"), false);
   session.destroy();
+  assert.deepEqual(fixture.events.at(-1).subtitle_playing_time, []);
 });
 
 test("playing-time totals keep at most 32 distinct values", async (t) => {
@@ -350,4 +352,55 @@ test("a final record with full breakdowns and played ranges stays within the del
   });
   await createOtlpAdapter("https://collector.example/v1/logs").send(end);
   session.destroy();
+});
+
+test("language tags are trimmed like the collector and repaired when ill-formed", async (t) => {
+  const cases = [
+    [[track("subtitles", "\u0085", "showing")], "und"], // White_Space that JavaScript's trim() keeps.
+    [[track("subtitles", "\u0085fr　", "showing")], "fr"],
+    [[track("subtitles", "fr\uD800", "showing")], "fr�"],
+  ];
+  for (const [tracks, expected] of cases) {
+    const fixture = setup(t, { tracks });
+    const session = await fixture.attach();
+    session.startAttempt();
+    assert.equal(fixture.events[0].subtitle_language, expected, JSON.stringify(tracks));
+    session.destroy();
+  }
+});
+
+test("playing time under 1 ms is not reported and does not hold a slot", async (t) => {
+  const fixture = setup(t);
+  const session = await fixture.attach();
+  fixture.dispatch("play");
+  fixture.dispatch("playing");
+  fixture.advance(0.4);
+  // 32 distinct rates: the first one has only 0.4 ms.
+  for (let i = 1; i < 32; i++) {
+    fixture.setRate(1 + i / 100);
+    fixture.advance(10);
+  }
+  fixture.setRate(3); // A 33rd value replaces the negligible one instead of being dropped.
+  fixture.advance(10);
+  fixture.dispatch("ended");
+  const totals = fixture.events.at(-1).playback_rate_playing_time;
+  assert.equal(totals.length, 32);
+  assert.equal(totals.some((entry) => entry.rate === 1), false);
+  assert.deepEqual(totals.at(-1), { rate: 3, playing_time_ms: 10 });
+  assert.ok(totals.every((entry) => entry.playing_time_ms > 0));
+  session.destroy();
+});
+
+test("a source load re-reads the playback rate it resets without a ratechange event", async (t) => {
+  const fixture = setup(t, { playbackRate: 1.5 });
+  const { attachAnalyticsWithManagedSource } = await import("../../packages/analytics/dist/core.js");
+  const session = attachAnalyticsWithManagedSource(fixture.media, { videoId: "reload",
+    destinations: [{ send(event) { fixture.events.push(event); } }] });
+  session.startAttempt();
+  fixture.media.playbackRate = 1; // load() resets to defaultPlaybackRate silently.
+  fixture.dispatch("loadstart");
+  assert.deepEqual(fixture.named("playback_rate_changed").map((event) =>
+    [event.previous_playback_rate, event.playback_rate]), [[1.5, 1]]);
+  session.destroy();
+  assert.equal(fixture.events.at(-1).playback_rate, 1);
 });
