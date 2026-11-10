@@ -5,7 +5,7 @@ import { resolveViewerId } from "./viewer-id.js";
 
 export type { AnalyticsEventType } from "./event-types.js";
 
-const sdkVersion = "0.10.0"; // x-release-please-version
+const sdkVersion = "0.11.0"; // x-release-please-version
 const seekSettleMs = 400;
 
 export type AnalyticsEndReason = "ended" | "destroyed" | "source_changed" | "page_exit";

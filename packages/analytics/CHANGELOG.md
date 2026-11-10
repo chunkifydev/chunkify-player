@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.10.0...analytics-v0.11.0) (2026-11-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **analytics:** track subtitles, playback speed and custom dimensions ([#37](https://github.com/chunkifydev/chunkify-player/issues/37))
+
+### Features
+
+* **analytics:** track subtitles, playback speed and custom dimensions ([#37](https://github.com/chunkifydev/chunkify-player/issues/37)) ([2ed01f7](https://github.com/chunkifydev/chunkify-player/commit/2ed01f782a3344504a711478de7fbc86664782b6))
+
 ## [0.10.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.9.0...analytics-v0.10.0) (2026-11-09)
 
 
