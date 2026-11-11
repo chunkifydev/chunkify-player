@@ -81,17 +81,47 @@ export const defaultThemeMarkup = String.raw`
 
   media-controller > media-captions-menu,
   chunkify-settings-menu {
-    position: absolute;
-    bottom: 76px;
     --media-menu-background: rgb(20 20 30 / 0.95);
     --media-menu-border-radius: 12px;
   }
 
   media-controller > media-captions-menu {
+    position: absolute;
+    bottom: 76px;
     right: 80px;
   }
 
+  /*
+   * Stacks the settings menu on a spacer that ends 4px above the gear. When the
+   * player is too short, the spacer shrinks first so the menu slides down over
+   * the controls instead of leaving the player or shrinking.
+   */
+  .settings-menu-layer {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    pointer-events: none;
+    /* 30px bar margin + 10px bar padding + 32px gear + 4px gap, minus the 12px layer inset. */
+    --settings-menu-gear-offset: 64px;
+  }
+
+  .settings-menu-layer::after {
+    content: "";
+    flex: 0 1 var(--settings-menu-gear-offset);
+  }
+
   chunkify-settings-menu {
+    /* Laid out by the layer; Media Chrome's anchor still supplies the horizontal offset. */
+    position: relative;
+    top: auto;
+    bottom: auto;
+    flex: none;
     z-index: 2;
     width: 300px;
     /* Keep Media Chrome's submenu minimum width within the responsive width. */
@@ -99,7 +129,11 @@ export const defaultThemeMarkup = String.raw`
     border-radius: 12px;
     --media-settings-menu-min-width: 0;
     --media-icon-color: var(--media-text-color, white);
-    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 88px);
+    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);
+  }
+
+  chunkify-settings-menu:not([hidden]) {
+    pointer-events: auto;
   }
 
   chunkify-settings-menu [slot="submenu"] {
@@ -307,12 +341,14 @@ export const defaultThemeMarkup = String.raw`
     display: var(--settings-button, var(--playback-rate-button, flex));
   }
 
+  media-controller:not([breakpointsm]) .settings-menu-layer {
+    /* 22px bar padding + 48px gear + 4px gap, minus the 12px layer inset. */
+    --settings-menu-gear-offset: 62px;
+  }
+
   media-controller:not([breakpointsm]) chunkify-settings-menu {
-    /* Sit 4px above the 48px gear (22px bar padding); slide down only when the player is too short. */
-    bottom: clamp(12px, calc(var(--settings-menu-bounds-height, 100%) - 12px - var(--settings-menu-height, 0px)), 74px);
     right: 12px;
     width: min(300px, calc(100% - 24px));
-    --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);
   }
 
   media-controller:not([breakpointsm]) media-captions-menu-button.small-button {
@@ -432,6 +468,7 @@ export const defaultThemeMarkup = String.raw`
     </media-fullscreen-button>
   </media-control-bar>
   <media-captions-menu id="captions-menu" hidden></media-captions-menu>
+  <div class="settings-menu-layer">
   <chunkify-settings-menu id="settings-menu" hidden anchor="auto" aria-label="Settings">
     <media-settings-menu-item>
       <svg slot="prefix" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 9a9 9 0 1 0 1 5M12 12l8-6"/><circle cx="12" cy="12" r="1"/></svg>
@@ -456,5 +493,6 @@ export const defaultThemeMarkup = String.raw`
       </media-captions-menu>
     </media-settings-menu-item>
   </chunkify-settings-menu>
+  </div>
 </media-controller>
 `;

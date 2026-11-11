@@ -5,8 +5,6 @@ class SettingsMenu extends MediaSettingsMenu {
     const bounds = entries.find((entry) => entry.target.localName === "media-controller");
     // A pixel limit also applies inside the absolutely positioned submenus.
     if (bounds) this.style.setProperty("--settings-menu-bounds-height", `${bounds.contentRect.height}px`);
-    // Lets the compact layout keep the menu above the gear while it still fits in the player.
-    this.style.setProperty("--settings-menu-height", `${this.offsetHeight}px`);
     // Keep Media Chrome's expanded height in sync after bounds or breakpoint changes.
     const submenu = this.querySelector<HTMLElement>('[slot="submenu"]:not([hidden])');
     if (submenu) {
@@ -18,7 +16,6 @@ class SettingsMenu extends MediaSettingsMenu {
     super.connectedCallback();
     const controller = this.closest("media-controller");
     if (controller) this.#layoutObserver.observe(controller);
-    this.#layoutObserver.observe(this);
     this.querySelectorAll('[slot="submenu"]').forEach((submenu) => this.#layoutObserver.observe(submenu));
   }
 
