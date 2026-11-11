@@ -308,8 +308,8 @@ export const defaultThemeMarkup = String.raw`
   }
 
   media-controller:not([breakpointsm]) chunkify-settings-menu {
-    top: 12px;
-    bottom: auto;
+    /* Sit 4px above the 48px gear (22px bar padding); slide down only when the player is too short. */
+    bottom: clamp(12px, calc(var(--settings-menu-bounds-height, 100%) - 12px - var(--settings-menu-height, 0px)), 74px);
     right: 12px;
     width: min(300px, calc(100% - 24px));
     --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);

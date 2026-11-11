@@ -470,6 +470,34 @@ test("operates the playback speed menu with the keyboard", async ({ page }) => {
   await expect(button).toBeFocused();
 });
 
+for (const width of [480, 560, 800, 1200]) {
+  test(`opens settings just above the gear at ${width}px`, async ({ page }) => {
+    await page.evaluate((width) => {
+      document.body.innerHTML = `<chunkify-player controls muted
+        style="width:${width}px;aspect-ratio:16/9" src="/tests/fixtures/media/video.mp4"></chunkify-player>`;
+    }, width);
+    const player = page.locator("chunkify-player");
+    const button = player.locator("media-settings-menu-button");
+    const menu = player.locator("chunkify-settings-menu");
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+      .toBeGreaterThanOrEqual(1);
+    const gapToGear = async () => {
+      await waitForMenuAnimation(menu);
+      const buttonBounds = (await button.boundingBox())!;
+      const menuBounds = (await menu.boundingBox())!;
+      return buttonBounds.y - (menuBounds.y + menuBounds.height);
+    };
+    await button.click();
+    await expect(menu).toBeVisible();
+    expect(await gapToGear()).toBeGreaterThanOrEqual(0);
+    expect(await gapToGear()).toBeLessThanOrEqual(8);
+    await menu.getByRole("menuitem", { name: /Playback speed/ }).click();
+    await expect(player.locator("chunkify-playback-rate-menu")).toBeVisible();
+    expect(await gapToGear()).toBeGreaterThanOrEqual(0);
+    expect(await gapToGear()).toBeLessThanOrEqual(8);
+  });
+}
+
 for (const width of [320, 800]) {
   test(`forces quality and restores Auto at ${width}px`, async ({ page }) => {
     const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
