@@ -523,14 +523,47 @@ for (const [width, height] of [[480, 270], [800, 240]]) {
     const menuBounds = (await menu.boundingBox())!;
     // Too tall to fit above the gear, so it slides down to the 12px margin instead of leaving the player.
     expect(menuBounds.y + menuBounds.height).toBeGreaterThan(buttonBounds.y);
-    // Allow 1px: focusing the submenu can scroll media-controller by a pixel (also happens without this layout).
-    expect(Math.abs(menuBounds.y - playerBounds.y - 12)).toBeLessThanOrEqual(1);
-    expect(playerBounds.y + playerBounds.height - (menuBounds.y + menuBounds.height)).toBeGreaterThanOrEqual(12 - 1);
+    expect(menuBounds.y - playerBounds.y).toBeCloseTo(12, 0);
+    expect(playerBounds.y + playerBounds.height - (menuBounds.y + menuBounds.height)).toBeGreaterThanOrEqual(12 - 0.5);
     // Sliding keeps every quality option visible without scrolling.
     expect(await quality.evaluate((element) => {
       const list = element.shadowRoot!.querySelector<HTMLElement>("slot:not([name])")!;
       return list.scrollHeight - list.clientHeight;
     })).toBeLessThanOrEqual(1);
+  });
+}
+
+for (const width of [320, 480, 800]) {
+  test(`opening settings submenus never scrolls the player at ${width}px`, async ({ page }) => {
+    const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
+    test.skip(!hlsJsSupported, "This browser uses native HLS playback");
+    await page.evaluate((width) => {
+      document.body.innerHTML = `<chunkify-player controls muted
+        style="width:${width}px;aspect-ratio:16/9" src="/tests/fixtures/media/quality/master.m3u8">
+        <track kind="captions" srclang="en" label="English" src="/tests/fixtures/media/captions-en.vtt" />
+      </chunkify-player>`;
+    }, width);
+    const player = page.locator("chunkify-player");
+    const button = player.locator("media-settings-menu-button");
+    const menu = player.locator("chunkify-settings-menu");
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState))
+      .toBeGreaterThanOrEqual(2);
+    const scrollOffsets = () => player.evaluate((element: ChunkifyPlayer) => {
+      const theme = element.shadowRoot!.querySelector("media-theme")!.shadowRoot!;
+      const controller = theme.querySelector("media-controller")!;
+      const settings = theme.querySelector("chunkify-settings-menu")!;
+      return [controller.scrollTop, controller.scrollLeft, settings.scrollTop, settings.scrollLeft];
+    });
+    for (const name of [/^Playback speed/, /^Quality/, /^Subtitles/]) {
+      // Pick the submenu while the menu is still animating open, when focus used to scroll the player.
+      await button.click();
+      await menu.getByRole("menuitem", { name }).click();
+      await waitForMenuAnimation(menu);
+      expect(await scrollOffsets()).toEqual([0, 0, 0, 0]);
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+    }
   });
 }
 

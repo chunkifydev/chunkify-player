@@ -79,6 +79,14 @@ export const defaultThemeMarkup = String.raw`
     user-select: none;
   }
 
+  media-controller {
+    /*
+     * Clip without being scrollable: focusing a menu item next to a sub-pixel
+     * overflow would otherwise scroll the whole player by a pixel.
+     */
+    overflow: clip;
+  }
+
   media-controller > media-captions-menu,
   chunkify-settings-menu {
     --media-menu-background: rgb(20 20 30 / 0.95);
@@ -127,6 +135,8 @@ export const defaultThemeMarkup = String.raw`
     /* Keep Media Chrome's submenu minimum width within the responsive width. */
     min-width: 0 !important;
     border-radius: 12px;
+    /* Clip like Media Chrome's overflow: hidden, but never scroll when focus lands on a sub-pixel overflow. */
+    overflow: clip;
     --media-settings-menu-min-width: 0;
     --media-icon-color: var(--media-text-color, white);
     --media-menu-max-height: calc(var(--settings-menu-bounds-height, 100%) - 24px);
