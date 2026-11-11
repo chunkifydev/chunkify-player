@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.0...player-v1.4.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **player:** open settings menu above the gear in compact layout ([#39](https://github.com/chunkifydev/chunkify-player/issues/39)) ([ad77fbc](https://github.com/chunkifydev/chunkify-player/commit/ad77fbc06ee69e0d9fdff43f895c0684ca6796bc))
+
 ## [1.4.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.3.3...player-v1.4.0) (2026-11-02)
 
 
