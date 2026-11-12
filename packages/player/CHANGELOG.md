@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.1...player-v1.4.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* **player:** start growing HLS at the beginning with preload="none" ([#41](https://github.com/chunkifydev/chunkify-player/issues/41)) ([bfef15b](https://github.com/chunkifydev/chunkify-player/commit/bfef15be1a279e0fbd8bf88e4598c2e7bc62f570))
+
 ## [1.4.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.0...player-v1.4.1) (2026-11-11)
 
 
