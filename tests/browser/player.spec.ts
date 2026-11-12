@@ -807,6 +807,48 @@ for (const [autoSeekToLive, native] of [[false, false], [true, false], [false, t
   }
 });
 
+for (const [preload, autoSeekToLive, native] of [
+  ["none", false, false], ["none", true, false], ["metadata", false, false], ["none", false, true],
+] as const) test(`starts a growing ${native ? "native " : ""}EVENT playlist with preload=${preload} ${autoSeekToLive ? "near the live edge with opt-in" : "at the beginning"}`, async ({ page, browserName }) => {
+  test.skip(native && browserName !== "webkit", "Native HLS is only available in WebKit");
+  if (native) {
+    const supportsNativeHls = await page.evaluate(() => Boolean(
+      document.createElement("video").canPlayType("application/vnd.apple.mpegurl"),
+    ));
+    test.skip(!supportsNativeHls, "This WebKit build does not support native HLS");
+    await page.evaluate(async () => {
+      const { Hls } = await import("hls-video-element");
+      Hls.isSupported = () => false;
+    });
+  }
+
+  // With preload="none", hls-video-element starts hls.js loading on the first Play,
+  // after the playlist is known, which used to ignore the configured start position.
+  await page.evaluate(([preload, autoSeekToLive]) => {
+    document.body.innerHTML = `<chunkify-player
+      src="/tests/fixtures/media/event.m3u8" preload="${preload}" controls muted
+      ${autoSeekToLive ? "autoseektolive" : ""}></chunkify-player>`;
+  }, [preload, autoSeekToLive] as const);
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => Boolean(element.media))).toBe(true);
+  await player.locator("media-control-bar media-play-button").first()
+    .evaluate((button: HTMLElement) => button.click());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => (
+    element.media.readyState >= 2 && !element.media.paused && element.media.seekable.length > 0
+  ))).toBe(true);
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.played.length))
+    .toBeGreaterThan(0);
+
+  const position = await player.evaluate((element: ChunkifyPlayer) => ({
+    currentTime: element.media.currentTime,
+    seekableStart: element.media.seekable.start(0),
+    seekableEnd: element.media.seekable.end(0),
+  }));
+  expect(position.seekableEnd - position.seekableStart).toBeGreaterThan(native ? 20 : 30);
+  if (autoSeekToLive) expect(position.currentTime - position.seekableStart).toBeGreaterThan(10);
+  else expect(position.currentTime - position.seekableStart).toBeLessThan(2);
+});
+
 test("native live HLS keeps a seek made before the first Play", async ({ page, browserName }) => {
   test.skip(browserName !== "webkit", "Native HLS is only available in WebKit");
   const supportsNativeHls = await page.evaluate(() => Boolean(

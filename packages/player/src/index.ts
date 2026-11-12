@@ -432,9 +432,22 @@ export class ChunkifyPlayer extends HTMLElement {
         // An explicit choice must still update the requested level, including Auto (-1).
         if (typeof index === "number" && hls.manualLevel !== index) hls.nextLevel = index;
       };
+      // With preload="none", hls-video-element starts loading on the first Play by
+      // calling startLoad() without a position. hls.js then already knows the
+      // playlist and starts a live or growing EVENT playlist at the live edge,
+      // ignoring the configured startPosition. Start that first load where the
+      // viewer is instead: the beginning, unless they chose a time.
+      const startLoad = hls.startLoad;
+      const startFirstLoad: typeof startLoad = (startPosition = -1, skipSeekToStartPosition) => {
+        hls.startLoad = startLoad;
+        startLoad.call(hls, startPosition === -1 ? media.currentTime : startPosition,
+          skipSeekToStartPosition);
+      };
+      if (!this.autoSeekToLive && !hls.loadingEnabled) hls.startLoad = startFirstLoad;
       hls.on(Hls.Events.ERROR, onError);
       renditions?.addEventListener("change", onRenditionChange);
       this.#hlsCleanup = () => {
+        if (hls.startLoad === startFirstLoad) hls.startLoad = startLoad;
         hls.off(Hls.Events.ERROR, onError);
         renditions?.removeEventListener("change", onRenditionChange);
       };
