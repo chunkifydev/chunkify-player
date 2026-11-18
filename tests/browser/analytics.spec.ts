@@ -316,6 +316,135 @@ test("a seek waits for playback to resume after its final seeked event", async (
   });
 });
 
+test("a seek that lands in buffered media resumes playback without a playing event", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-buffered", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 0 });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    Object.defineProperty(f.video, "readyState", { configurable: true, value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+    // A small seek into buffered media keeps readyState high, so the spec queues no playing event.
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.currentTime = 0.5;
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(1000);
+  const events = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.currentTime = 1.5;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    f.session!.destroy();
+    return f.events;
+  });
+  expect(events.find((event) => event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    seek_outcome: "resumed", seek_resume_wait_ms: 0, state_after_seek: "playing",
+    from_playhead_seconds: 0, to_playhead_seconds: 0.5,
+  });
+  expect(events.at(-1)).toMatchObject({
+    event_name: "chunkify.video.view_ended", reason: "destroyed",
+    playing_time_ms: 1000, seek_count: 1, maximum_playhead_seconds: 1.5,
+    played_ranges: [{ start_seconds: 0.5, end_seconds: 1.5 }],
+  });
+});
+
+test("a stale seeked event during a newer seek does not resume playback", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-twice", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    let mediaSeeking = false;
+    Object.defineProperty(f.video, "seeking", { configurable: true, get: () => mediaSeeking });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 9 });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    Object.defineProperty(f.video, "readyState", { configurable: true, value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+    f.video.currentTime = 10;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    // Seek back to 8, then to 2 before the first seeked event has been handled.
+    mediaSeeking = true;
+    f.video.currentTime = 8;
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.currentTime = 2;
+    f.video.dispatchEvent(new Event("seeked"));
+    f.video.dispatchEvent(new Event("seeking"));
+    mediaSeeking = false;
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(1000);
+  const ended = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.currentTime = 3;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    f.session!.destroy();
+    return f.events.at(-1);
+  });
+  expect(ended).toMatchObject({
+    event_name: "chunkify.video.view_ended", playing_time_ms: 1000, seek_count: 1,
+    played_ranges: [{ start_seconds: 2, end_seconds: 3 }, { start_seconds: 9, end_seconds: 10 }],
+  });
+});
+
+test("a source change after the media reset ends the view at the last recorded position", async ({ page }) => {
+  const events = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-source-reset", includeEvents: ["playback_state_changed", "view_ended"],
+      destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 0 });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    f.video.currentTime = 5;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    // Loading a new source resets the position before the queued emptied event arrives.
+    f.video.currentTime = 0;
+    f.video.dispatchEvent(new Event("emptied"));
+    return f.events;
+  });
+  expect(events.at(-2)).toMatchObject({
+    event_name: "chunkify.video.playback_state_changed", to_state: "stopped", playhead_seconds: 5,
+  });
+  expect(events.at(-1)).toMatchObject({
+    event_name: "chunkify.video.view_ended", reason: "source_changed",
+    playhead_seconds: 5, maximum_playhead_seconds: 5,
+    played_ranges: [{ start_seconds: 0, end_seconds: 5 }],
+  });
+});
+
+test("an explicit source change on loaded media ends the view at its current position", async ({ page }) => {
+  const ended = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-source-live", includeEvents: ["view_ended"],
+      destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(f.video, "readyState", { configurable: true, value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    f.video.currentTime = 5;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    f.video.currentTime = 5.2;
+    f.session.sourceChanged();
+    return f.events.at(-1);
+  });
+  expect(ended).toMatchObject({
+    event_name: "chunkify.video.view_ended", reason: "source_changed",
+    playhead_seconds: 5.2, maximum_playhead_seconds: 5.2,
+    played_ranges: [{ start_seconds: 0, end_seconds: 5.2 }],
+  });
+});
+
 test("excluding the grouped seek event keeps raw state changes available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;

@@ -103,6 +103,101 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
   expect(result.custom).toEqual(Array(3).fill({ plan: "premium", seats: 5 }));
 });
 
+test("real HLS playback keeps played ranges and playing time after a startup gap seek", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+  await page.evaluate(async () => {
+    const { attachPlayerAnalytics } = await import("@chunkify/player-analytics/player");
+    const state = window as typeof window & {
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: ReturnType<typeof attachPlayerAnalytics>;
+    };
+    state.analyticsEvents = [];
+    const player = document.createElement("chunkify-player");
+    player.muted = true;
+    player.src = "/tests/fixtures/media/master.m3u8";
+    document.body.append(player);
+    state.analyticsSession = attachPlayerAnalytics(player, {
+      videoId: "asset-gap-seek", includeEvents: ["view_ended"],
+      destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
+    });
+  });
+
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  // hls.js may jump a small gap at the start; WebKit then fires seeked without a later playing event.
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    element.media.seeking ? 0 : element.media.currentTime)).toBeGreaterThan(1);
+  const ended = await page.evaluate(() => {
+    const state = window as typeof window & {
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: { destroy(): void };
+    };
+    state.analyticsSession.destroy();
+    return state.analyticsEvents.at(-1)!;
+  });
+  expect(ended).toMatchObject({ event_name: "chunkify.video.view_ended", reason: "destroyed" });
+  const playhead = ended.playhead_seconds!;
+  expect(playhead).toBeGreaterThan(1);
+  // WebKit can advance currentTime between reads within one task.
+  expect(ended.maximum_playhead_seconds).toBeGreaterThan(playhead - 0.05);
+  expect(ended.played_ranges!.at(-1)!.end_seconds).toBeGreaterThan(playhead - 0.05);
+  const playedSeconds = ended.played_ranges!.reduce((total, range) => total + range.end_seconds - range.start_seconds, 0);
+  expect(playedSeconds).toBeGreaterThan(playhead - 0.25);
+  expect(ended.playing_time_ms).toBeGreaterThan((playhead - 0.25) * 1000);
+});
+
+for (const [format, from, to] of [
+  ["MP4", "/tests/fixtures/media/video.mp4", "/tests/fixtures/media/video.mp4?next"],
+  ["HLS", "/tests/fixtures/media/master.m3u8", "/tests/fixtures/media/master.m3u8?next"],
+] as const) {
+  test(`a ${format} to ${format} switch ends the view at the position reached`, async ({ page }) => {
+    await page.goto("/tests/fixtures/player.html");
+    await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+    await page.evaluate(async (src) => {
+      const { attachPlayerAnalytics } = await import("@chunkify/player-analytics/player");
+      const state = window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] };
+      state.analyticsEvents = [];
+      const player = document.createElement("chunkify-player");
+      player.muted = true;
+      player.src = src;
+      document.body.append(player);
+      attachPlayerAnalytics(player, {
+        videoId: "asset-same-format", includeEvents: ["view_ended"],
+        destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
+      });
+    }, from);
+
+    const player = page.locator("chunkify-player");
+    // With preload="metadata", WebKit loads no MP4 media data before play().
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(1);
+    await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+    await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+      element.media.seeking ? 0 : element.media.currentTime)).toBeGreaterThan(1);
+    // The same element is reused, so its position is already reset when analytics ends the view.
+    const positionBeforeSwitch = await player.evaluate((element: ChunkifyPlayer, src) => {
+      const position = element.media.currentTime;
+      element.src = src;
+      return position;
+    }, to);
+    await expect.poll(() => page.evaluate(() => (
+      window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
+    ).analyticsEvents.length)).toBe(1);
+    const ended = await page.evaluate(() => (
+      window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
+    ).analyticsEvents[0]!);
+    expect(ended).toMatchObject({ event_name: "chunkify.video.view_ended", reason: "source_changed" });
+    // Without a timeupdate after the reset, the last recorded position trails by one timeupdate interval.
+    const playhead = ended.playhead_seconds!;
+    expect(playhead).toBeGreaterThan(0.5);
+    expect(playhead).toBeLessThanOrEqual(positionBeforeSwitch);
+    expect(positionBeforeSwitch - playhead).toBeLessThan(0.5);
+    expect(ended.maximum_playhead_seconds).toBeGreaterThanOrEqual(playhead);
+    expect(ended.played_ranges!.at(-1)!.end_seconds).toBeCloseTo(playhead, 5);
+  });
+}
+
 test("the adapter records real HLS playback and then MP4 playback", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
@@ -131,8 +226,14 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
+  // Switch after hls.js has settled any startup gap seek, so the position is a played position.
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    element.media.seeking ? 0 : element.media.currentTime)).toBeGreaterThan(0.5);
+  const positionBeforeSwitch = await player.evaluate((element: ChunkifyPlayer) => {
+    const position = element.media.currentTime;
+    element.src = "/tests/fixtures/media/video.mp4";
+    return position;
+  });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
   await expect.poll(() => page.evaluate(() => (
@@ -166,6 +267,12 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
   }
+  // The ending view keeps the position reached before the player cleared the old media.
+  const endedPlayhead = events[1]!.playhead_seconds!;
+  expect(endedPlayhead).toBeGreaterThan(0.5);
+  expect(Math.abs(endedPlayhead - positionBeforeSwitch)).toBeLessThan(0.25);
+  expect(events[1]!.maximum_playhead_seconds).toBeGreaterThanOrEqual(endedPlayhead);
+  expect(events[1]!.played_ranges!.at(-1)!.end_seconds).toBeCloseTo(endedPlayhead, 5);
   expect(events[1]!.media_width_px).toBeGreaterThan(0);
   expect(events[1]!.media_height_px).toBeGreaterThan(0);
   expect(events[3]!.media_width_px).toBeGreaterThan(0);
