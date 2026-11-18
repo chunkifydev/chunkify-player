@@ -466,6 +466,21 @@ export class ChunkifyPlayer extends HTMLElement {
     if (hlsMedia.api) hlsMedia.api.capLevelToPlayerSize = this.capRenditionToPlayerSize;
   }
 
+  // hls.js only nudges a stalled playhead across buffer holes. WebKit can also stop advancing
+  // inside a buffered range after an early seek (for example hls.js skipping a small gap at the
+  // start), while it reports playing with enough data. Seeking to the same position restarts it.
+  #restartStalledPlayback(media: ChunkifyMediaElement) {
+    if (media.paused || media.seeking || media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+    const position = media.currentTime;
+    const { buffered } = media;
+    for (let index = 0; index < buffered.length; index++) {
+      if (buffered.start(index) <= position && position + 0.1 < buffered.end(index)) {
+        media.currentTime = position;
+        return;
+      }
+    }
+  }
+
   #attachHlsEvents(media: ChunkifyMediaElement) {
     const generation = this.#playbackGeneration;
     queueMicrotask(() => {
@@ -478,6 +493,10 @@ export class ChunkifyPlayer extends HTMLElement {
       if (!hls) return;
       this.#detachHlsEvents();
       const onError = (_event: string, data: { fatal: boolean; type: string; details: string }) => {
+        if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+          if (this.#playbackGeneration === generation && this.#media === media) this.#restartStalledPlayback(media);
+          return;
+        }
         if (!data.fatal || this.#playbackGeneration !== generation
           || this.#media !== media || this.#failedMedia === media) return;
         const code: PlaybackErrorCode = data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR
