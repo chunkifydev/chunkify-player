@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.3.2...player-react-v1.4.0) (2026-11-18)
+
+
+### Features
+
+* **player:** send analytics to a Chunkify collector with attributes ([#43](https://github.com/chunkifydev/chunkify-player/issues/43)) ([8b5c387](https://github.com/chunkifydev/chunkify-player/commit/8b5c387c01c4630bccba5aa8cbc0c85083eaa9bd))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.4.2 to 1.5.0
+
 ## [1.3.2](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.3.1...player-react-v1.3.2) (2026-11-12)
 
 

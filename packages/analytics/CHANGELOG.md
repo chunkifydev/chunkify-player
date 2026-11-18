@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.11.0...analytics-v0.12.0) (2026-11-18)
+
+
+### Features
+
+* **player:** send analytics to a Chunkify collector with attributes ([#43](https://github.com/chunkifydev/chunkify-player/issues/43)) ([8b5c387](https://github.com/chunkifydev/chunkify-player/commit/8b5c387c01c4630bccba5aa8cbc0c85083eaa9bd))
+
+
+### Bug Fixes
+
+* **analytics:** report the real playhead and played ranges on source changes and seeks ([#48](https://github.com/chunkifydev/chunkify-player/issues/48)) ([13992d7](https://github.com/chunkifydev/chunkify-player/commit/13992d7e213c93619629f76bba105e0f9ba1b9fe))
+
 ## [0.11.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.10.0...analytics-v0.11.0) (2026-11-10)
 
 
