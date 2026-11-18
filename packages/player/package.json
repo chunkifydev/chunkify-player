@@ -35,6 +35,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "@chunkify/player-analytics": "0.11.0",
     "hls-video-element": "~1.5.11",
     "media-chrome": "~4.19.2"
   }

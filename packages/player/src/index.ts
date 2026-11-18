@@ -5,8 +5,11 @@ import {
   resolvePlayerTheme,
   syncPlayerTheme,
 } from "./theme.js";
+import { PlayerAnalytics, analyticsAttributes, isAnalyticsAttribute, readCustom, writeCustom,
+  type AnalyticsAttribute, type PlayerAnalyticsCustom } from "./analytics.js";
 
 export { registerPlayerTheme } from "./theme.js";
+export { defaultAnalyticsEndpoint, type PlayerAnalyticsCustom } from "./analytics.js";
 
 export type ChunkifyMediaElement = HTMLVideoElement;
 export type PlayerAspectRatio = "portrait" | "landscape";
@@ -72,7 +75,7 @@ function isThemeAttribute(
 }
 
 export class ChunkifyPlayer extends HTMLElement {
-  static observedAttributes = [...playerAttributes];
+  static observedAttributes = [...playerAttributes, ...analyticsAttributes];
 
   declare addEventListener: ((
     type: "playback-error",
@@ -89,6 +92,7 @@ export class ChunkifyPlayer extends HTMLElement {
   #media: ChunkifyMediaElement;
   #theme: ReturnType<typeof createPlayerTheme>;
   #themeName = defaultPlayerTheme;
+  #analytics = new PlayerAnalytics(this);
   #pendingHlsSource: number | undefined;
   #hlsCleanup: (() => void) | null = null;
   #failedMedia: ChunkifyMediaElement | null = null;
@@ -288,11 +292,62 @@ export class ChunkifyPlayer extends HTMLElement {
   get playsInline(): boolean { return this.hasAttribute("playsinline"); }
   set playsInline(value: boolean) { this.toggleAttribute("playsinline", value); }
 
+  /** Send playback analytics to a Chunkify collector. Requires `analyticsIngestKey` and `analyticsVideoId`. */
+  get analytics(): boolean { return this.hasAttribute("analytics"); }
+  set analytics(value: boolean) { this.toggleAttribute("analytics", value); }
+
+  /** The collector's public write-only ingest key. */
+  get analyticsIngestKey(): string { return this.getAttribute("analytics-ingest-key") ?? ""; }
+  set analyticsIngestKey(value: string | null | undefined) {
+    this.#setStringAttribute("analytics-ingest-key", value);
+  }
+
+  /** Your video ID or Chunkify asset ID, sent as `video_id`. */
+  get analyticsVideoId(): string { return this.getAttribute("analytics-video-id") ?? ""; }
+  set analyticsVideoId(value: string | null | undefined) { this.#setStringAttribute("analytics-video-id", value); }
+
+  /**
+   * The analytics server's URL; `/v1/events` is added when it has no path. A URL with a path is used as
+   * given. Empty means Chunkify's hosted collector, `defaultAnalyticsEndpoint`.
+   */
+  get analyticsEndpoint(): string { return this.getAttribute("analytics-endpoint") ?? ""; }
+  set analyticsEndpoint(value: string | null | undefined) { this.#setStringAttribute("analytics-endpoint", value); }
+
+  get analyticsVideoTitle(): string { return this.getAttribute("analytics-video-title") ?? ""; }
+  set analyticsVideoTitle(value: string | null | undefined) {
+    this.#setStringAttribute("analytics-video-title", value);
+  }
+
+  /** A pseudonymous ID of the signed-in user, never an email address. */
+  get analyticsUserId(): string { return this.getAttribute("analytics-user-id") ?? ""; }
+  set analyticsUserId(value: string | null | undefined) { this.#setStringAttribute("analytics-user-id", value); }
+
+  get analyticsEnvironment(): string { return this.getAttribute("analytics-environment") ?? ""; }
+  set analyticsEnvironment(value: string | null | undefined) {
+    this.#setStringAttribute("analytics-environment", value);
+  }
+
+  /**
+   * Custom dimensions, stored as `analytics-custom-<key>` attributes and sent as text on `view_started`.
+   * At most 10 keys of 1 to 40 lowercase letters, digits or underscores. A change applies from the next video.
+   */
+  get analyticsCustom(): Record<string, string> { return readCustom(this); }
+  set analyticsCustom(value: PlayerAnalyticsCustom | null | undefined) { writeCustom(this, value); }
+
+  /** Keep the anonymous viewer ID in localStorage across page loads. Defaults to true. */
+  get analyticsPersistViewerId(): boolean { return this.getAttribute("analytics-persist-viewer-id") !== "false"; }
+  set analyticsPersistViewerId(value: boolean) {
+    if (value) this.removeAttribute("analytics-persist-viewer-id");
+    else this.setAttribute("analytics-persist-viewer-id", "false");
+  }
+
   connectedCallback() {
     for (const name of [
       "src", "type", "poster", "preload", "crossOrigin", "credentials", "autoplay", "controls", "loop", "muted",
       "autoSeekToLive", "playsInline", "theme", "aspectRatio", "thumbnails", "primaryColor",
-      "secondaryColor", "accentColor", "capRenditionToPlayerSize",
+      "secondaryColor", "accentColor", "capRenditionToPlayerSize", "analytics", "analyticsIngestKey",
+      "analyticsVideoId", "analyticsEndpoint", "analyticsVideoTitle", "analyticsUserId", "analyticsEnvironment",
+      "analyticsPersistViewerId", "analyticsCustom",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -303,9 +358,12 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#visibilityDocument = this.ownerDocument;
     this.#visibilityDocument.addEventListener("visibilitychange", this.#onVisibilityChange);
     this.#syncMedia();
+    this.#analytics.schedule();
   }
 
   disconnectedCallback() {
+    // End the view before the media is cleared, so clearing it is not recorded.
+    this.#analytics.stop();
     this.#playbackGeneration++;
     this.#cancelBackgroundPlayback();
     this.#visibilityDocument?.removeEventListener("visibilitychange", this.#onVisibilityChange);
@@ -317,8 +375,16 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#clearMedia(this.#media);
   }
 
-  attributeChangedCallback(name: typeof playerAttributes[number], oldValue: string | null, value: string | null) {
-    if (this.isConnected && oldValue !== value) this.#syncMedia(name);
+  attributeChangedCallback(name: typeof playerAttributes[number] | AnalyticsAttribute,
+    oldValue: string | null, value: string | null) {
+    if (!this.isConnected || oldValue === value) return;
+    if (isAnalyticsAttribute(name)) {
+      this.#analytics.schedule();
+      return;
+    }
+    this.#syncMedia(name);
+    // A new video starts a new analytics session.
+    if (name === "src") this.#analytics.schedule();
   }
 
   #setStringAttribute(name: string, value: string | null | undefined) {

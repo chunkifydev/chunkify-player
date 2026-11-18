@@ -39,7 +39,33 @@ export interface ChunkifyAdapterOptions {
   retry?: boolean;
 }
 
-/** Send complete analytics events to the full native collector endpoint, normally /v1/events. */
+/** The collector's ingestion path. */
+const eventsPath = "/v1/events";
+
+/**
+ * A collector address without a path, such as `https://analytics.example.com`, means its events URL. Any
+ * other URL is used as given, so a proxy on a path keeps its full URL. The HTTP adapter validates the result.
+ */
+function eventsEndpoint(endpoint: string): string {
+  if (endpoint === "/") return eventsPath;
+  if (typeof endpoint !== "string" || !/^https?:\/\//i.test(endpoint)) return endpoint;
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return endpoint;
+  }
+  if (url.pathname !== "/" || url.search || url.hash || endpoint.includes("?") || endpoint.includes("#")) {
+    return endpoint;
+  }
+  // Resolving against the URL keeps any credentials, so the HTTP adapter still rejects them.
+  return new URL(eventsPath, url).href;
+}
+
+/**
+ * Send complete analytics events to a Chunkify collector. Pass its address, such as
+ * `https://analytics.example.com`, to use its `/v1/events` endpoint, or the full events URL.
+ */
 export function createChunkifyAdapter(endpoint: string, options: ChunkifyAdapterOptions): AnalyticsDestination {
   if (!options || typeof options !== "object" || Array.isArray(options) ||
       typeof options.ingestKey !== "string" || !options.ingestKey.trim()) {
@@ -49,7 +75,7 @@ export function createChunkifyAdapter(endpoint: string, options: ChunkifyAdapter
     throw new TypeError("Chunkify browser-context option must be a boolean.");
   }
   const readContext = options.collectBrowserContext === false ? () => undefined : createBrowserContextReader();
-  return createHttpAdapter(endpoint, {
+  return createHttpAdapter(eventsEndpoint(endpoint), {
     retry: options.retry === undefined ? true : options.retry,
     headers: { "X-Chunkify-Ingest-Key": options.ingestKey },
     mapEvent(event): ChunkifyCollectorEvent {

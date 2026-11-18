@@ -19,6 +19,41 @@ test("Chunkify imports and sends unchanged events without a browser, and reports
   await assert.rejects(destination.send(event), /HTTP 503/);
 });
 
+test("Chunkify sends a collector address without a path to its /v1/events endpoint", async (t) => {
+  const urls = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    urls.push(url);
+    return new Response("{}", { status: 201 });
+  });
+  const cases = [
+    // A collector or proxy address without a path.
+    ["https://analytics.example.com", "https://analytics.example.com/v1/events"],
+    ["https://analytics.example.com/", "https://analytics.example.com/v1/events"],
+    ["https://analytics.example.com:8443", "https://analytics.example.com:8443/v1/events"],
+    ["HTTPS://Analytics.Example.com", "https://analytics.example.com/v1/events"],
+    ["http://127.0.0.1:4174", "http://127.0.0.1:4174/v1/events"],
+    ["/", "/v1/events"],
+    // Any URL with a path is used as given: full URLs and proxies on a path.
+    ["https://analytics.example.com/v1/events", "https://analytics.example.com/v1/events"],
+    ["https://example.com/collector/v1/events", "https://example.com/collector/v1/events"],
+    ["https://example.com/api/video-events", "https://example.com/api/video-events"],
+    ["/v1/events", "/v1/events"],
+  ];
+  for (const [endpoint] of cases) {
+    await createChunkifyAdapter(endpoint, { ingestKey: "public-key", collectBrowserContext: false })
+      .send({ event_name: "chunkify.video.view_started" });
+  }
+  assert.deepEqual(urls, cases.map(([, expected]) => expected));
+});
+
+test("Chunkify still rejects collector addresses the HTTP adapter refuses", () => {
+  for (const endpoint of ["https://user:secret@analytics.example.com", "https://analytics.example.com/?key=secret",
+    "https://analytics.example.com?key=secret", "https://analytics.example.com#fragment",
+    "http://analytics.example.com", "//analytics.example.com", "ftp://analytics.example.com", ""]) {
+    assert.throws(() => createChunkifyAdapter(endpoint, { ingestKey: "key" }), TypeError, endpoint);
+  }
+});
+
 test("Chunkify requires a valid configuration and retains HTTP endpoint restrictions", () => {
   for (const options of [undefined, null, [], {}, { ingestKey: " " }, { ingestKey: 123 },
     { ingestKey: "key", collectBrowserContext: "yes" }, { ingestKey: "key\r\nInjected: value" }]) {

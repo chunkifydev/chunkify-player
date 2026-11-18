@@ -27,6 +27,9 @@ import "@chunkify/player";
 ></chunkify-player>
 ```
 
-React integration, customization, private playback, themes, and the complete
+To send playback analytics to a Chunkify collector, add `analytics` with
+`analytics-ingest-key` and `analytics-video-id`.
+
+React integration, customization, private playback, themes, analytics, and the complete
 API are documented in the
 [Chunkify Player repository](https://github.com/chunkifydev/chunkify-player#readme).
