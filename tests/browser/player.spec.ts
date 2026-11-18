@@ -849,6 +849,50 @@ for (const [preload, autoSeekToLive, native] of [
   else expect(position.currentTime - position.seekableStart).toBeLessThan(2);
 });
 
+test("restarts hls.js playback that stalls inside buffered media", async ({ page }) => {
+  const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
+  test.skip(!hlsJsSupported, "This browser uses native HLS playback");
+
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/master.m3u8" muted></chunkify-player>`;
+    const errors: string[] = [];
+    (window as typeof window & { playbackErrors: string[] }).playbackErrors = errors;
+    document.querySelector("chunkify-player")!.addEventListener("playback-error", (event) => {
+      errors.push((event as CustomEvent<{ code: string }>).detail.code);
+    });
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => (
+    element.media.readyState >= 3 && !element.media.seeking && element.media.currentTime > 0.5
+  ))).toBe(true);
+
+  // hls.js reports a stall without nudging when the playhead sits inside one buffered range.
+  const reportStall = () => player.evaluate(async (element: ChunkifyPlayer) => {
+    const { Hls } = await import("hls-video-element");
+    const media = element.media as ChunkifyPlayer["media"] & { api: InstanceType<typeof Hls> };
+    let seekedTo: number | null = null;
+    const onSeeking = () => { seekedTo = media.currentTime; };
+    media.addEventListener("seeking", onSeeking);
+    const position = media.currentTime;
+    media.api.trigger(Hls.Events.ERROR, {
+      type: Hls.ErrorTypes.MEDIA_ERROR, details: Hls.ErrorDetails.BUFFER_STALLED_ERROR, fatal: false,
+      error: new Error("stalled"), buffer: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    media.removeEventListener("seeking", onSeeking);
+    return { position, seekedTo };
+  });
+  const playing = await reportStall();
+  expect(playing.seekedTo).not.toBeNull();
+  expect(Math.abs(playing.seekedTo! - playing.position)).toBeLessThan(0.1);
+
+  await player.evaluate((element: ChunkifyPlayer) => element.media.pause());
+  expect((await reportStall()).seekedTo).toBeNull();
+  expect(await page.evaluate(() => (window as typeof window & { playbackErrors: string[] }).playbackErrors)).toEqual([]);
+});
+
 test("native live HLS keeps a seek made before the first Play", async ({ page, browserName }) => {
   test.skip(browserName !== "webkit", "Native HLS is only available in WebKit");
   const supportsNativeHls = await page.evaluate(() => Boolean(

@@ -13,7 +13,10 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
     { name: "firefox", use: { browserName: "firefox" } },
-    { name: "webkit", use: { browserName: "webkit" } },
+    // Linux WebKit in CI can freeze its whole web process while starting MSE playback
+    // (the page stops answering and the browser takes ~30 s to close). One retry absorbs that;
+    // the report still lists such tests as flaky.
+    { name: "webkit", use: { browserName: "webkit" }, retries: process.env.CI ? 1 : 0 },
   ],
   webServer: {
     command: "npm run serve",
