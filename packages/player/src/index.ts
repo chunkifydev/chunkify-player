@@ -305,7 +305,10 @@ export class ChunkifyPlayer extends HTMLElement {
   get analyticsVideoId(): string { return this.getAttribute("analytics-video-id") ?? ""; }
   set analyticsVideoId(value: string | null | undefined) { this.#setStringAttribute("analytics-video-id", value); }
 
-  /** The collector's events URL. Empty means Chunkify's hosted collector, `defaultAnalyticsEndpoint`. */
+  /**
+   * The analytics server's URL; `/v1/events` is added when it has no path. A URL with a path is used as
+   * given. Empty means Chunkify's hosted collector, `defaultAnalyticsEndpoint`.
+   */
   get analyticsEndpoint(): string { return this.getAttribute("analytics-endpoint") ?? ""; }
   set analyticsEndpoint(value: string | null | undefined) { this.#setStringAttribute("analytics-endpoint", value); }
 

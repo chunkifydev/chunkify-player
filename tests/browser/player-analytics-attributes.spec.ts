@@ -54,7 +54,7 @@ test("analytics attributes send events to the configured collector", async ({ pa
 test("analytics uses the hosted collector when no endpoint is set", async ({ page }) => {
   const deliveries = await collect(page, "https://analytics.chunkify.dev/v1/events");
   expect(await page.evaluate(async () => (await import("@chunkify/player")).defaultAnalyticsEndpoint))
-    .toBe("https://analytics.chunkify.dev/v1/events");
+    .toBe("https://analytics.chunkify.dev");
   await page.evaluate(() => {
     document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/video.mp4" muted
       analytics analytics-ingest-key="hosted-key" analytics-video-id="video_hosted"></chunkify-player>`;
@@ -62,6 +62,18 @@ test("analytics uses the hosted collector when no endpoint is set", async ({ pag
   await playUntilStarted(page);
   await expect.poll(() => deliveries.length).toBeGreaterThan(0);
   expect(deliveries[0]).toMatchObject({ key: "hosted-key", body: { video_id: "video_hosted" } });
+});
+
+test("a collector address without a path sends to its /v1/events endpoint", async ({ page }) => {
+  const deliveries = await collect(page, "https://collector.example.test/v1/events");
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/video.mp4" muted
+      analytics analytics-endpoint="https://collector.example.test" analytics-ingest-key="public-key"
+      analytics-video-id="video_base_url"></chunkify-player>`;
+  });
+  await playUntilStarted(page);
+  await expect.poll(() => deliveries.length).toBeGreaterThan(0);
+  expect(deliveries[0]).toMatchObject({ key: "public-key", body: { video_id: "video_base_url" } });
 });
 
 test("nothing is sent until the analytics switch is on", async ({ page }) => {
@@ -83,7 +95,9 @@ test("nothing is sent until the analytics switch is on", async ({ page }) => {
 
   // Turning it off ends the view.
   await page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => { element.analytics = false; });
-  await expect.poll(() => names(deliveries).at(-1)).toEqual(["chunkify.video.view_ended", "destroyed", "video_123"]);
+  // The final events are sent together and can arrive in either order.
+  await expect.poll(() => names(deliveries).filter(([name]) => name === "chunkify.video.view_ended"))
+    .toEqual([["chunkify.video.view_ended", "destroyed", "video_123"]]);
 });
 
 test("missing or invalid analytics settings warn without affecting playback", async ({ page }) => {

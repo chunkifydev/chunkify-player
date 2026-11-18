@@ -478,7 +478,7 @@ Provide at least one adapter or object with `send(event)`. Every included event 
 Use the dedicated adapter for the self-hosted Chunkify collector. The server is
 maintained separately in `chunkifydev/chunkify-analytics`, currently a private
 repository. The client adapter is part of this SDK.
-Pass its full native ingestion URL and public ingest key:
+Pass the server's URL and public ingest key:
 
 ```js
 import { monitor } from "@chunkify/player-analytics";
@@ -486,11 +486,15 @@ import { createChunkifyAdapter } from "@chunkify/player-analytics/chunkify";
 
 monitor(video, {
   videoId: "video_123",
-  destinations: [createChunkifyAdapter("https://analytics.example.com/v1/events", {
+  destinations: [createChunkifyAdapter("https://analytics.example.com", {
     ingestKey: "YOUR_PUBLIC_INGEST_KEY",
   })],
 });
 ```
+
+A URL without a path, such as `https://analytics.example.com`, is sent to the server's `/v1/events`
+endpoint. A URL with a path is used as given, so pass the full events URL for a proxy on a path, such as
+`https://example.com/collector/v1/events`. The full URL `https://analytics.example.com/v1/events` also works.
 
 The adapter sets `X-Chunkify-Ingest-Key` and posts the complete event with an additional
 `browser_context` object. It reuses the HTTP adapter's endpoint validation, omitted

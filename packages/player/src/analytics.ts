@@ -1,8 +1,8 @@
 import { createChunkifyAdapter } from "@chunkify/player-analytics/chunkify";
 import { attachPlayerAnalytics, type MediaPlayerHost } from "@chunkify/player-analytics/player";
 
-/** Chunkify's hosted collector, used when `analytics-endpoint` is not set. */
-export const defaultAnalyticsEndpoint = "https://analytics.chunkify.dev/v1/events";
+/** Chunkify's hosted collector, used when `analytics-endpoint` is not set. Events go to its `/v1/events`. */
+export const defaultAnalyticsEndpoint = "https://analytics.chunkify.dev";
 
 export const analyticsAttributes = [
   "analytics", "analytics-ingest-key", "analytics-video-id", "analytics-endpoint",

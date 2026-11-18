@@ -319,7 +319,7 @@ attribute (or set `player.analytics = false`) to turn it off.
 | `analytics` | `analytics` | Turns tracking on. |
 | `analytics-ingest-key` | `analyticsIngestKey` | Required. The collector's public, write-only ingest key. |
 | `analytics-video-id` | `analyticsVideoId` | Required. Your video ID or Chunkify asset ID, sent as `video_id`. |
-| `analytics-endpoint` | `analyticsEndpoint` | The collector's events URL. Defaults to Chunkify's hosted collector, `https://analytics.chunkify.dev/v1/events`. Set it when you host the collector yourself. |
+| `analytics-endpoint` | `analyticsEndpoint` | Your analytics server's URL, such as `https://analytics.example.com`; `/v1/events` is added when the URL has no path. A URL with a path, such as a proxy at `https://example.com/collector/v1/events`, is used as given. Defaults to Chunkify's hosted collector, `https://analytics.chunkify.dev`. |
 | `analytics-video-title` | `analyticsVideoTitle` | Optional title, sent as `video_title`. |
 | `analytics-user-id` | `analyticsUserId` | Optional pseudonymous ID of the signed-in user, sent as `user_id`. Never use an email address. |
 | `analytics-environment` | `analyticsEnvironment` | Optional environment name, such as `production`. |
