@@ -103,6 +103,51 @@ test("the standalone adapter follows Chunkify Player media replacements", async 
   expect(result.custom).toEqual(Array(3).fill({ plan: "premium", seats: 5 }));
 });
 
+test("real HLS playback keeps played ranges and playing time after a startup gap seek", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+  await page.evaluate(async () => {
+    const { attachPlayerAnalytics } = await import("@chunkify/player-analytics/player");
+    const state = window as typeof window & {
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: ReturnType<typeof attachPlayerAnalytics>;
+    };
+    state.analyticsEvents = [];
+    const player = document.createElement("chunkify-player");
+    player.muted = true;
+    player.src = "/tests/fixtures/media/master.m3u8";
+    document.body.append(player);
+    state.analyticsSession = attachPlayerAnalytics(player, {
+      videoId: "asset-gap-seek", includeEvents: ["view_ended"],
+      destinations: [{ send(event) { state.analyticsEvents.push(event); } }],
+    });
+  });
+
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  // hls.js may jump a small gap at the start; WebKit then fires seeked without a later playing event.
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    element.media.seeking ? 0 : element.media.currentTime)).toBeGreaterThan(1);
+  const ended = await page.evaluate(() => {
+    const state = window as typeof window & {
+      analyticsEvents: ChunkifyPlayerAnalyticsEvent[];
+      analyticsSession: { destroy(): void };
+    };
+    state.analyticsSession.destroy();
+    return state.analyticsEvents.at(-1)!;
+  });
+  expect(ended).toMatchObject({ event_name: "chunkify.video.view_ended", reason: "destroyed" });
+  const playhead = ended.playhead_seconds!;
+  expect(playhead).toBeGreaterThan(1);
+  // WebKit can advance currentTime between reads within one task.
+  expect(ended.maximum_playhead_seconds).toBeGreaterThan(playhead - 0.05);
+  expect(ended.played_ranges!.at(-1)!.end_seconds).toBeGreaterThan(playhead - 0.05);
+  const playedSeconds = ended.played_ranges!.reduce((total, range) => total + range.end_seconds - range.start_seconds, 0);
+  expect(playedSeconds).toBeGreaterThan(playhead - 0.25);
+  expect(ended.playing_time_ms).toBeGreaterThan((playhead - 0.25) * 1000);
+});
+
 test("the adapter records real HLS playback and then MP4 playback", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));

@@ -316,6 +316,43 @@ test("a seek waits for playback to resume after its final seeked event", async (
   });
 });
 
+test("a seek that lands in buffered media resumes playback without a playing event", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-buffered", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 0 });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    Object.defineProperty(f.video, "readyState", { configurable: true, value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+    // A small seek into buffered media keeps readyState high, so the spec queues no playing event.
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.currentTime = 0.5;
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(1000);
+  const events = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.currentTime = 1.5;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    f.session!.destroy();
+    return f.events;
+  });
+  expect(events.find((event) => event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    seek_outcome: "resumed", seek_resume_wait_ms: 0, state_after_seek: "playing",
+    from_playhead_seconds: 0, to_playhead_seconds: 0.5,
+  });
+  expect(events.at(-1)).toMatchObject({
+    event_name: "chunkify.video.view_ended", reason: "destroyed",
+    playing_time_ms: 1000, seek_count: 1, maximum_playhead_seconds: 1.5,
+    played_ranges: [{ start_seconds: 0.5, end_seconds: 1.5 }],
+  });
+});
+
 test("excluding the grouped seek event keeps raw state changes available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;
