@@ -616,17 +616,18 @@ export class ChunkifyPlayer extends HTMLElement {
       this.#firstHlsPlayPending = isHls;
       this.#soughtBeforeFirstHlsPlay = false;
     }
-    let replaced = false;
+    let previous: ChunkifyMediaElement | null = null;
     if (this.#media.localName !== tagName || changedAttribute === "credentials") {
       this.#cancelPendingHlsSource();
       this.#detachHlsEvents();
       for (const event of mediaEvents) this.#media.removeEventListener(event, this.#forwardMediaEvent);
-      const previous = this.#media;
-      this.#clearMedia(previous);
+      previous = this.#media;
+      // Pause now; the resource is released after mediachange so listeners can still read its position.
+      previous.pause();
       this.#media = this.#createMedia(tagName);
       previous.replaceWith(this.#media);
-      replaced = true;
     }
+    const replaced = previous !== null;
 
     this.#configureHlsPlayback(this.#media);
 
@@ -647,7 +648,10 @@ export class ChunkifyPlayer extends HTMLElement {
     }
     if (replaced || changedAttribute === undefined || changedAttribute === "src"
       || changedAttribute === "thumbnails") this.#syncTracks();
-    if (replaced) this.dispatchEvent(new Event("mediachange"));
+    if (previous) {
+      this.dispatchEvent(new Event("mediachange"));
+      this.#clearMedia(previous);
+    }
   }
 }
 

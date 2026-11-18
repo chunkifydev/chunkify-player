@@ -131,8 +131,14 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
   await expect.poll(() => page.evaluate(() => (
     window as typeof window & { analyticsEvents: ChunkifyPlayerAnalyticsEvent[] }
   ).analyticsEvents.some((event) => event.event_name === "chunkify.video.view_started"))).toBe(true);
-  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.currentTime)).toBeGreaterThan(0.1);
-  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/video.mp4"; });
+  // Switch after hls.js has settled any startup gap seek, so the position is a played position.
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) =>
+    element.media.seeking ? 0 : element.media.currentTime)).toBeGreaterThan(0.5);
+  const positionBeforeSwitch = await player.evaluate((element: ChunkifyPlayer) => {
+    const position = element.media.currentTime;
+    element.src = "/tests/fixtures/media/video.mp4";
+    return position;
+  });
   await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.localName)).toBe("video");
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
   await expect.poll(() => page.evaluate(() => (
@@ -165,6 +171,15 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     ]);
     expect(events[1]!.rendition_playing_time![0]!.playing_time_ms).toBeGreaterThan(0);
     expect(events[3]!.connector_name).toBe("html-media");
+  }
+  // The ending view keeps the position reached before the player cleared the old media.
+  const endedPlayhead = events[1]!.playhead_seconds!;
+  expect(endedPlayhead).toBeGreaterThan(0.5);
+  expect(Math.abs(endedPlayhead - positionBeforeSwitch)).toBeLessThan(0.25);
+  expect(events[1]!.maximum_playhead_seconds).toBeGreaterThanOrEqual(endedPlayhead);
+  // WebKit's hls.js startup gap seek is not followed by `playing`, so it records no range.
+  if (events[1]!.seek_count === 0) {
+    expect(events[1]!.played_ranges!.at(-1)!.end_seconds).toBeCloseTo(endedPlayhead, 5);
   }
   expect(events[1]!.media_width_px).toBeGreaterThan(0);
   expect(events[1]!.media_height_px).toBeGreaterThan(0);

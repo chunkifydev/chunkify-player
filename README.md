@@ -87,7 +87,8 @@ The read-only `media` property returns the active media element. Read it again
 after switching between HLS and MP4 because that change replaces the element.
 The player forwards standard media events such as `play`, `pause`, `timeupdate`,
 `ended`, and `error`. It also emits `mediachange` when it replaces the active
-media element.
+media element. During that event the previous element is paused but still holds
+its position; the player releases its source right after.
 
 With `controls` enabled, open the settings gear, then **Playback speed**, to
 adjust the slider from 0.5× to 2× in 0.05× steps. **Reset** restores 1×. The menu
