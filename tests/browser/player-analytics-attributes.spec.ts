@@ -143,3 +143,78 @@ test("changing the video ID with the source starts a new view", async ({ page })
       ["chunkify.video.view_started", null, "second"],
     ]);
 });
+
+test("analytics-custom attributes are sent as custom dimensions", async ({ page }) => {
+  const deliveries = await collect(page, "**/player-events");
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/video.mp4" muted
+      analytics analytics-endpoint="/player-events" analytics-ingest-key="public-key" analytics-video-id="video_123"
+      analytics-custom-plan="premium" analytics-custom-ab_variant="b" analytics-custom-empty=""></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  expect(await player.evaluate((element: ChunkifyPlayer) => element.analyticsCustom))
+    .toEqual({ plan: "premium", ab_variant: "b" });
+  await playUntilStarted(page);
+  await expect.poll(() => deliveries.length).toBeGreaterThan(0);
+  expect(deliveries[0]!.body).toMatchObject({ event_name: "chunkify.video.view_started",
+    custom: { plan: "premium", ab_variant: "b" } });
+
+  // The property writes the same attributes; numbers and booleans become text.
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    element.analyticsCustom = { seats: 5, trial: true, plan: "team" };
+    return { custom: element.analyticsCustom,
+      attributes: element.getAttributeNames().filter((name) => name.startsWith("analytics-custom-")).sort() };
+  })).toEqual({ custom: { seats: "5", trial: "true", plan: "team" },
+    attributes: ["analytics-custom-plan", "analytics-custom-seats", "analytics-custom-trial"] });
+  expect(await player.evaluate((element: ChunkifyPlayer) => {
+    element.analyticsCustom = null;
+    return element.analyticsCustom;
+  })).toEqual({});
+});
+
+test("a custom dimension change applies from the next video without splitting the view", async ({ page }) => {
+  const deliveries = await collect(page, "**/player-events");
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/video.mp4" muted
+      analytics analytics-endpoint="/player-events" analytics-ingest-key="public-key" analytics-video-id="video_123"
+      analytics-custom-plan="free"></chunkify-player>`;
+  });
+  await playUntilStarted(page);
+  const player = page.locator("chunkify-player");
+  await player.evaluate((element: ChunkifyPlayer) => { element.analyticsCustom = { plan: "premium" }; });
+  await page.waitForTimeout(300);
+  await player.evaluate((element: ChunkifyPlayer) => { element.src = "/tests/fixtures/media/background/video.mp4"; });
+  await playUntilStarted(page);
+  const views = () => deliveries.filter(({ body }) => body.event_name !== "chunkify.video.playback_state_changed")
+    .map(({ body }) => [body.event_name, body.reason, (body.custom as { plan?: string } | undefined)?.plan]);
+  await expect.poll(views).toEqual([
+    ["chunkify.video.view_started", null, "free"],
+    ["chunkify.video.view_ended", "source_changed", undefined],
+    ["chunkify.video.view_started", null, "premium"],
+  ]);
+});
+
+test("invalid custom dimensions are ignored with a warning and tracking continues", async ({ page }) => {
+  const deliveries = await collect(page, "**/player-events");
+  const warnings: string[] = [];
+  page.on("console", (message) => { if (message.type() === "warning") warnings.push(message.text()); });
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/video.mp4" muted
+      analytics analytics-endpoint="/player-events" analytics-ingest-key="public-key" analytics-video-id="video_123"
+      analytics-custom-ab-variant="b"></chunkify-player>`;
+  });
+  await playUntilStarted(page);
+  await expect.poll(() => deliveries.length).toBeGreaterThan(0);
+  expect(deliveries[0]!.body.event_name).toBe("chunkify.video.view_started");
+  expect(deliveries[0]!.body).not.toHaveProperty("custom");
+  expect(warnings).toEqual([expect.stringContaining("Chunkify Player analytics ignores the analytics-custom-* attributes")]);
+
+  // The property replaces every custom attribute, and refuses keys that could not be read back from one.
+  await page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => {
+    element.analyticsCustom = { Plan: "premium", ok: "yes" };
+  });
+  await expect.poll(() => warnings.length).toBe(2);
+  expect(warnings[1]).toContain('ignores the custom key "Plan"');
+  expect(await page.locator("chunkify-player").evaluate((element: ChunkifyPlayer) => element.analyticsCustom))
+    .toEqual({ ok: "yes" });
+});

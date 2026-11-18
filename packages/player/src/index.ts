@@ -5,10 +5,11 @@ import {
   resolvePlayerTheme,
   syncPlayerTheme,
 } from "./theme.js";
-import { PlayerAnalytics, analyticsAttributes, isAnalyticsAttribute, type AnalyticsAttribute } from "./analytics.js";
+import { PlayerAnalytics, analyticsAttributes, isAnalyticsAttribute, readCustom, writeCustom,
+  type AnalyticsAttribute, type PlayerAnalyticsCustom } from "./analytics.js";
 
 export { registerPlayerTheme } from "./theme.js";
-export { defaultAnalyticsEndpoint } from "./analytics.js";
+export { defaultAnalyticsEndpoint, type PlayerAnalyticsCustom } from "./analytics.js";
 
 export type ChunkifyMediaElement = HTMLVideoElement;
 export type PlayerAspectRatio = "portrait" | "landscape";
@@ -326,6 +327,13 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#setStringAttribute("analytics-environment", value);
   }
 
+  /**
+   * Custom dimensions, stored as `analytics-custom-<key>` attributes and sent as text on `view_started`.
+   * At most 10 keys of 1 to 40 lowercase letters, digits or underscores. A change applies from the next video.
+   */
+  get analyticsCustom(): Record<string, string> { return readCustom(this); }
+  set analyticsCustom(value: PlayerAnalyticsCustom | null | undefined) { writeCustom(this, value); }
+
   /** Keep the anonymous viewer ID in localStorage across page loads. Defaults to true. */
   get analyticsPersistViewerId(): boolean { return this.getAttribute("analytics-persist-viewer-id") !== "false"; }
   set analyticsPersistViewerId(value: boolean) {
@@ -339,7 +347,7 @@ export class ChunkifyPlayer extends HTMLElement {
       "autoSeekToLive", "playsInline", "theme", "aspectRatio", "thumbnails", "primaryColor",
       "secondaryColor", "accentColor", "capRenditionToPlayerSize", "analytics", "analyticsIngestKey",
       "analyticsVideoId", "analyticsEndpoint", "analyticsVideoTitle", "analyticsUserId", "analyticsEnvironment",
-      "analyticsPersistViewerId",
+      "analyticsPersistViewerId", "analyticsCustom",
     ]) {
       if (!Object.prototype.hasOwnProperty.call(this, name)) continue;
       const value: unknown = Reflect.get(this, name);
@@ -370,8 +378,13 @@ export class ChunkifyPlayer extends HTMLElement {
   attributeChangedCallback(name: typeof playerAttributes[number] | AnalyticsAttribute,
     oldValue: string | null, value: string | null) {
     if (!this.isConnected || oldValue === value) return;
-    if (isAnalyticsAttribute(name)) this.#analytics.schedule();
-    else this.#syncMedia(name);
+    if (isAnalyticsAttribute(name)) {
+      this.#analytics.schedule();
+      return;
+    }
+    this.#syncMedia(name);
+    // A new video starts a new analytics session.
+    if (name === "src") this.#analytics.schedule();
   }
 
   #setStringAttribute(name: string, value: string | null | undefined) {

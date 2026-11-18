@@ -324,6 +324,7 @@ attribute (or set `player.analytics = false`) to turn it off.
 | `analytics-user-id` | `analyticsUserId` | Optional pseudonymous ID of the signed-in user, sent as `user_id`. Never use an email address. |
 | `analytics-environment` | `analyticsEnvironment` | Optional environment name, such as `production`. |
 | `analytics-persist-viewer-id` | `analyticsPersistViewerId` | Defaults to on: the anonymous viewer ID is kept in `localStorage`. Set to `"false"` until the viewer consents to storage. |
+| `analytics-custom-<key>` | `analyticsCustom` | Optional [custom dimensions](#custom-dimensions), such as `analytics-custom-plan="premium"`. |
 
 In React, use the property names as props, for example
 `<ChunkifyPlayer analytics analyticsIngestKey="…" analyticsVideoId="video_123" />`.
@@ -342,8 +343,44 @@ How it behaves:
 - Do not also call `monitor()` on a player that has `analytics` set, or every
   event is sent twice.
 
-For other destinations (Datadog, PostHog, OTLP, your own endpoint), custom
-dimensions, and other players, use the `@chunkify/player-analytics` package
+### Custom dimensions
+
+Add your own fields to filter and group views by, such as plan or A/B test
+variant, with one `analytics-custom-<key>` attribute per field:
+
+```html
+<chunkify-player
+  src="https://media.example.com/master.m3u8"
+  analytics
+  analytics-ingest-key="YOUR_PUBLIC_INGEST_KEY"
+  analytics-video-id="video_123"
+  analytics-custom-plan="premium"
+  analytics-custom-ab_variant="b"
+></chunkify-player>
+```
+
+The player sends them as `custom: { plan: "premium", ab_variant: "b" }` on each
+view's `view_started` event. In JavaScript, the `analyticsCustom` property reads
+them as an object and replaces them all when set; in React, pass the
+`analyticsCustom` prop:
+
+```js
+player.analyticsCustom = { plan: "premium", seats: 5 }; // sent as { plan: "premium", seats: "5" }
+```
+
+- Use at most 10 keys of 1 to 40 lowercase letters, digits or underscores:
+  `ab_variant`, not `ab-variant`. Values are text, up to 256 characters;
+  numbers and booleans set through the property are sent as text, which is how
+  the Chunkify collector stores and filters every custom value.
+- A change applies from the next video (a new `src` or video ID), so a view is
+  never split in two.
+- Invalid custom dimensions are ignored with a console warning; tracking
+  continues without them.
+- Do not put personal data in custom dimensions; use `analytics-user-id` for the
+  signed-in user.
+
+For other destinations (Datadog, PostHog, OTLP, your own endpoint), typed
+custom values, and other players, use the `@chunkify/player-analytics` package
 directly. See [the analytics package README](packages/analytics/README.md) for
 the API, the event schema, and limits.
 

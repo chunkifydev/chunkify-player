@@ -18,7 +18,8 @@ const ref = createRef<ChunkifyPlayerRef>();
   aria-label="Product video" />;
 <ChunkifyPlayer src="/master.m3u8" analytics analyticsIngestKey="public-key" analyticsVideoId="video_123"
   analyticsEndpoint="https://analytics.example.com/v1/events" analyticsVideoTitle="Keynote"
-  analyticsUserId="user_42" analyticsEnvironment="production" analyticsPersistViewerId={false} />;
+  analyticsUserId="user_42" analyticsEnvironment="production" analyticsPersistViewerId={false}
+  analyticsCustom={{ plan: "premium", seats: 5, trial: true }} />;
 <ChunkifyPlayer src={null} />;
 <ChunkifyPlayer />;
 <ChunkifyPlayer src="/master.m3u8" controls>

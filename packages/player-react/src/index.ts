@@ -18,6 +18,7 @@ import type {
   ChunkifyPlayer as PlayerElement,
   PlaybackErrorDetail,
   PlayerAspectRatio,
+  PlayerAnalyticsCustom,
   PlayerCredentials,
 } from "@chunkify/player";
 
@@ -109,6 +110,7 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   analyticsUserId?: string | null | undefined;
   analyticsEnvironment?: string | null | undefined;
   analyticsPersistViewerId?: boolean | undefined;
+  analyticsCustom?: PlayerAnalyticsCustom | null | undefined;
 };
 
 export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null {

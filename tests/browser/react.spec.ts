@@ -211,12 +211,14 @@ test("React analytics props start built-in tracking", async ({ page }) => {
     analyticsEndpoint: "/react-events",
     analyticsIngestKey: "public-key",
     analyticsVideoId: "react_video",
+    analyticsCustom: { plan: "premium", seats: 5 },
   }));
   const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("analytics-custom-seats", "5");
   await expect(player).toHaveAttribute("analytics-video-id", "react_video");
   await player.evaluate((element: ChunkifyPlayer) => element.media.play());
-  await expect.poll(() => bodies.map((body) => [body.event_name, body.video_id])[0])
-    .toEqual(["chunkify.video.view_started", "react_video"]);
+  await expect.poll(() => bodies.map((body) => [body.event_name, body.video_id, body.custom])[0])
+    .toEqual(["chunkify.video.view_started", "react_video", { plan: "premium", seats: "5" }]);
 
   await page.evaluate(() => window.reactFixture.render({
     src: "/tests/fixtures/media/video.mp4",
@@ -226,5 +228,7 @@ test("React analytics props start built-in tracking", async ({ page }) => {
     analyticsVideoId: "react_video",
   }));
   await expect(player).not.toHaveAttribute("analytics");
-  await expect.poll(() => bodies.at(-1)?.event_name).toBe("chunkify.video.view_ended");
+  await expect(player).not.toHaveAttribute("analytics-custom-plan");
+  // The final events are sent together and can arrive in either order.
+  await expect.poll(() => bodies.some((body) => body.event_name === "chunkify.video.view_ended")).toBe(true);
 });

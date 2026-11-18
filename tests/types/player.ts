@@ -40,6 +40,10 @@ player.analyticsVideoTitle = "Keynote";
 player.analyticsUserId = "user_42";
 player.analyticsEnvironment = "production";
 player.analyticsPersistViewerId = false;
+player.analyticsCustom = { plan: "premium", seats: 5, trial: true };
+player.analyticsCustom = null;
+const custom: Record<string, string> = player.analyticsCustom;
+void custom;
 const endpoint: string = defaultAnalyticsEndpoint;
 void endpoint;
 
