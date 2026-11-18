@@ -16,6 +16,9 @@ const ref = createRef<ChunkifyPlayerRef>();
     "--settings-button": "none",
   }}
   aria-label="Product video" />;
+<ChunkifyPlayer src="/master.m3u8" analytics analyticsIngestKey="public-key" analyticsVideoId="video_123"
+  analyticsEndpoint="https://analytics.example.com/v1/events" analyticsVideoTitle="Keynote"
+  analyticsUserId="user_42" analyticsEnvironment="production" analyticsPersistViewerId={false} />;
 <ChunkifyPlayer src={null} />;
 <ChunkifyPlayer />;
 <ChunkifyPlayer src="/master.m3u8" controls>

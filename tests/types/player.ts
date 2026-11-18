@@ -1,4 +1,4 @@
-import { registerPlayerTheme } from "@chunkify/player";
+import { defaultAnalyticsEndpoint, registerPlayerTheme } from "@chunkify/player";
 
 const player = document.createElement("chunkify-player");
 
@@ -29,6 +29,19 @@ player.primaryColor = "#700cd4";
 player.primaryColor = null;
 player.secondaryColor = "#bb1111";
 player.accentColor = "#cf2626";
+
+player.analytics = true;
+player.analyticsIngestKey = "public-key";
+player.analyticsIngestKey = null;
+player.analyticsVideoId = "video_123";
+player.analyticsEndpoint = "https://analytics.example.com/v1/events";
+player.analyticsEndpoint = undefined;
+player.analyticsVideoTitle = "Keynote";
+player.analyticsUserId = "user_42";
+player.analyticsEnvironment = "production";
+player.analyticsPersistViewerId = false;
+const endpoint: string = defaultAnalyticsEndpoint;
+void endpoint;
 
 const media: HTMLVideoElement = player.media;
 void media;

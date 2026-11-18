@@ -2,6 +2,8 @@
 
 Standalone playback analytics for Chunkify Player, a native `<video>`, and supported third-party players. It has no runtime dependency on `@chunkify/player` and no built-in analytics endpoint. Each event goes to the destinations supplied by the application.
 
+To send Chunkify Player's analytics to a Chunkify collector without writing code, use the player's [`analytics` attributes](https://github.com/chunkifydev/chunkify-player#playback-analytics), which use this package.
+
 ```sh
 npm install @chunkify/player-analytics
 ```

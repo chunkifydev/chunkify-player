@@ -101,6 +101,14 @@ export type ChunkifyPlayerProps = HostProps & MediaCallbacks & {
   autoSeekToLive?: boolean | undefined;
   controls?: boolean | undefined;
   playsInline?: boolean | undefined;
+  analytics?: boolean | undefined;
+  analyticsIngestKey?: string | null | undefined;
+  analyticsVideoId?: string | null | undefined;
+  analyticsEndpoint?: string | null | undefined;
+  analyticsVideoTitle?: string | null | undefined;
+  analyticsUserId?: string | null | undefined;
+  analyticsEnvironment?: string | null | undefined;
+  analyticsPersistViewerId?: boolean | undefined;
 };
 
 export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null {
@@ -159,6 +167,8 @@ export function ChunkifyPlayer(props: ChunkifyPlayerProps): ReactElement | null 
     controls: props.controls ?? false,
     autoSeekToLive: props.autoSeekToLive ?? false,
     capRenditionToPlayerSize: props.capRenditionToPlayerSize ?? true,
+    analytics: props.analytics ?? false,
+    analyticsPersistViewerId: props.analyticsPersistViewerId ?? true,
   };
   for (const name of callbackNames) delete elementProps[name];
   return createElement("chunkify-player", elementProps);

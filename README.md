@@ -287,7 +287,8 @@ function Video({ src }: { src: string }) {
 ```
 
 Web Component attributes use React-style names such as `crossOrigin`,
-`aspectRatio`, `primaryColor`, `autoPlay`, `playsInline`, and `autoSeekToLive`.
+`aspectRatio`, `primaryColor`, `autoPlay`, `playsInline`, `autoSeekToLive`, and
+the [analytics](#playback-analytics) props such as `analyticsVideoId`.
 Standard host props, `<track>` children, and the documented CSS variables are
 also typed. The ref exposes the Web Component and its current `media` element.
 
@@ -296,11 +297,55 @@ on the server and loads the Web Component after mounting in the browser.
 
 ## Playback analytics
 
-The separate `@chunkify/player-analytics` package can monitor
-`<video>`, `<chunkify-player>`, and supported third-party players. It sends
-playback records to destinations chosen by the application, not to Chunkify.
-See [the analytics package README](packages/analytics/README.md) for the
-current API and limits.
+The player can send playback analytics to a Chunkify collector by itself. Add
+the `analytics` attribute with a public ingest key and your video ID:
+
+```html
+<chunkify-player
+  src="https://media.example.com/master.m3u8"
+  controls
+  analytics
+  analytics-ingest-key="YOUR_PUBLIC_INGEST_KEY"
+  analytics-video-id="video_123"
+></chunkify-player>
+```
+
+Nothing is tracked unless `analytics` is present. Like `autoplay`, it is a
+boolean attribute: `analytics="false"` still turns tracking on, so remove the
+attribute (or set `player.analytics = false`) to turn it off.
+
+| Attribute | Property | Meaning |
+| --- | --- | --- |
+| `analytics` | `analytics` | Turns tracking on. |
+| `analytics-ingest-key` | `analyticsIngestKey` | Required. The collector's public, write-only ingest key. |
+| `analytics-video-id` | `analyticsVideoId` | Required. Your video ID or Chunkify asset ID, sent as `video_id`. |
+| `analytics-endpoint` | `analyticsEndpoint` | The collector's events URL. Defaults to Chunkify's hosted collector, `https://analytics.chunkify.dev/v1/events`. Set it when you host the collector yourself. |
+| `analytics-video-title` | `analyticsVideoTitle` | Optional title, sent as `video_title`. |
+| `analytics-user-id` | `analyticsUserId` | Optional pseudonymous ID of the signed-in user, sent as `user_id`. Never use an email address. |
+| `analytics-environment` | `analyticsEnvironment` | Optional environment name, such as `production`. |
+| `analytics-persist-viewer-id` | `analyticsPersistViewerId` | Defaults to on: the anonymous viewer ID is kept in `localStorage`. Set to `"false"` until the viewer consents to storage. |
+
+In React, use the property names as props, for example
+`<ChunkifyPlayer analytics analyticsIngestKey="…" analyticsVideoId="video_123" />`.
+
+How it behaves:
+
+- Attributes changed in the same task apply together. Change `src` and
+  `analytics-video-id` together when switching videos: the current view ends as
+  a source change and the next play starts a view for the new video.
+- Adding `analytics` during playback, for example after a consent banner,
+  starts tracking at the next play. Removing it, or removing the player from
+  the page, ends the current view.
+- A missing ingest key or video ID, or an invalid setting such as a non-HTTPS
+  endpoint, turns analytics off with a console warning. Playback is never
+  affected.
+- Do not also call `monitor()` on a player that has `analytics` set, or every
+  event is sent twice.
+
+For other destinations (Datadog, PostHog, OTLP, your own endpoint), custom
+dimensions, and other players, use the `@chunkify/player-analytics` package
+directly. See [the analytics package README](packages/analytics/README.md) for
+the API, the event schema, and limits.
 
 ## Development
 

@@ -197,3 +197,34 @@ test("React forwards and removes player colors", async ({ page }) => {
   await expect(player).not.toHaveAttribute("secondary-color");
   await expect(player).not.toHaveAttribute("accent-color");
 });
+
+test("React analytics props start built-in tracking", async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route("**/react-events", async (route) => {
+    bodies.push(route.request().postDataJSON());
+    await route.fulfill({ status: 201, body: "{}" });
+  });
+  await page.evaluate(() => window.reactFixture.render({
+    src: "/tests/fixtures/media/video.mp4",
+    muted: true,
+    analytics: true,
+    analyticsEndpoint: "/react-events",
+    analyticsIngestKey: "public-key",
+    analyticsVideoId: "react_video",
+  }));
+  const player = page.locator("chunkify-player");
+  await expect(player).toHaveAttribute("analytics-video-id", "react_video");
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => bodies.map((body) => [body.event_name, body.video_id])[0])
+    .toEqual(["chunkify.video.view_started", "react_video"]);
+
+  await page.evaluate(() => window.reactFixture.render({
+    src: "/tests/fixtures/media/video.mp4",
+    muted: true,
+    analyticsEndpoint: "/react-events",
+    analyticsIngestKey: "public-key",
+    analyticsVideoId: "react_video",
+  }));
+  await expect(player).not.toHaveAttribute("analytics");
+  await expect.poll(() => bodies.at(-1)?.event_name).toBe("chunkify.video.view_ended");
+});
