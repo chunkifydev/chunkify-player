@@ -353,6 +353,47 @@ test("a seek that lands in buffered media resumes playback without a playing eve
   });
 });
 
+test("a stale seeked event during a newer seek does not resume playback", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-twice", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    let mediaSeeking = false;
+    Object.defineProperty(f.video, "seeking", { configurable: true, get: () => mediaSeeking });
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 9 });
+    f.session.startAttempt();
+    f.video.dispatchEvent(new Event("playing"));
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    Object.defineProperty(f.video, "readyState", { configurable: true, value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+    f.video.currentTime = 10;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    // Seek back to 8, then to 2 before the first seeked event has been handled.
+    mediaSeeking = true;
+    f.video.currentTime = 8;
+    f.video.dispatchEvent(new Event("seeking"));
+    f.video.currentTime = 2;
+    f.video.dispatchEvent(new Event("seeked"));
+    f.video.dispatchEvent(new Event("seeking"));
+    mediaSeeking = false;
+    f.video.dispatchEvent(new Event("seeked"));
+  });
+  await page.clock.runFor(1000);
+  const ended = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    f.video.currentTime = 3;
+    f.video.dispatchEvent(new Event("timeupdate"));
+    f.session!.destroy();
+    return f.events.at(-1);
+  });
+  expect(ended).toMatchObject({
+    event_name: "chunkify.video.view_ended", playing_time_ms: 1000, seek_count: 1,
+    played_ranges: [{ start_seconds: 2, end_seconds: 3 }, { start_seconds: 9, end_seconds: 10 }],
+  });
+});
+
 test("excluding the grouped seek event keeps raw state changes available", async ({ page }) => {
   const events = await page.evaluate(() => {
     const f = window.analyticsFixture;

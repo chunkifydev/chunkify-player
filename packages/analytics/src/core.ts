@@ -1194,7 +1194,8 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
       }
       // A seek into buffered media can keep readyState at HAVE_FUTURE_DATA (3) or above. The spec
       // then queues no playing event (WebKit follows it), so playback has already resumed here.
-      if (!media.paused && media.readyState >= 3) playing();
+      // A seeked event from an earlier seek can arrive while a newer seek is still running.
+      if (!media.paused && !media.seeking && media.readyState >= 3) playing();
     },
     timeupdate: updatePlaybackPosition,
     loadedmetadata: metadata, durationchange: metadata,
