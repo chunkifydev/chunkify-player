@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.2...player-v1.5.0) (2026-11-18)
+
+
+### Features
+
+* **player:** send analytics to a Chunkify collector with attributes ([#43](https://github.com/chunkifydev/chunkify-player/issues/43)) ([8b5c387](https://github.com/chunkifydev/chunkify-player/commit/8b5c387c01c4630bccba5aa8cbc0c85083eaa9bd))
+
+
+### Bug Fixes
+
+* **analytics:** report the real playhead and played ranges on source changes and seeks ([#48](https://github.com/chunkifydev/chunkify-player/issues/48)) ([13992d7](https://github.com/chunkifydev/chunkify-player/commit/13992d7e213c93619629f76bba105e0f9ba1b9fe))
+* **player:** re-issue an hls.js seek that never completes in WebKit ([#50](https://github.com/chunkifydev/chunkify-player/issues/50)) ([22ab3dd](https://github.com/chunkifydev/chunkify-player/commit/22ab3dd1b261391f532e5e95cc491193a5d0e7a3))
+* **player:** restart hls.js playback that stalls inside buffered media ([#49](https://github.com/chunkifydev/chunkify-player/issues/49)) ([decdd96](https://github.com/chunkifydev/chunkify-player/commit/decdd965a753a7e4870996cb3697ffdc64df0f0a))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player-analytics bumped from 0.11.0 to 0.12.0
+
 ## [1.4.2](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.1...player-v1.4.2) (2026-11-12)
 
 
