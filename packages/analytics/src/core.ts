@@ -701,7 +701,10 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
       previous_playback_rate: previous, playback_rate: selectedPlaybackRate });
   }
 
+  // Set while a view ends after its source was reset, when currentTime no longer holds its position.
+  let endingPlayhead: number | null | undefined;
   function playheadSeconds(): number | null {
+    if (endingPlayhead !== undefined) return endingPlayhead;
     return Number.isFinite(media.currentTime) && media.currentTime >= 0 ? media.currentTime : null;
   }
 
@@ -970,11 +973,12 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
   function updatePlaybackPosition() {
     if (!view) return;
     refreshIntrinsicVideoSize(view);
-    if (!Number.isFinite(media.currentTime)) return;
-    if (media.seeking) return;
-    if (view.playingSince !== null && !seeking && !media.seeking) recordPlayedRange();
-    view.maximumPlayhead = Math.max(view.maximumPlayhead, media.currentTime);
-    view.lastPlayhead = playheadSeconds();
+    // Read once: WebKit can advance currentTime between reads within one task.
+    const position = playheadSeconds();
+    if (position === null || media.seeking) return;
+    if (view.playingSince !== null && !seeking) recordPlayedRange(position);
+    view.maximumPlayhead = Math.max(view.maximumPlayhead, position);
+    view.lastPlayhead = position;
   }
   function reportMediaError() {
     if (!view) return;
@@ -1100,17 +1104,24 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
     const seekOutcome = seekInteraction?.lastSeekedAt === null || seeking ? "interrupted" :
       current.playbackState === "playing" ? "resumed" :
       current.playbackState === "paused" ? "paused" : "interrupted";
-    cancelFirstVideoFrame(current);
-    stopPlaying();
-    stopRebuffering();
-    stopSeeking();
-    updatePlaybackPosition();
-    view = null;
-    wantsPlay = false;
-    seeking = false;
-    changePlaybackState(reason === "ended" ? "ended" : "stopped", current);
-    finishSeek(seekOutcome);
-    emit(current, "chunkify.video.view_ended", reason);
+    // emptied and loadstart arrive after the browser has reset the old resource, so its
+    // position is gone. End the view at the last position recorded while it played.
+    if (reason === "source_changed" && media.readyState === 0) endingPlayhead = current.lastPlayhead;
+    try {
+      cancelFirstVideoFrame(current);
+      stopPlaying();
+      stopRebuffering();
+      stopSeeking();
+      updatePlaybackPosition();
+      view = null;
+      wantsPlay = false;
+      seeking = false;
+      changePlaybackState(reason === "ended" ? "ended" : "stopped", current);
+      finishSeek(seekOutcome);
+      emit(current, "chunkify.video.view_ended", reason);
+    } finally {
+      endingPlayhead = undefined;
+    }
   }
   function metadata() {
     if (!view) return;
