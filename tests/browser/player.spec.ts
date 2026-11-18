@@ -893,6 +893,54 @@ test("restarts hls.js playback that stalls inside buffered media", async ({ page
   expect(await page.evaluate(() => (window as typeof window & { playbackErrors: string[] }).playbackErrors)).toEqual([]);
 });
 
+test("re-issues an hls.js seek that never completes", async ({ page }) => {
+  const hlsJsSupported = await page.evaluate(async () => (await import("hls-video-element")).Hls.isSupported());
+  test.skip(!hlsJsSupported, "This browser uses native HLS playback");
+
+  await page.evaluate(() => {
+    document.body.innerHTML = `<chunkify-player src="/tests/fixtures/media/master.m3u8" muted></chunkify-player>`;
+  });
+  const player = page.locator("chunkify-player");
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => element.media.readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.play());
+  await expect.poll(() => player.evaluate((element: ChunkifyPlayer) => (
+    element.media.readyState >= 3 && !element.media.seeking && element.media.currentTime > 0.5
+  ))).toBe(true);
+  await player.evaluate((element: ChunkifyPlayer) => element.media.pause());
+
+  // Linux WebKit can leave an early seek pending forever while its target is buffered.
+  const seekAgainAfter = (completes: boolean) => player.evaluate(async (element: ChunkifyPlayer, completes) => {
+    const media = element.media;
+    const prototype = Object.getPrototypeOf(media) as object;
+    const currentTime = Object.getOwnPropertyDescriptor(prototype, "currentTime")
+      ?? Object.getOwnPropertyDescriptor(Object.getPrototypeOf(prototype), "currentTime")!;
+    const sets: number[] = [];
+    let seeking = true;
+    Object.defineProperty(media, "seeking", { configurable: true, get: () => seeking });
+    Object.defineProperty(media, "currentTime", {
+      configurable: true,
+      get: () => currentTime.get!.call(media),
+      set: (value: number) => { sets.push(value); },
+    });
+    const position = media.currentTime;
+    media.dispatchEvent(new Event("seeking"));
+    if (completes) {
+      seeking = false;
+      media.dispatchEvent(new Event("seeked"));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    delete (media as unknown as Record<string, unknown>).seeking;
+    delete (media as unknown as Record<string, unknown>).currentTime;
+    media.dispatchEvent(new Event("seeked"));
+    return { position, sets };
+  }, completes);
+
+  expect((await seekAgainAfter(true)).sets).toEqual([]);
+  const stuck = await seekAgainAfter(false);
+  expect(stuck.sets[0]).toBe(stuck.position);
+  expect(stuck.sets.length).toBeLessThanOrEqual(3);
+});
+
 test("native live HLS keeps a seek made before the first Play", async ({ page, browserName }) => {
   test.skip(browserName !== "webkit", "Native HLS is only available in WebKit");
   const supportsNativeHls = await page.evaluate(() => Boolean(

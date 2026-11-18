@@ -102,6 +102,8 @@ export class ChunkifyPlayer extends HTMLElement {
   #backgroundPlayback = false;
   #backgroundResumePosition: number | null = null;
   #backgroundResumeAttempt = 0;
+  #seekWatchdog: ReturnType<typeof setTimeout> | undefined;
+  #seekRetries = 0;
   #visibilityDocument: Document | null = null;
   #onVisibilityChange = () => {
     this.#cancelBackgroundPlayback();
@@ -147,6 +149,8 @@ export class ChunkifyPlayer extends HTMLElement {
       || event.type === "ended" || event.type === "error") {
       this.#cancelBackgroundPlayback();
     }
+    if (event.type === "seeking") this.#watchSeek(media);
+    if (event.type === "seeked" || event.type === "emptied" || event.type === "loadstart") this.#cancelSeekWatchdog();
     if (event.type === "seeking" && this.#firstHlsPlayPending && media.paused) {
       this.#soughtBeforeFirstHlsPlay = true;
     }
@@ -366,6 +370,7 @@ export class ChunkifyPlayer extends HTMLElement {
     this.#analytics.stop();
     this.#playbackGeneration++;
     this.#cancelBackgroundPlayback();
+    this.#cancelSeekWatchdog();
     this.#visibilityDocument?.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.#visibilityDocument = null;
     this.#trackObserver.disconnect();
@@ -466,19 +471,41 @@ export class ChunkifyPlayer extends HTMLElement {
     if (hlsMedia.api) hlsMedia.api.capLevelToPlayerSize = this.capRenditionToPlayerSize;
   }
 
+  #hasDataAhead(media: ChunkifyMediaElement) {
+    if (media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+    const position = media.currentTime;
+    const { buffered } = media;
+    for (let index = 0; index < buffered.length; index++) {
+      if (buffered.start(index) <= position && position + 0.1 < buffered.end(index)) return true;
+    }
+    return false;
+  }
+
   // hls.js only nudges a stalled playhead across buffer holes. WebKit can also stop advancing
   // inside a buffered range after an early seek (for example hls.js skipping a small gap at the
   // start), while it reports playing with enough data. Seeking to the same position restarts it.
   #restartStalledPlayback(media: ChunkifyMediaElement) {
-    if (media.paused || media.seeking || media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
-    const position = media.currentTime;
-    const { buffered } = media;
-    for (let index = 0; index < buffered.length; index++) {
-      if (buffered.start(index) <= position && position + 0.1 < buffered.end(index)) {
-        media.currentTime = position;
-        return;
-      }
-    }
+    if (media.paused || media.seeking || !this.#hasDataAhead(media)) return;
+    media.currentTime = media.currentTime;
+  }
+
+  // The same early seek can also never complete in Linux WebKit: it stays seeking with its target
+  // buffered, and hls.js waits for it. Issuing the seek again completes it.
+  #watchSeek(media: ChunkifyMediaElement) {
+    clearTimeout(this.#seekWatchdog);
+    if (this.#engineFor(media) !== "hlsjs") return;
+    this.#seekWatchdog = setTimeout(() => {
+      this.#seekWatchdog = undefined;
+      if (this.#media !== media || !media.seeking || this.#seekRetries >= 3 || !this.#hasDataAhead(media)) return;
+      this.#seekRetries++;
+      media.currentTime = media.currentTime;
+    }, 1000);
+  }
+
+  #cancelSeekWatchdog() {
+    clearTimeout(this.#seekWatchdog);
+    this.#seekWatchdog = undefined;
+    this.#seekRetries = 0;
   }
 
   #attachHlsEvents(media: ChunkifyMediaElement) {
