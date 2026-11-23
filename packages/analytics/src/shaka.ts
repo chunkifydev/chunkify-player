@@ -27,6 +27,8 @@ export interface ShakaPlayer {
   removeEventListener(type: string, listener: (event: Event) => void): void;
   /** The rate Shaka plays at when not buffering; the media element's rate is 0 while it buffers. 0 without media. */
   getPlaybackRate?(): number;
+  /** The loaded manifest's type, such as `"HLS"` or `"DASH"`; null without a manifest, as for a single file. */
+  getManifestType?(): string | null;
 }
 
 export interface ShakaAnalyticsConnector extends AnalyticsConnector {
@@ -104,6 +106,8 @@ export function createShakaConnector(player: ShakaPlayer): ShakaAnalyticsConnect
   return {
     name: "shaka-player", version: playerVersion,
     playerName: "shaka-player", playerVersion,
+    // DASH is neither HLS nor a single file. Without a manifest the source URL decides.
+    deliveryFormat: () => player.getManifestType?.() === "HLS" ? "hls" : null,
     snapshot(): AnalyticsConnectorSnapshot {
       return {
         renditionWidth: rendition?.width ?? null,

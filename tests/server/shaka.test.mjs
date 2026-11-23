@@ -71,6 +71,21 @@ test("Shaka connector leaves transfer metrics unavailable if a download omits si
   connector.destroy();
 });
 
+test("Shaka connector reports HLS manifests and leaves DASH and single files to the source URL", () => {
+  const shaka = player();
+  const connector = createShakaConnector(shaka);
+  // Shaka versions without getManifestType report nothing.
+  assert.equal(connector.deliveryFormat(), null);
+  let type = null;
+  shaka.getManifestType = () => type;
+  assert.equal(connector.deliveryFormat(), null);
+  type = "HLS";
+  assert.equal(connector.deliveryFormat(), "hls");
+  type = "DASH";
+  assert.equal(connector.deliveryFormat(), null);
+  connector.destroy();
+});
+
 test("Shaka's buffering rate of 0 is not reported as a speed change", async (t) => {
   const { monitorShaka } = await import("@chunkify/player-analytics/shaka");
   let clock = 0;

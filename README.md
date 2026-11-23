@@ -335,6 +335,9 @@ How it behaves:
 - Attributes changed in the same task apply together. Change `src` and
   `analytics-video-id` together when switching videos: the current view ends as
   a source change and the next play starts a view for the new video.
+- Each view reports how the source is delivered as `delivery_format`: `hls`
+  when the player plays it as HLS, otherwise `file`, such as an MP4 static
+  rendition. Reports can then tell HLS and file playback apart.
 - Adding `analytics` during playback, for example after a consent banner,
   starts tracking at the next play. Removing it, or removing the player from
   the page, ends the current view.

@@ -29,6 +29,8 @@ function videoJsConnector(engine: Hls | null): AnalyticsConnector & { destroy():
   return {
     name: "video.js", version: null, playerName: "video.js", playerVersion: null,
     snapshot: emptySnapshot,
+    // Every supported element (hls-video, hlsjs-video, native-hls-video) plays HLS.
+    deliveryFormat: () => "hls",
     subscribeToErrors: () => () => {},
     destroy() {},
   };

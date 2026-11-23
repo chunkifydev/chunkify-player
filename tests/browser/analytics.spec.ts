@@ -1285,7 +1285,7 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   expect(events).toHaveLength(2);
   for (const event of events) {
     expect(event).toMatchObject({
-      schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test",
+      schema_version: 1, video_id: "asset-private", delivery_hostname: "media.example.test", delivery_format: "hls",
       sdk_name: "@chunkify/player-analytics", sdk_version: analyticsPackage.version,
       connector_name: "html-media", connector_version: analyticsPackage.version,
       player_name: null, player_version: null, environment: "test", viewer_id: expect.stringMatching(uuidPattern),
@@ -1299,6 +1299,50 @@ test("records use the versioned contract and exclude URLs and unrelated configur
   for (const excluded of ["https://", "/private/path", "must-not-leak", "authorization", "rawError"]) {
     expect(serialized).not.toContain(excluded);
   }
+});
+
+test("the delivery format comes from the option, else from the source URL's extension", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    const formatOf = (source: string, deliveryFormat?: "hls" | "file" | null) => {
+      const video = document.createElement("video");
+      video.preload = "none";
+      if (source) video.src = source;
+      const events: import("../../packages/analytics/src/index.js").ChunkifyPlayerAnalyticsEvent[] = [];
+      const session = f.attachAnalytics(video, {
+        videoId: "asset-format", deliveryFormat, includeEvents: ["view_started"],
+        destinations: [{ send: (event) => { events.push(event); } }],
+      });
+      session.startAttempt();
+      session.destroy();
+      return events[0]!.delivery_format;
+    };
+    let invalid = "";
+    try {
+      f.attachAnalytics(document.createElement("video"), {
+        videoId: "asset-format", deliveryFormat: "dash" as never, destinations: [{ send() {} }],
+      });
+    } catch (error) {
+      invalid = error instanceof Error ? error.message : String(error);
+    }
+    return {
+      formats: [
+        formatOf("https://media.example.test/a/master.M3U8?token=1"),
+        formatOf("https://media.example.test/a/video.mp4#t=10"),
+        formatOf("https://media.example.test/a/audio.webm"),
+        formatOf("https://media.example.test/a/download?file=video.mp4"),
+        formatOf("https://media.example.test/a/manifest"),
+        formatOf(""),
+        // The option wins over what the URL shows.
+        formatOf("https://media.example.test/a/manifest", "hls"),
+        formatOf("https://media.example.test/a/video.mp4", "hls"),
+        formatOf("https://media.example.test/a/manifest", null),
+      ],
+      invalid,
+    };
+  });
+  expect(result.formats).toEqual(["hls", "file", "file", null, null, null, "hls", "hls", null]);
+  expect(result.invalid).toBe('Analytics deliveryFormat must be "hls", "file" or null when provided.');
 });
 
 test("source resets and page exit end separate views, and destroy removes observation", async ({ page }) => {
