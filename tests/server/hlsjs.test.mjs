@@ -56,6 +56,8 @@ test("hls.js connector records selected renditions, delivery and fatal errors, t
     deliveryRequestCount: 2, deliveryTransferredBytes: 1500, deliveryDurationMs: 30,
   });
   assert.deepEqual(errors, [{ category: "network", code: "manifestLoadError", fatal: true }]);
+  // hls.js only plays HLS, whatever the media element's blob: source shows.
+  assert.equal(connector.deliveryFormat(), "hls");
   assert.deepEqual(renditions, [
     null,
     { width: 256, height: 144, codec: "avc1.42E01E", bitrate_bps: 250_000, frame_rate: 24 },

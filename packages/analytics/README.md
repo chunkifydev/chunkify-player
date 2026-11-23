@@ -68,6 +68,7 @@ The second argument to `monitor()` has the same options as `monitorHlsJs()`, `mo
 | `userId` | `null` | Optional ID of the signed-in user in your application, included in events as `user_id`. Use a pseudonymous ID, not an email address. Must be 1 to 256 Unicode characters; an empty or longer string, or one with a lone surrogate, throws. Pass `null` (or omit it) for viewers who are not signed in. |
 | `custom` | `null` | Your own dimensions, such as plan or A/B test variant, sent unchanged as `custom` on each `view_started`. `null` is the same as omitting it. See [custom dimensions](#custom-dimensions). |
 | `persistViewerId` | `true` | Keep the generated `viewer_id` in page `localStorage` so it is reused on later page loads. Set `false` until the viewer consents to storage; each page load then gets a new ID and storage is never read or written. |
+| `deliveryFormat` | Detected | `"hls"` or `"file"`, sent as `delivery_format` for every source of this session. Set it when the source URL does not show the format, for example a signed URL without an extension. `null` is the same as omitting it. See [delivery format](#delivery-format). |
 
 Once monitoring is attached, each destination receives all event types that occur by default. An empty `includeEvents` array sends nothing. Excluding `view_snapshot` stops its timer but still collects the final view metrics. Rapid seeks within 400 ms of the last `seeked` are grouped into one `seek_completed` record; seek-related state changes are withheld while that record is enabled.
 
@@ -127,6 +128,29 @@ These limits are part of the event contract for `custom`. Monitoring checks them
 In TypeScript, `custom` also accepts a value typed with an `interface`, as long as every property is a string, number or boolean.
 
 > **Keep personal data out of `custom`.** Values are sent as given to every destination. Do not include names, email addresses, phone numbers, or other information that identifies a person. Use `userId` with a pseudonymous ID for user identity.
+
+### Delivery format
+
+Every event carries `delivery_format`, so reports can tell HLS playback apart from a single media file such as an MP4 rendition or a transcoding output. `connector_name` cannot: Safari plays HLS natively, so its HLS views report `html-media` like MP4 files.
+
+| Source | `delivery_format` |
+| --- | --- |
+| `<chunkify-player>` | `hls` when the player plays the source as HLS (a `.m3u8` path or an HLS `type`), otherwise `file`. |
+| hls.js, the Video.js 10 HLS elements, and Shaka Player with an HLS manifest | `hls` |
+| A `<video>` element, Shaka Player without a manifest | From the source URL: a path ending in `.m3u8` is `hls`; `.mp4`, `.m4v`, `.mov`, `.webm`, `.ogv`, `.ogg`, `.mkv` and audio files such as `.mp3` or `.m4a` are `file`; anything else, such as a URL without an extension, is `null`. |
+| Shaka Player with a DASH manifest | `null` |
+
+The `deliveryFormat` option replaces the detection when the URL does not show the format:
+
+```js
+monitor(video, {
+  videoId: "video_123",
+  deliveryFormat: "file", // a signed MP4 URL without an extension
+  destinations: [{ send: (event) => console.log(event) }],
+});
+```
+
+Chunkify Analytics releases after 0.18.0 store the field and can filter and group views by it. Release 0.18.0 and earlier accept events that carry it.
 
 ## Monitor third-party players
 
@@ -244,6 +268,7 @@ This complete `view_ended` event is based on `<chunkify-player>` playing a local
   "player_name": "hls.js",
   "player_version": "1.7.3",
   "delivery_hostname": null,
+  "delivery_format": "hls",
   "environment": null,
   "viewer_id": "3f0c6a1e-2b7d-4c59-9e1a-7d4b2f8c6e10",
   "user_id": null,
@@ -388,6 +413,7 @@ These are excerpts; actual timeline records also have the shared identifiers and
 | `view_id`, `video_id` | Ephemeral playback-attempt ID and the `videoId` supplied by your application. A new attempt gets a new `view_id`. |
 | `sdk_name`, `sdk_version`, `connector_name`, `connector_version`, `player_name`, `player_version` | The collector, connector, and player that produced the record. Player fields can be `null`. |
 | `delivery_hostname`, `environment` | Delivery host when available and optional application environment. No complete URL is included. |
+| `delivery_format` | `hls` for an HLS stream, `file` for a single media file such as an MP4, or `null` when unknown. See [delivery format](#delivery-format). |
 | `viewer_id`, `user_id`, `video_title` | Generated anonymous browser ID (see [viewer identity](#viewer-identity)), your optional `userId` (1 to 256 Unicode characters), and your optional `videoTitle` (truncated to 256 Unicode characters; empty becomes `null`). |
 | `custom` | The `custom` option, unchanged. Only on `view_started`, and absent when the option is absent, `null`, or empty. See [custom dimensions](#custom-dimensions). |
 | `reason`, `startup_outcome` | End reason and startup result on `view_ended`; `null` on other events. Ending before startup does not establish why the viewer left. |

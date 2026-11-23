@@ -105,6 +105,7 @@ export function fixedAnalyticsOptions(options: AnalyticsOptionsInput): FixedAnal
     videoId: options.videoId, videoTitle: options.videoTitle, destinations: options.destinations,
     environment: options.environment, userId: options.userId, persistViewerId: options.persistViewerId,
     custom: options.custom, snapshotIntervalMs: options.snapshotIntervalMs, includeEvents: options.includeEvents,
+    deliveryFormat: options.deliveryFormat,
   };
   assertAnalyticsOptions(copy);
   const fixed: FixedAnalyticsOptions = Object.freeze({
@@ -150,6 +151,9 @@ function assertAnalyticsOptions(options: Omit<AnalyticsOptions, "custom">): void
       (!Number.isSafeInteger(options.snapshotIntervalMs) || options.snapshotIntervalMs < 1000 ||
        options.snapshotIntervalMs > 2_147_483_647)) {
     throw new TypeError("Analytics snapshotIntervalMs must be an integer from 1000 to 2147483647 ms.");
+  }
+  if (options.deliveryFormat != null && options.deliveryFormat !== "hls" && options.deliveryFormat !== "file") {
+    throw new TypeError('Analytics deliveryFormat must be "hls", "file" or null when provided.');
   }
   if (options.includeEvents !== undefined &&
       (!Array.isArray(options.includeEvents) || !options.includeEvents.every((event) => eventTypes.has(event)))) {

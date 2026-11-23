@@ -54,6 +54,36 @@ test("monitor selects the video collector or Chunkify adapter from its target", 
   expect(result.playerSizes).toEqual(Array(4).fill([320, 180]));
 });
 
+test("Chunkify Player sends the delivery format it chose, even when the URL has no extension", async ({ page }) => {
+  await page.goto("/tests/fixtures/player.html");
+  await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
+
+  const result = await page.evaluate(async () => {
+    const { monitor } = await import("@chunkify/player-analytics");
+    const events: ChunkifyPlayerAnalyticsEvent[] = [];
+    const player: ChunkifyPlayer = document.createElement("chunkify-player");
+    player.preload = "none";
+    player.src = "/media/stream";
+    document.body.append(player);
+    const session = monitor(player, {
+      videoId: "asset-format", includeEvents: ["view_started"],
+      destinations: [{ send(event) { events.push(event); } }],
+    });
+    const elements = [player.media.localName];
+    player.media.dispatchEvent(new Event("play"));
+    // The type attribute makes the player play the same URL as HLS, in a new media element.
+    player.setAttribute("type", "application/x-mpegURL");
+    elements.push(player.media.localName);
+    player.media.dispatchEvent(new Event("play"));
+    session.destroy();
+    player.remove();
+    return { elements, formats: events.map((event) => event.delivery_format) };
+  });
+
+  expect(result.elements).toEqual(["video", "hls-video"]);
+  expect(result.formats).toEqual(["file", "hls"]);
+});
+
 test("the standalone adapter follows Chunkify Player media replacements", async ({ page }) => {
   await page.goto("/tests/fixtures/player.html");
   await page.waitForFunction(() => Boolean(customElements.get("chunkify-player")));
@@ -248,11 +278,11 @@ test("the adapter records real HLS playback and then MP4 playback", async ({ pag
     state.analyticsSession.destroy();
     return state.analyticsEvents;
   });
-  expect(events.map((event) => [event.event_name, event.reason])).toEqual([
-    ["chunkify.video.view_started", null],
-    ["chunkify.video.view_ended", "source_changed"],
-    ["chunkify.video.view_started", null],
-    ["chunkify.video.view_ended", "destroyed"],
+  expect(events.map((event) => [event.event_name, event.reason, event.delivery_format])).toEqual([
+    ["chunkify.video.view_started", null, "hls"],
+    ["chunkify.video.view_ended", "source_changed", "hls"],
+    ["chunkify.video.view_started", null, "file"],
+    ["chunkify.video.view_ended", "destroyed", "file"],
   ]);
   if (hlsJsActive) {
     expect(events[1]).toMatchObject({

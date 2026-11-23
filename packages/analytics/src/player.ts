@@ -16,8 +16,12 @@ export function attachPlayerAnalytics<Custom extends AnalyticsCustomValues<Custo
 ): Pick<AnalyticsSession, "startAttempt" | "sourceChanged" | "destroy"> {
   // Sessions for later media elements reuse the options as they were at startup.
   const options = fixedAnalyticsOptions(initialOptions);
+  // The player plays HLS sources in an hls-video element and every other source in a plain video element,
+  // which it replaces when the format changes. So each element's format is known, even without an extension.
+  const attach = (element: HTMLMediaElement) => attachAnalytics(element, options.deliveryFormat ? options : {
+    ...options, deliveryFormat: element.localName === "hls-video" ? "hls" : "file" });
   let media = player.media;
-  let session = attachAnalytics(media, options);
+  let session = attach(media);
   let destroyed = false;
   let activeHls: Hls | null = null;
   let connector: HlsJsAnalyticsConnector | null = null;
@@ -80,7 +84,7 @@ export function attachPlayerAnalytics<Custom extends AnalyticsCustomValues<Custo
     session.destroy();
     detachConnector();
     media = next;
-    session = attachAnalytics(media, options);
+    session = attach(media);
     bindMedia();
   };
   player.addEventListener("mediachange", onMediaChange);

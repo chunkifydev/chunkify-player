@@ -78,6 +78,7 @@ test("Video.js 10 hlsjs-video adds engine metrics and resets on a new source", (
   const firstViewEnd = events.find((event) => event.event_name === "chunkify.video.view_ended");
   assert.equal(firstViewEnd.reason, "source_changed");
   assert.equal(firstViewEnd.connector_name, "video.js/hls.js");
+  assert.equal(firstViewEnd.delivery_format, "hls");
   assert.equal(firstViewEnd.player_name, "video.js");
   assert.equal(firstViewEnd.selected_rendition_height, 720);
   assert.equal(firstViewEnd.rendition_switch_count, 1);
@@ -113,6 +114,9 @@ test("Video.js 10 native and lightweight HLS media retain core metrics without e
     assert.equal(viewEnd.player_name, "video.js");
     assert.equal(viewEnd.selected_rendition_height, null);
     assert.equal(viewEnd.delivery_request_count, null);
+    // Every supported element plays HLS, so the format does not depend on the source URL.
+    assert.ok(events.length > 0);
+    for (const event of events) assert.equal(event.delivery_format, "hls");
   }
 });
 

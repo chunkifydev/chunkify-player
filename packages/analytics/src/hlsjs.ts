@@ -89,6 +89,7 @@ export function createHlsJsConnector(hls: Hls): HlsJsAnalyticsConnector {
     name: "hls.js", version: HlsClass.version,
     playerName: "hls.js", playerVersion: HlsClass.version,
     snapshot: () => ({ ...snapshot }),
+    deliveryFormat: () => "hls",
     subscribeToErrors(listener) {
       errorListeners.add(listener);
       return () => { errorListeners.delete(listener); };
