@@ -14,8 +14,13 @@ permissions:
   contents: read
   id-token: write
 
+# One group per release tag (or manual ref). Release Please creates one
+# release per changed package at the same moment; with a single shared group,
+# GitHub keeps only one pending run and cancels the others, so a package was
+# never published. Each tag publishes only its own package (bin/publish-npm),
+# so runs for different tags can safely run in parallel.
 concurrency:
-  group: npm-publish
+  group: npm-publish-${{ github.event.release.tag_name || inputs.ref }}
   cancel-in-progress: false
 
 jobs:
