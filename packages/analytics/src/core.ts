@@ -162,6 +162,8 @@ export interface AnalyticsSeekEvent extends AnalyticsEventEnvelope, Partial<View
   playback_resumed_at: string | null;
   state_before_seek: AnalyticsPlaybackState;
   state_after_seek: AnalyticsPlaybackState;
+  /** Wall-clock time spent in `state_before_seek` until the seek started. */
+  previous_state_duration_ms: number;
   from_playhead_seconds: number | null;
   to_playhead_seconds: number | null;
   seek_interaction_duration_ms: number;
@@ -319,6 +321,8 @@ interface SeekInteraction {
   durationAtStart: number;
   startedAt: string;
   stateBeforeSeek: AnalyticsPlaybackState;
+  /** The withheld state change into seeking would have reported this duration. */
+  stateDurationBeforeSeek: number;
   fromPlayhead: number | null;
   toPlayhead: number | null;
   lastSeekedAt: number | null;
@@ -802,6 +806,7 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
       playback_resumed_at: interaction.resumedAtWall,
       state_before_seek: interaction.stateBeforeSeek,
       state_after_seek: current.playbackState,
+      previous_state_duration_ms: interaction.stateDurationBeforeSeek,
       from_playhead_seconds: interaction.fromPlayhead,
       to_playhead_seconds: interaction.toPlayhead,
       seek_interaction_duration_ms: current.seekDuration + (current.seekSince === null ? 0 : now - current.seekSince) -
@@ -1220,6 +1225,7 @@ function createAnalyticsSession(media: HTMLMediaElement, initialOptions: Analyti
         if (!seekInteraction) {
           seekInteraction = { view, durationAtStart: view.seekDuration,
             startedAt: new Date().toISOString(), stateBeforeSeek: view.playbackState,
+            stateDurationBeforeSeek: Math.max(0, performance.now() - view.playbackStateSince),
             fromPlayhead: view.lastPlayhead, toPlayhead: null,
             lastSeekedAt: null, lastSeekedAtWall: null, resumedAt: null, resumedAtWall: null };
           view.seekCount++;
