@@ -203,11 +203,76 @@ test("state and seek events distinguish buffering and seeking from playing time"
     ["startup", "playing", 0], ["playing", "buffering", 1000], ["buffering", "playing", 2000],
   ]);
   expect(events.find((event) => event.event_name === "chunkify.video.seek_completed")).toMatchObject({
+    state_before_seek: "playing", previous_state_duration_ms: 1000,
     to_playhead_seconds: 65, seek_interaction_duration_ms: 500, seek_resume_wait_ms: 200,
     seek_outcome: "resumed",
   });
   expect(events.at(-1)).toMatchObject({ playing_time_ms: 2000, rebuffer_duration_ms: 2000,
     seek_duration_ms: 500 });
+});
+
+test("a seek reports the time spent in the state before it, so each stretch is counted once", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.evaluate(() => {
+    const f = window.analyticsFixture;
+    Object.defineProperty(f.video, "currentTime", { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(f.video, "paused", { configurable: true, value: false });
+    f.session = f.attachAnalytics(f.video, {
+      videoId: "video-seek-durations", destinations: [{ send(event) { f.events.push(event); } }],
+    });
+    f.session.startAttempt();
+  });
+  const dispatch = (name: string) => page.evaluate((name) => window.analyticsFixture.video.dispatchEvent(new Event(name)), name);
+  const seek = async (time: number, durationMs: number) => {
+    await dispatch("seeking");
+    await page.clock.runFor(durationMs);
+    await page.evaluate((time) => { window.analyticsFixture.video.currentTime = time; }, time);
+    await dispatch("seeked");
+  };
+  const paused = (value: boolean) => page.evaluate((value) => {
+    Object.defineProperty(window.analyticsFixture.video, "paused", { configurable: true, value });
+  }, value);
+  // A seek to the start position while starting: the seek replaces startup -> playing.
+  await page.clock.runFor(100);
+  await seek(0.2, 50);
+  await dispatch("playing");
+  await page.clock.runFor(400);
+  // Play 3 s, seek while playing, then play 2 s more and pause.
+  await page.clock.runFor(2600);
+  await seek(40, 300);
+  await page.clock.runFor(100);
+  await dispatch("playing");
+  await page.clock.runFor(2000);
+  await paused(true);
+  await dispatch("pause");
+  // Stay paused 1.5 s, seek while paused, stay paused 1 s and resume.
+  await page.clock.runFor(1500);
+  await seek(20, 200);
+  await page.clock.runFor(1000);
+  await paused(false);
+  await dispatch("play");
+  await dispatch("playing");
+  await page.clock.runFor(1000);
+  await dispatch("ended");
+  const events = await page.evaluate(() => window.analyticsFixture.events);
+  const timeline = events.filter((event) => event.event_name === "chunkify.video.playback_state_changed" ||
+    event.event_name === "chunkify.video.seek_completed").map((event) => event.event_name === "chunkify.video.seek_completed"
+    ? ["seek", event.state_before_seek, event.state_after_seek, event.previous_state_duration_ms]
+    : [event.from_state, event.to_state, event.previous_state_duration_ms]);
+  expect(timeline).toEqual([
+    ["seek", "startup", "playing", 100],
+    ["seek", "playing", "playing", 3000],
+    ["playing", "paused", 2000],
+    ["seek", "paused", "paused", 1500],
+    ["paused", "resuming", 1000],
+    ["resuming", "playing", 0],
+    ["playing", "ended", 1000],
+  ]);
+  // The playing stretches add up to watch time: the seek's own time is reported separately.
+  const playingStretches = [3000, 2000, 1000];
+  expect(events.at(-1)).toMatchObject({ event_name: "chunkify.video.view_ended",
+    playing_time_ms: playingStretches.reduce((total, ms) => total + ms, 0), seek_duration_ms: 550 });
 });
 
 test("rapid seek cycles emit one completed interaction without seek state records", async ({ page }) => {
