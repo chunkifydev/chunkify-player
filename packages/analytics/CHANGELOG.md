@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.12.0...analytics-v0.13.0) (2026-11-24)
+
+
+### Features
+
+* **analytics:** report whether each view plays HLS or a file ([#51](https://github.com/chunkifydev/chunkify-player/issues/51)) ([7c5b4d1](https://github.com/chunkifydev/chunkify-player/commit/7c5b4d192bf0294a0b3b01f479c8e489eb2aa660))
+
+
+### Bug Fixes
+
+* **analytics:** report the time spent in the state before a seek ([#54](https://github.com/chunkifydev/chunkify-player/issues/54)) ([be1ff41](https://github.com/chunkifydev/chunkify-player/commit/be1ff41f0239269da80cd1f47dbf291edfd295f7))
+
 ## [0.12.0](https://github.com/chunkifydev/chunkify-player/compare/analytics-v0.11.0...analytics-v0.12.0) (2026-11-18)
 
 

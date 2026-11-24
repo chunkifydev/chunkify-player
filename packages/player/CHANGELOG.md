@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.1](https://github.com/chunkifydev/chunkify-player/compare/player-v1.5.0...player-v1.5.1) (2026-11-24)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player-analytics bumped from 0.12.0 to 0.13.0
+
 ## [1.5.0](https://github.com/chunkifydev/chunkify-player/compare/player-v1.4.2...player-v1.5.0) (2026-11-18)
 
 

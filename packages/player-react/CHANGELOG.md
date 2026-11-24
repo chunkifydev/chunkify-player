@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.4.0...player-react-v1.4.1) (2026-11-24)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @chunkify/player bumped from 1.5.0 to 1.5.1
+
 ## [1.4.0](https://github.com/chunkifydev/chunkify-player/compare/player-react-v1.3.2...player-react-v1.4.0) (2026-11-18)
 
 
