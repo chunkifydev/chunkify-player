@@ -1,6 +1,6 @@
 {
   "name": "@chunkify/player",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Chunkify's portable video player Web Component",
   "license": "MIT",
   "repository": {
@@ -35,7 +35,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@chunkify/player-analytics": "0.12.0",
+    "@chunkify/player-analytics": "0.13.0",
     "hls-video-element": "~1.5.11",
     "media-chrome": "~4.19.2"
   }
